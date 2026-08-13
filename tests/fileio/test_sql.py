@@ -10,7 +10,9 @@ import pytest
 from beeref.fileio import schema, is_bee_file
 from beeref.fileio.errors import BeeFileIOError
 from beeref.fileio.sql import SQLiteIO
-from beeref.items import BeePixmapItem, BeeTextItem, BeeErrorItem
+from beeref import commands
+from beeref.items import (
+    BeeGroupItem, BeePixmapItem, BeeTextItem, BeeErrorItem)
 
 
 @pytest.mark.parametrize('filename,expected',
@@ -118,6 +120,49 @@ def test_all_migrations(tmpfile):
     assert result[1] == 33.3
     assert json.loads(result[2]) == {'filename': 'bee.png'}
     assert result[3] == b'bla'
+
+
+def test_sqliteio_roundtrip_group(tmpfile, view):
+    item1 = BeeTextItem(text='inside one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem(text='inside two')
+    view.scene.addItem(item2)
+    item2.setPos(0, 80)
+    loose = BeeTextItem(text='outside')
+    view.scene.addItem(loose)
+    loose.setPos(500, 500)
+
+    group = BeeGroupItem(box_color=(10, 20, 30, 200))
+    commands.GroupItems(view.scene, [item1, item2], group).redo()
+
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    io.write()
+
+    # Groups have to be written before the items they contain
+    types = [row[0] for row in io.fetchall(
+        'SELECT type FROM items ORDER BY id')]
+    assert types[0] == 'group'
+
+    for item in list(view.scene.items_for_save()):
+        if item.parentItem() is None:
+            view.scene.removeItem(item)
+
+    io = SQLiteIO(tmpfile, view.scene)
+    io.read()
+    view.scene.add_queued_items()
+
+    groups = list(view.scene.items_by_type('group'))
+    assert len(groups) == 1
+    assert groups[0].box_color == QtGui.QColor(10, 20, 30, 200)
+    children = groups[0].bee_children()
+    assert len(children) == 2
+    assert sorted(c.toPlainText() for c in children) == [
+        'inside one', 'inside two']
+    # The item outside the group stays outside it
+    outside = [i for i in view.scene.items_by_type('text')
+               if i.parentItem() is None]
+    assert len(outside) == 1
+    assert outside[0].toPlainText() == 'outside'
 
 
 def test_sqliteio_write_meta_application_id(tmpfile):

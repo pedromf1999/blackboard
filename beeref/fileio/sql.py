@@ -193,13 +193,13 @@ class SQLiteIO:
             'SELECT items.id, type, x, y, z, scale, rotation, flip, '
             'items.data, sqlar.data '
             'FROM sqlar JOIN items on sqlar.item_id = items.id')
-        # Avoid OUTER JOIN for performance reasons; fetch text items
-        # separately instead
+        # Avoid OUTER JOIN for performance reasons; fetch the items
+        # without image data separately instead
         rows.extend(self.fetchall(
             'SELECT items.id, type, x, y, z, scale, rotation, flip, '
             ' items.data, null as data '
             'FROM items '
-            'WHERE items.type = "text"'))
+            'WHERE items.type IN ("text", "group")'))
         if self.worker:
             self.worker.begin_processing.emit(len(rows))
 
@@ -301,7 +301,7 @@ class SQLiteIO:
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             (item.TYPE, item.pos().x(), item.pos().y(), item.zValue(),
              item.scale(), item.rotation(), item.flip(),
-             json.dumps(item.get_extra_save_data())))
+             json.dumps(item.get_save_data())))
         item.save_id = self.cursor.lastrowid
 
         if hasattr(item, 'pixmap_to_bytes'):
@@ -325,6 +325,6 @@ class SQLiteIO:
             'WHERE id=?',
             (item.pos().x(), item.pos().y(), item.zValue(), item.scale(),
              item.rotation(), item.flip(),
-             json.dumps(item.get_extra_save_data()),
+             json.dumps(item.get_save_data()),
              item.save_id))
         self.connection.commit()

@@ -95,6 +95,15 @@ class BeeItemMixin(SelectableMixin):
                 and not self.scene().active_mode is None):
             self.bring_to_front()
 
+    def get_save_data(self):
+        """The item's data for saving, including its group membership."""
+
+        data = self.get_extra_save_data()
+        parent = self.parentItem()
+        if getattr(parent, 'TYPE', None) == 'group':
+            data['parent_group'] = parent.save_id
+        return data
+
     def update_from_data(self, **kwargs):
         self.save_id = kwargs.get('save_id', self.save_id)
         self.setPos(kwargs.get('x', self.pos().x()),
@@ -104,6 +113,116 @@ class BeeItemMixin(SelectableMixin):
         self.setRotation(kwargs.get('rotation', self.rotation()))
         if kwargs.get('flip', 1) != self.flip():
             self.do_flip()
+
+
+@register_item
+class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
+    """A coloured box holding a group of items.
+
+    The items are real children of this item, so moving, scaling or
+    rotating the group moves its contents with it. The box itself is
+    drawn behind the children and grows to fit them.
+    """
+
+    TYPE = 'group'
+
+    DEFAULT_BOX_COLOR = (52, 52, 52, 255)
+    # Space between the box edge and the items inside it
+    PADDING = 20
+
+    def __init__(self, box_color=None, **kwargs):
+        super().__init__()
+        self.save_id = None
+        self.is_image = False
+        self.init_selectable()
+        self.is_editable = False
+        self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
+        logger.debug(f'Initialized {self}')
+
+    @classmethod
+    def create_from_data(cls, **kwargs):
+        data = kwargs.get('data', {})
+        return cls(**data)
+
+    def __str__(self):
+        return f'Group ({len(self.childItems())} items)'
+
+    @property
+    def box_color(self):
+        return self._box_color
+
+    @box_color.setter
+    def box_color(self, value):
+        logger.debug(f'Setting box colour for {self} to {value.name()}')
+        self._box_color = value
+        self.update()
+
+    def get_extra_save_data(self):
+        return {'box_color': self.box_color.getRgb()}
+
+    def bee_children(self):
+        """The items grouped inside this one."""
+
+        return [item for item in self.childItems()
+                if hasattr(item, 'save_id')]
+
+    def fit_to_children(self):
+        """Grow the box so that it contains all its items, with padding."""
+
+        children = self.bee_children()
+        if not children:
+            return
+        rect = self.childrenBoundingRect()
+        self.prepareGeometryChange()
+        self.setRect(rect.adjusted(
+            -self.PADDING, -self.PADDING, self.PADDING, self.PADDING))
+
+    def set_children_interactive(self, value):
+        """Whether the items inside the group can be clicked individually.
+
+        When switched off, mouse events fall through to the group
+        itself, so that clicking any item selects and moves the whole
+        group.
+        """
+
+        for item in self.bee_children():
+            item.setFlag(
+                QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable,
+                value)
+            item.setFlag(
+                QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsMovable,
+                value)
+            if not value:
+                item.setSelected(False)
+
+    def contains_scene_pos(self, pos):
+        """Whether the given scene position falls inside the box."""
+
+        return self.rect().contains(self.mapFromScene(pos))
+
+    def paint(self, painter, option, widget):
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QBrush(self.box_color))
+        painter.drawRect(self.rect())
+        self.paint_selectable(painter, option, widget)
+
+    def create_copy(self):
+        item = BeeGroupItem(box_color=self.box_color.getRgb())
+        item.setPos(self.pos())
+        item.setZValue(self.zValue())
+        item.setScale(self.scale())
+        item.setRotation(self.rotation())
+        if self.flip() == -1:
+            item.do_flip()
+        for child in self.bee_children():
+            copy = child.create_copy()
+            copy.setParentItem(item)
+        item.fit_to_children()
+        return item
+
+    def copy_to_clipboard(self, clipboard):
+        # Nothing sensible to hand to other applications
+        pass
 
 
 @register_item

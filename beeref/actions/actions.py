@@ -281,6 +281,26 @@ actions = ActionList([
         group='active_when_selection',
     ),
     Action(
+        id='group_items',
+        text='&Group',
+        shortcuts=['Ctrl+G'],
+        callback='on_action_group_items',
+        group='active_when_selection',
+    ),
+    Action(
+        id='ungroup_items',
+        text='&Ungroup',
+        shortcuts=['Ctrl+Shift+G'],
+        callback='on_action_ungroup_items',
+        group='active_when_selection',
+    ),
+    Action(
+        id='group_box_color',
+        text='Group &Colour...',
+        callback='on_action_group_box_color',
+        group='active_when_selection',
+    ),
+    Action(
         id='find_text',
         text='&Find Text...',
         shortcuts=['Ctrl+F'],

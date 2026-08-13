@@ -472,8 +472,22 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         Items to be saved are items that have a save_id attribute.
         """
 
-        return filter(lambda i: hasattr(i, 'save_id'),
-                      self.items(order=Qt.SortOrder.AscendingOrder))
+        items = filter(lambda i: hasattr(i, 'save_id'),
+                       self.items(order=Qt.SortOrder.AscendingOrder))
+
+        def depth(item):
+            value = 0
+            parent = item.parentItem()
+            while parent is not None:
+                value += 1
+                parent = parent.parentItem()
+            return value
+
+        # Groups have to be saved before the items inside them, so that
+        # those items can refer to the group's save id. Sorting by depth
+        # handles groups within groups too, and keeps the z ordering
+        # within each level.
+        return sorted(items, key=depth)
 
     def clear_save_ids(self):
         for item in self.items_for_save():
@@ -555,6 +569,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def add_queued_items(self):
         """Adds items added via ``add_item_later``"""
 
+        grouped = []
+
         while not self.items_to_add.empty():
             data, selected = self.items_to_add.get()
             typ = data.pop('type')
@@ -573,3 +589,34 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             if selected:
                 item.setSelected(True)
                 item.bring_to_front()
+            parent_group = data.get('data', {}).get('parent_group')
+            if parent_group is not None:
+                grouped.append((item, parent_group))
+
+        self.restore_groups(grouped)
+
+    def restore_groups(self, grouped):
+        """Puts loaded items back into their groups.
+
+        ``grouped`` is a list of (item, group save id) tuples. Positions
+        are stored relative to the group, so they can be kept as they
+        are once the item is re-parented.
+        """
+
+        if not grouped:
+            return
+
+        groups = {item.save_id: item
+                  for item in self.items_by_type('group')}
+        for item, parent_group in grouped:
+            group = groups.get(parent_group)
+            if group is None:
+                logger.warning(f'Group {parent_group} not found for {item}')
+                continue
+            pos = item.pos()
+            item.setParentItem(group)
+            item.setPos(pos)
+
+        for group in groups.values():
+            group.fit_to_children()
+            group.set_children_interactive(False)

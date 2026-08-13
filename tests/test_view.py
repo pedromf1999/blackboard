@@ -1144,6 +1144,73 @@ def test_on_action_text_color_when_no_text_selected(color_mock, view):
     assert len(view.undo_stack) == 0
 
 
+def test_on_action_group_items(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item1.setSelected(True)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setSelected(True)
+
+    view.on_action_group_items()
+    assert len(view.undo_stack) == 1
+    groups = list(view.scene.items_by_type('group'))
+    assert len(groups) == 1
+    # Qt does not guarantee the order of selectedItems()
+    assert set(groups[0].bee_children()) == {item1, item2}
+
+
+def test_on_action_group_items_without_selection(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(False)
+    view.on_action_group_items()
+    assert len(view.undo_stack) == 0
+
+
+def test_on_action_ungroup_items(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    view.on_action_ungroup_items()
+    assert len(view.undo_stack) == 2
+    assert list(view.scene.items_by_type('group')) == []
+    assert item.parentItem() is None
+
+
+def test_on_action_ungroup_items_when_no_group_selected(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_ungroup_items()
+    assert len(view.undo_stack) == 0
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor(1, 2, 3, 200))
+def test_on_action_group_box_color(color_mock, view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+
+    view.on_action_group_box_color()
+    group = list(view.scene.items_by_type('group'))[0]
+    assert group.box_color == QtGui.QColor(1, 2, 3, 200)
+    assert len(view.undo_stack) == 2
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor')
+def test_on_action_group_box_color_when_no_group(color_mock, view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_box_color()
+    color_mock.assert_not_called()
+    assert len(view.undo_stack) == 0
+
+
 def add_text_items(view, *texts):
     items = []
     for i, text in enumerate(texts):

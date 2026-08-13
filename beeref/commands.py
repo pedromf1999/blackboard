@@ -311,6 +311,98 @@ class CropItem(QtGui.QUndoCommand):
         self.item.crop = self.old_crop
 
 
+class GroupItems(QtGui.QUndoCommand):
+    """Put the given items into a new group."""
+
+    def __init__(self, scene, items, group):
+        super().__init__('Group items')
+        self.scene = scene
+        self.items = list(items)
+        self.group = group
+        # Positions are relative to the parent, so they need restoring
+        # when the items are taken out of the group again
+        self.old_positions = [item.pos() for item in self.items]
+
+    def redo(self):
+        self.scene.addItem(self.group)
+        self.group.setZValue(
+            min(item.zValue() for item in self.items) - self.scene.Z_STEP)
+        for item in self.items:
+            item.setParentItem(self.group)
+        self.group.fit_to_children()
+        self.group.set_children_interactive(False)
+        self.scene.deselect_all_items()
+        self.group.setSelected(True)
+
+    def undo(self):
+        self.group.set_children_interactive(True)
+        for item, pos in zip(self.items, self.old_positions):
+            item.setParentItem(None)
+            item.setPos(pos)
+            self.scene.addItem(item)
+        self.scene.removeItem(self.group)
+        self.scene.deselect_all_items()
+        for item in self.items:
+            item.setSelected(True)
+
+
+class UngroupItems(QtGui.QUndoCommand):
+    """Dissolve the given groups, keeping their items."""
+
+    def __init__(self, scene, groups):
+        super().__init__('Ungroup items')
+        self.scene = scene
+        self.groups = list(groups)
+        self.children = [group.bee_children() for group in self.groups]
+        self.positions = [[item.pos() for item in children]
+                          for children in self.children]
+
+    def redo(self):
+        self.scene.deselect_all_items()
+        for group, children in zip(self.groups, self.children):
+            group.set_children_interactive(True)
+            for item in children:
+                # Keep the item where it appears on screen
+                scene_pos = item.scenePos()
+                item.setParentItem(group.parentItem())
+                if item.parentItem() is None:
+                    self.scene.addItem(item)
+                    item.setPos(scene_pos)
+                item.setSelected(True)
+            self.scene.removeItem(group)
+
+    def undo(self):
+        for group, children, positions in zip(
+                self.groups, self.children, self.positions):
+            self.scene.addItem(group)
+            for item, pos in zip(children, positions):
+                item.setParentItem(group)
+                item.setPos(pos)
+            group.fit_to_children()
+            group.set_children_interactive(False)
+        self.scene.deselect_all_items()
+        for group in self.groups:
+            group.setSelected(True)
+
+
+class ChangeGroupBoxColor(QtGui.QUndoCommand):
+    """Change the colour of the box behind grouped items."""
+
+    def __init__(self, groups, color):
+        super().__init__('Change group colour')
+        self.groups = list(groups)
+        self.color = color
+        self.old_colors = [group.box_color for group in self.groups]
+
+    def redo(self):
+        for group in self.groups:
+            group.box_color = self.color
+
+    def undo(self):
+        for group, color in zip(self.groups, self.old_colors):
+            group.box_color = color
+
+
 class ChangeText(QtGui.QUndoCommand):
     """Change the contents of a text item.
 

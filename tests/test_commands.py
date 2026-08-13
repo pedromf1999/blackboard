@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from PyQt6 import QtCore, QtGui
 
 from beeref import commands
-from beeref.items import BeePixmapItem, BeeTextItem
+from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 
 
 def test_insert_items(view):
@@ -483,6 +483,71 @@ def test_change_text():
     assert item.toPlainText() == 'bar'
     command.undo()
     assert item.toPlainText() == 'foo'
+
+
+def test_group_items(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setPos(0, 80)
+    group = BeeGroupItem()
+
+    command = commands.GroupItems(view.scene, [item1, item2], group)
+    command.redo()
+    assert group.bee_children() == [item1, item2]
+    assert item1.parentItem() is group
+    assert group.isSelected() is True
+    assert group.rect().isValid()
+
+    command.undo()
+    assert group.scene() is None
+    assert item1.parentItem() is None
+    assert item1.scene() is view.scene
+    assert item1.isSelected() is True
+
+
+def test_group_items_restores_positions_on_undo(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setPos(30, 40)
+    command = commands.GroupItems(view.scene, [item], BeeGroupItem())
+    command.redo()
+    command.undo()
+    assert item.pos() == QtCore.QPointF(30, 40)
+
+
+def test_ungroup_items(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2], group).redo()
+
+    command = commands.UngroupItems(view.scene, [group])
+    command.redo()
+    assert group.scene() is None
+    assert item1.parentItem() is None
+    assert item1.scene() is view.scene
+    assert item1.isSelected() is True
+
+    command.undo()
+    assert item1.parentItem() is group
+    assert group.scene() is view.scene
+
+
+def test_change_group_box_color(view):
+    group1 = BeeGroupItem()
+    group2 = BeeGroupItem(box_color=(0, 0, 255, 50))
+    command = commands.ChangeGroupBoxColor(
+        [group1, group2], QtGui.QColor(255, 0, 0, 100))
+    command.redo()
+    assert group1.box_color == QtGui.QColor(255, 0, 0, 100)
+    assert group2.box_color == QtGui.QColor(255, 0, 0, 100)
+    command.undo()
+    assert group1.box_color == QtGui.QColor(52, 52, 52, 255)
+    assert group2.box_color == QtGui.QColor(0, 0, 255, 50)
 
 
 def test_change_text_keeps_formatting():

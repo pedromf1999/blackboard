@@ -31,7 +31,7 @@ from beeref import fileio
 from beeref.fileio.errors import IMG_LOADING_ERROR_MSG
 from beeref.fileio.export import exporter_registry, ImagesToDirectoryExporter
 from beeref import widgets
-from beeref.items import BeePixmapItem, BeeTextItem
+from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 from beeref.main_controls import MainControlsMixin
 from beeref.scene import BeeGraphicsScene
 from beeref.utils import get_file_extension_from_format, qcolor_to_hex
@@ -441,6 +441,38 @@ class BeeGraphicsView(MainControlsMixin,
         if images:
             self.undo_stack.push(
                 commands.ToggleGrayscale(images, checked))
+
+    def on_action_group_items(self):
+        items = self.scene.selectedItems(user_only=True)
+        if not items:
+            return
+        logger.debug(f'Grouping {len(items)} items')
+        self.undo_stack.push(
+            commands.GroupItems(self.scene, items, BeeGroupItem()))
+
+    def on_action_ungroup_items(self):
+        groups = [item for item in self.scene.selectedItems(user_only=True)
+                  if item.TYPE == BeeGroupItem.TYPE]
+        if not groups:
+            widgets.BeeNotification(self, 'No group selected')
+            return
+        logger.debug(f'Ungrouping {len(groups)} groups')
+        self.undo_stack.push(commands.UngroupItems(self.scene, groups))
+
+    def on_action_group_box_color(self):
+        groups = [item for item in self.scene.selectedItems(user_only=True)
+                  if item.TYPE == BeeGroupItem.TYPE]
+        if not groups:
+            widgets.BeeNotification(self, 'No group selected')
+            return
+        color = QtWidgets.QColorDialog.getColor(
+            groups[0].box_color,
+            self,
+            'Choose Group Colour',
+            QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        if color.isValid():
+            self.undo_stack.push(
+                commands.ChangeGroupBoxColor(groups, color))
 
     def on_action_find_text(self):
         query, ok = QtWidgets.QInputDialog.getText(
