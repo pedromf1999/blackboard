@@ -150,7 +150,7 @@ class BeeSettings(QtCore.QSettings):
                 lambda value: settings_events.canvas_color_changed.emit(value),
         },
         'View/grid_color': {
-            'default': '#787878',
+            'default': '#343434',
             'cast': str,
             'validate': lambda x: QtGui.QColor.isValidColorName(x),
             'post_save_callback':

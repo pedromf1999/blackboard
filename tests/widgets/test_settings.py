@@ -160,7 +160,7 @@ def test_canvas_color_on_restore_defaults(settings, view):
     widget.set_value('#ff0000')
     settings.remove('View/canvas_color')
     widget.on_restore_defaults()
-    assert widget.button.text() == '#3c3c3c'
+    assert widget.button.text() == '#272727'
     assert widget.title() == 'Canvas Colour:'
 
 
