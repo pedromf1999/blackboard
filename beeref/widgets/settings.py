@@ -16,11 +16,12 @@
 from functools import partial
 import logging
 
-from PyQt6 import QtWidgets
+from PyQt6 import QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import constants
 from beeref.config import BeeSettings, settings_events
+from beeref.utils import qcolor_to_hex
 
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,45 @@ class SingleCheckboxGroup(GroupBase):
         return value == Qt.CheckState.Checked
 
 
+class ColorGroup(GroupBase):
+    """A colour setting: a button showing the current colour which opens
+    a colour picker."""
+
+    def __init__(self):
+        super().__init__()
+        self.ignore_value_changed = True
+        self.button = QtWidgets.QPushButton()
+        self.button.setAutoDefault(False)
+        self.button.clicked.connect(self.on_button_clicked)
+        self.set_value(self.settings.valueOrDefault(self.KEY))
+        self.layout.addWidget(self.button)
+        self.layout.addStretch(100)
+        self.ignore_value_changed = False
+
+    def set_value(self, value):
+        self.value = value
+        color = QtGui.QColor(value)
+        # Keep the label readable on both light and dark colours
+        textcolor = 'black' if color.lightness() > 127 else 'white'
+        self.button.setStyleSheet(
+            f'background-color: {value}; color: {textcolor};')
+        self.button.setText(value)
+
+    def on_button_clicked(self, *args, **kwargs):
+        color = QtWidgets.QColorDialog.getColor(
+            QtGui.QColor(self.value), self,
+            f'Choose {self.TITLE.rstrip(":")}')
+        if color.isValid():
+            self.set_value(qcolor_to_hex(color))
+            self.on_value_changed(self.value)
+
+
+class CanvasColorWidget(ColorGroup):
+    TITLE = 'Canvas Colour:'
+    HELPTEXT = 'The background colour of the canvas.'
+    KEY = 'View/canvas_color'
+
+
 class ArrangeDefaultWidget(RadioGroup):
     TITLE = 'Default Arrange Method:'
     HELPTEXT = ('How images are arranged when inserted in batch')
@@ -208,6 +248,13 @@ class SettingsDialog(QtWidgets.QDialog):
         items_layout.addWidget(ArrangeGapWidget(), 1, 0)
         items_layout.addWidget(ArrangeDefaultWidget(), 1, 1)
         tabs.addTab(items, '&Images && Items')
+
+        # View
+        view = QtWidgets.QWidget()
+        view_layout = QtWidgets.QGridLayout()
+        view.setLayout(view_layout)
+        view_layout.addWidget(CanvasColorWidget(), 0, 0)
+        tabs.addTab(view, '&View')
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)

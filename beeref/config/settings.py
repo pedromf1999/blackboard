@@ -101,6 +101,8 @@ class CommandlineArgs:
 class BeeSettingsEvents(QtCore.QObject):
     restore_defaults = QtCore.pyqtSignal()
     restore_keyboard_defaults = QtCore.pyqtSignal()
+    # Emitted with the new colour so the view can repaint immediately
+    canvas_color_changed = QtCore.pyqtSignal(str)
 
 
 # We want to send and receive settings events globally, not per
@@ -136,7 +138,15 @@ class BeeSettings(QtCore.QSettings):
             'cast': int,
             'validate': lambda x: x >= 0,
             'post_save_callback': QtGui.QImageReader.setAllocationLimit,
-        }
+        },
+        'View/canvas_color': {
+            'default': QtGui.QColor(
+                *constants.COLORS['Scene:Canvas']).name(),
+            'cast': str,
+            'validate': lambda x: QtGui.QColor.isValidColorName(x),
+            'post_save_callback':
+                lambda value: settings_events.canvas_color_changed.emit(value),
+        },
     }
 
     def __init__(self):

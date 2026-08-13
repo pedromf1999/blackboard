@@ -1,9 +1,10 @@
 from unittest.mock import patch
 
-from PyQt6 import QtWidgets
+from PyQt6 import QtGui, QtWidgets
 
 from beeref.widgets.settings import (
     ArrangeGapWidget,
+    CanvasColorWidget,
     ConfirmCloseUnsavedWidget,
     ImageStorageFormatWidget,
     SettingsDialog,
@@ -117,6 +118,50 @@ def test_confirm_closed_on_restore_defaults(settings, view):
     widget.on_restore_defaults()
     assert widget.input.isChecked() is True
     assert widget.title() == 'Confirm when closing an unsaved file:'
+
+
+def test_canvas_color_initialises_input_from_settings(settings, view):
+    settings.setValue('View/canvas_color', '#ff0000')
+    widget = CanvasColorWidget()
+    assert widget.value == '#ff0000'
+    assert widget.button.text() == '#ff0000'
+
+
+def test_canvas_color_sets_title_when_not_edited(settings, view):
+    widget = CanvasColorWidget()
+    assert widget.title() == 'Canvas Colour:'
+
+
+def test_canvas_color_sets_title_when_edited(settings, view):
+    settings.setValue('View/canvas_color', '#ff0000')
+    widget = CanvasColorWidget()
+    assert widget.title() == 'Canvas Colour: ✎'
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor('#ff0000'))
+def test_canvas_color_saves_change(color_mock, settings, view):
+    widget = CanvasColorWidget()
+    widget.on_button_clicked()
+    assert settings.valueOrDefault('View/canvas_color') == '#ff0000'
+    assert widget.title() == 'Canvas Colour: ✎'
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor())
+def test_canvas_color_ignores_cancelled_dialog(color_mock, settings, view):
+    widget = CanvasColorWidget()
+    widget.on_button_clicked()
+    assert settings.value_changed('View/canvas_color') is False
+
+
+def test_canvas_color_on_restore_defaults(settings, view):
+    widget = CanvasColorWidget()
+    widget.set_value('#ff0000')
+    settings.remove('View/canvas_color')
+    widget.on_restore_defaults()
+    assert widget.button.text() == '#3c3c3c'
+    assert widget.title() == 'Canvas Colour:'
 
 
 @patch('PyQt6.QtWidgets.QMessageBox.question',

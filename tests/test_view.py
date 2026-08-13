@@ -33,6 +33,19 @@ def test_init_without_filenames(open_file_mock, qapp, commandline_args):
     del view
 
 
+def test_init_uses_canvas_color_from_settings(qapp, settings):
+    settings.setValue('View/canvas_color', '#ff0000')
+    parent = QtWidgets.QMainWindow()
+    view = BeeGraphicsView(qapp, parent)
+    assert view.backgroundBrush().color().name() == '#ff0000'
+    del view
+
+
+def test_canvas_color_setting_updates_view(qapp, settings, view):
+    settings.setValue('View/canvas_color', '#ff0000')
+    assert view.backgroundBrush().color().name() == '#ff0000'
+
+
 @patch('beeref.view.BeeGraphicsView.open_from_file')
 def test_init_with_filenames_beefile(open_file_mock, qapp, commandline_args):
     commandline_args.filenames = ['test.bee']
