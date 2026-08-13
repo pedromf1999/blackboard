@@ -71,6 +71,18 @@ def sort_by_filename(items):
 class BeeItemMixin(SelectableMixin):
     """Base for all items added by the user."""
 
+    # A name given by the user, shown in the layers panel. Items fall
+    # back to a description of their contents when this isn't set.
+    name = None
+
+    def get_display_name(self):
+        """The name to show for this item in the layers panel."""
+
+        return self.name or self.get_default_name()
+
+    def get_default_name(self):
+        return 'Item'
+
     def set_pos_center(self, pos):
         """Sets the position using the item's center as the origin point."""
 
@@ -99,6 +111,8 @@ class BeeItemMixin(SelectableMixin):
         """The item's data for saving, including its group membership."""
 
         data = self.get_extra_save_data()
+        if self.name:
+            data['name'] = self.name
         parent = self.parentItem()
         if getattr(parent, 'TYPE', None) == 'group':
             data['parent_group'] = parent.save_id
@@ -106,6 +120,7 @@ class BeeItemMixin(SelectableMixin):
 
     def update_from_data(self, **kwargs):
         self.save_id = kwargs.get('save_id', self.save_id)
+        self.name = kwargs.get('data', {}).get('name', self.name)
         self.setPos(kwargs.get('x', self.pos().x()),
                     kwargs.get('y', self.pos().y()))
         self.setZValue(kwargs.get('z', self.zValue()))
@@ -163,6 +178,9 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
 
     def __str__(self):
         return f'Group ({len(self.childItems())} items)'
+
+    def get_default_name(self):
+        return f'Group ({len(self.bee_children())})'
 
     @property
     def box_color(self):
@@ -298,6 +316,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     def __str__(self):
         size = self.pixmap().size()
         return (f'Image "{self.filename}" {size.width()} x {size.height()}')
+
+    def get_default_name(self):
+        if self.filename:
+            return os.path.basename(self.filename)
+        return 'Image'
 
     @property
     def crop(self):
@@ -833,6 +856,12 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def __str__(self):
         txt = self.toPlainText()[:40]
         return (f'Text "{txt}"')
+
+    def get_default_name(self):
+        text = self.toPlainText().strip().splitlines()
+        if not text:
+            return 'Text'
+        return text[0][:40]
 
     @property
     def box_color(self):

@@ -91,6 +91,10 @@ class BeeGraphicsView(MainControlsMixin,
         self.scene.cursor_cleared.connect(self.on_cursor_cleared)
         self.setScene(self.scene)
 
+        # Built before the actions, since the toggle acts on it as soon
+        # as it is restored from the settings
+        self.layers_dock = widgets.layers.LayersDock(parent, self)
+
         # Context menu and actions
         self.build_menu_and_actions()
         self.control_target = self
@@ -146,6 +150,11 @@ class BeeGraphicsView(MainControlsMixin,
     def on_canvas_color_changed(self, color):
         logger.debug(f'Canvas colour changed to: {color}')
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(color)))
+
+    def on_action_show_layers(self, checked):
+        self.layers_dock.setVisible(checked)
+        if checked:
+            self.layers_dock.tree.refresh()
 
     def on_action_show_grid(self, checked):
         self.show_grid = checked

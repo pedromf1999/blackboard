@@ -417,6 +417,40 @@ class UngroupItems(QtGui.QUndoCommand):
             group.setSelected(True)
 
 
+class RenameItem(QtGui.QUndoCommand):
+    """Rename an item from the layers panel."""
+
+    def __init__(self, item, name):
+        super().__init__('Rename item')
+        self.item = item
+        self.name = name or None
+        self.old_name = item.name
+
+    def redo(self):
+        self.item.name = self.name
+
+    def undo(self):
+        self.item.name = self.old_name
+
+
+class ReorderItems(QtGui.QUndoCommand):
+    """Set new z values, for reordering from the layers panel."""
+
+    def __init__(self, items, z_values):
+        super().__init__('Reorder items')
+        self.items = list(items)
+        self.z_values = list(z_values)
+        self.old_z_values = [item.zValue() for item in self.items]
+
+    def redo(self):
+        for item, z in zip(self.items, self.z_values):
+            item.setZValue(z)
+
+    def undo(self):
+        for item, z in zip(self.items, self.old_z_values):
+            item.setZValue(z)
+
+
 class MoveToGroup(QtGui.QUndoCommand):
     """Move items into a group, or out of their current one.
 

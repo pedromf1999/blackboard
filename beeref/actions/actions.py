@@ -452,6 +452,14 @@ actions = ActionList([
         callback='on_action_debuglog',
     ),
     Action(
+        id='show_layers',
+        text='Show &Layers',
+        shortcuts=['Ctrl+J'],
+        checkable=True,
+        settings='View/show_layers',
+        callback='on_action_show_layers',
+    ),
+    Action(
         id='show_grid',
         text='Show &Grid',
         checkable=True,

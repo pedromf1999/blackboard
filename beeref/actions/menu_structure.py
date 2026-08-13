@@ -67,6 +67,7 @@ menu_structure = [
             'fit_selection',
             MENU_SEPARATOR,
             'show_grid',
+            'show_layers',
             MENU_SEPARATOR,
             'fullscreen',
             'always_on_top',
