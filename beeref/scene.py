@@ -529,11 +529,17 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         item = self.itemAt(event.scenePos(), self.views()[0].transform())
         if item:
             group = self.get_group_ancestor(item)
-            if group is not None and not group.locked:
-                # Double-clicking an item inside a group selects that
-                # item so that it can be moved and scaled on its own
-                self.enter_group(group, item)
-                return
+            if group is not None and group is not self.active_group:
+                if group.locked:
+                    # A locked group stays closed, so treat the click as
+                    # one on the group itself
+                    item = group
+                else:
+                    # Double-clicking an item inside a group selects that
+                    # item so that it can be moved and scaled on its own.
+                    # Double-clicking it again edits it, as usual.
+                    self.enter_group(group, item)
+                    return
             if not item.isSelected():
                 item.setSelected(True)
             if item.is_editable:

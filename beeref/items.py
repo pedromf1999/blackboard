@@ -923,6 +923,9 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.old_text = self.toHtml()
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
+        # Explicit, so that editing also works when edit mode isn't
+        # entered by clicking the item
+        self.setFocus()
         self.scene().edit_item = self
 
     def exit_edit_mode(self, commit=True):

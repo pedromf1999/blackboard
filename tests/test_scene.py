@@ -1266,6 +1266,49 @@ def test_mouse_doubleclick_event_when_over_item(mouse_mock, view, item):
 
 
 @patch('PyQt6.QtWidgets.QGraphicsScene.mousePressEvent')
+def test_mouse_doubleclick_on_item_in_group_enters_group(press_mock, view):
+    group, item1, item2 = make_group_in_scene(view)
+    item1.enter_edit_mode = MagicMock()
+    event = MagicMock()
+    view.scene.itemAt = MagicMock(return_value=item1)
+
+    view.scene.mouseDoubleClickEvent(event)
+    assert view.scene.active_group is group
+    assert item1.isSelected() is True
+    # The first double click opens the group, it doesn't edit yet
+    item1.enter_edit_mode.assert_not_called()
+
+
+@patch('PyQt6.QtWidgets.QGraphicsScene.mousePressEvent')
+def test_mouse_doubleclick_in_open_group_edits_text(press_mock, view):
+    group, item1, item2 = make_group_in_scene(view)
+    item1.enter_edit_mode = MagicMock()
+    event = MagicMock()
+    view.scene.itemAt = MagicMock(return_value=item1)
+
+    view.scene.mouseDoubleClickEvent(event)
+    view.scene.mouseDoubleClickEvent(event)
+    item1.enter_edit_mode.assert_called_once_with()
+
+
+@patch('PyQt6.QtWidgets.QGraphicsScene.mousePressEvent')
+def test_mouse_doubleclick_on_item_in_locked_group(press_mock, view):
+    group, item1, item2 = make_group_in_scene(view)
+    group.locked = True
+    item1.enter_edit_mode = MagicMock()
+    event = MagicMock()
+    view.scene.itemAt = MagicMock(return_value=item1)
+    view.fit_rect = MagicMock()
+
+    view.scene.mouseDoubleClickEvent(event)
+    assert view.scene.active_group is None
+    item1.enter_edit_mode.assert_not_called()
+    # Zooms to the group instead
+    assert group.isSelected() is True
+    view.fit_rect.assert_called_once()
+
+
+@patch('PyQt6.QtWidgets.QGraphicsScene.mousePressEvent')
 @patch('PyQt6.QtWidgets.QGraphicsScene.mouseDoubleClickEvent')
 def test_mouse_doubleclick_event_when_over_editable_item(
         double_mock, press_mock, view):

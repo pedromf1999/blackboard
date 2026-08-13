@@ -918,7 +918,6 @@ class BeeGraphicsView(MainControlsMixin,
         # Start editing straight away, with the placeholder selected so
         # that typing replaces it
         item.enter_edit_mode()
-        item.setFocus()
         cursor = item.textCursor()
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
         item.setTextCursor(cursor)
