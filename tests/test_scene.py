@@ -703,6 +703,26 @@ def test_has_multi_selection_when_multi_selection(view):
     assert view.scene.has_multi_selection() is True
 
 
+def test_has_text_selection(view, item):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    view.scene.addItem(item)
+    item.setSelected(True)
+    assert view.scene.has_text_selection() is True
+    assert view.scene.selected_text_items() == [textitem]
+
+
+def test_has_text_selection_when_only_images_selected(view, item):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(False)
+    view.scene.addItem(item)
+    item.setSelected(True)
+    assert view.scene.has_text_selection() is False
+    assert view.scene.selected_text_items() == []
+
+
 def test_has_single_image_selection(view, item):
     view.scene.addItem(item)
     item.setSelected(True)

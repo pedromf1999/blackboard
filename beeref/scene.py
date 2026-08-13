@@ -356,6 +356,17 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
 
         return len(self.selectedItems(user_only=True)) > 1
 
+    def has_text_selection(self):
+        """Checks whether the current selection contains text items."""
+
+        return bool(self.selected_text_items())
+
+    def selected_text_items(self):
+        """The currently selected text items."""
+
+        return [item for item in self.selectedItems(user_only=True)
+                if item.TYPE == 'text']
+
     def has_single_image_selection(self):
         """Checks whether the current selection is a single image."""
 

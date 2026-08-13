@@ -1077,6 +1077,72 @@ def test_on_action_grayscale(view):
     assert pixmapitem2.grayscale is False
 
 
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor(255, 0, 0))
+def test_on_action_text_color(color_mock, view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+
+    view.on_action_text_color()
+    assert len(view.undo_stack) == 1
+    cursor = textitem.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().foreground().color() == QtGui.QColor(255, 0, 0)
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor(255, 255, 0))
+def test_on_action_text_highlight_color(color_mock, view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_highlight_color()
+    assert len(view.undo_stack) == 1
+    cursor = textitem.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().background().color() == QtGui.QColor(
+        255, 255, 0)
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor(0, 0, 255, 100))
+def test_on_action_text_box_color(color_mock, view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_box_color()
+    assert len(view.undo_stack) == 1
+    assert textitem.box_color == QtGui.QColor(0, 0, 255, 100)
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor())
+def test_on_action_text_color_when_dialog_cancelled(color_mock, view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_color()
+    assert len(view.undo_stack) == 0
+
+
+@patch('PyQt6.QtWidgets.QColorDialog.getColor')
+def test_on_action_text_color_when_no_text_selected(color_mock, view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+
+    view.on_action_text_color()
+    color_mock.assert_not_called()
+    assert len(view.undo_stack) == 0
+
+
 def test_cancel_active_modes_when_sample_color_mode(view):
     view.active_mode = view.SAMPLE_COLOR_MODE
     view.sample_color_widget = widgets.SampleColorWidget(

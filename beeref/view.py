@@ -353,6 +353,53 @@ class BeeGraphicsView(MainControlsMixin,
             self.undo_stack.push(
                 commands.ToggleGrayscale(images, checked))
 
+    def on_action_text_color(self):
+        self.change_text_char_format('Text Colour', foreground=True)
+
+    def on_action_text_highlight_color(self):
+        self.change_text_char_format('Highlight Colour', foreground=False)
+
+    def change_text_char_format(self, title, foreground):
+        """Ask for a colour and apply it to the selected text items.
+
+        While editing an item, this applies to the selected words only;
+        otherwise it applies to the whole text of each selected item.
+        """
+
+        items = self.scene.selected_text_items()
+        if not items:
+            return
+        color = QtWidgets.QColorDialog.getColor(
+            QtGui.QColor(), self, f'Choose {title}')
+        if not color.isValid():
+            return
+
+        charformat = QtGui.QTextCharFormat()
+        if foreground:
+            charformat.setForeground(color)
+        else:
+            charformat.setBackground(color)
+
+        old_htmls = [item.toHtml() for item in items]
+        for item in items:
+            item.apply_char_format(charformat)
+        new_htmls = [item.toHtml() for item in items]
+        self.undo_stack.push(
+            commands.ChangeTextFormat(items, new_htmls, old_htmls))
+
+    def on_action_text_box_color(self):
+        items = self.scene.selected_text_items()
+        if not items:
+            return
+        color = QtWidgets.QColorDialog.getColor(
+            items[0].box_color,
+            self,
+            'Choose Box Colour',
+            QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        if color.isValid():
+            self.undo_stack.push(
+                commands.ChangeTextBoxColor(items, color))
+
     def on_action_crop(self):
         self.scene.crop_items()
 
@@ -732,6 +779,8 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_selection())
         self.actiongroup_set_enabled('active_when_single_image',
                                      self.scene.has_single_image_selection())
+        self.actiongroup_set_enabled('active_when_text_selection',
+                                     self.scene.has_text_selection())
 
         if self.scene.has_selection():
             item = self.scene.selectedItems(user_only=True)[0]

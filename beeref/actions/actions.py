@@ -281,6 +281,24 @@ actions = ActionList([
         group='active_when_selection',
     ),
     Action(
+        id='text_color',
+        text='&Text Colour...',
+        callback='on_action_text_color',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_highlight_color',
+        text='&Highlight Colour...',
+        callback='on_action_text_highlight_color',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_box_color',
+        text='&Box Colour...',
+        callback='on_action_text_box_color',
+        group='active_when_text_selection',
+    ),
+    Action(
         id='show_color_gamut',
         text='Show &Color Gamut',
         callback='on_action_show_color_gamut',

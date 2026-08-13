@@ -485,6 +485,48 @@ def test_change_text():
     assert item.toPlainText() == 'foo'
 
 
+def test_change_text_keeps_formatting():
+    item = BeeTextItem('foo')
+    command = commands.ChangeText(
+        item, '<p><span style="color:#ff0000;">bar</span></p>', 'foo')
+    command.redo()
+    assert item.toPlainText() == 'bar'
+    cursor = item.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().foreground().color() == QtGui.QColor(255, 0, 0)
+    command.undo()
+    assert item.toPlainText() == 'foo'
+
+
+def test_change_text_format():
+    item1 = BeeTextItem('foo')
+    item2 = BeeTextItem('bar')
+    old_htmls = [item1.toHtml(), item2.toHtml()]
+    new_htmls = ['<p>foo new</p>', '<p>bar new</p>']
+    command = commands.ChangeTextFormat(
+        [item1, item2], new_htmls, old_htmls)
+    command.redo()
+    assert item1.toPlainText() == 'foo new'
+    assert item2.toPlainText() == 'bar new'
+    command.undo()
+    assert item1.toPlainText() == 'foo'
+    assert item2.toPlainText() == 'bar'
+
+
+def test_change_text_box_color():
+    item1 = BeeTextItem('foo')
+    item2 = BeeTextItem('bar')
+    item2.box_color = QtGui.QColor(0, 0, 255, 50)
+    command = commands.ChangeTextBoxColor(
+        [item1, item2], QtGui.QColor(255, 0, 0, 100))
+    command.redo()
+    assert item1.box_color == QtGui.QColor(255, 0, 0, 100)
+    assert item2.box_color == QtGui.QColor(255, 0, 0, 100)
+    command.undo()
+    assert item1.box_color == QtGui.QColor(0, 0, 0, 40)
+    assert item2.box_color == QtGui.QColor(0, 0, 255, 50)
+
+
 def test_change_opacity(view):
     item1 = BeePixmapItem(QtGui.QImage())
     item1.setOpacity(0.5)

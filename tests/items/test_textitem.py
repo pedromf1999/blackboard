@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref.items import BeeTextItem, item_registry
@@ -61,7 +61,72 @@ def test_set_pos_center_when_rotated(qapp):
 
 def test_get_extra_save_data(qapp):
     item = BeeTextItem('foo bar')
-    assert item.get_extra_save_data() == {'text': 'foo bar'}
+    data = item.get_extra_save_data()
+    assert data['text'] == 'foo bar'
+    assert data['box_color'] == (0, 0, 0, 40)
+    assert 'foo bar' in data['html']
+
+
+def test_get_extra_save_data_with_box_color(qapp):
+    item = BeeTextItem('foo bar')
+    item.box_color = QtGui.QColor(255, 0, 0, 100)
+    assert item.get_extra_save_data()['box_color'] == (255, 0, 0, 100)
+
+
+def test_init_from_html_and_box_color(qapp):
+    item = BeeTextItem(text='plain',
+                       html='<p>rich <b>text</b></p>',
+                       box_color=(255, 0, 0, 100))
+    assert item.toPlainText() == 'rich text'
+    assert item.box_color == QtGui.QColor(255, 0, 0, 100)
+
+
+def test_init_falls_back_to_plain_text(qapp):
+    item = BeeTextItem(text='plain')
+    assert item.toPlainText() == 'plain'
+    assert item.box_color == QtGui.QColor(0, 0, 0, 40)
+
+
+def test_apply_char_format_applies_to_whole_text(qapp):
+    item = BeeTextItem('foo bar')
+    charformat = QtGui.QTextCharFormat()
+    charformat.setForeground(QtGui.QColor(255, 0, 0))
+    item.apply_char_format(charformat)
+    cursor = item.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().foreground().color() == QtGui.QColor(255, 0, 0)
+
+
+def test_apply_char_format_applies_to_selection_only(qapp):
+    item = BeeTextItem('foo bar')
+    cursor = item.textCursor()
+    cursor.setPosition(0)
+    cursor.setPosition(3, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    item.setTextCursor(cursor)
+    charformat = QtGui.QTextCharFormat()
+    charformat.setForeground(QtGui.QColor(255, 0, 0))
+    item.apply_char_format(charformat)
+
+    check = item.textCursor()
+    check.setPosition(2)
+    assert check.charFormat().foreground().color() == QtGui.QColor(255, 0, 0)
+    check.setPosition(6)
+    assert check.charFormat().foreground().color() != QtGui.QColor(255, 0, 0)
+
+
+def test_create_copy_keeps_formatting(qapp):
+    item = BeeTextItem('foo bar')
+    item.box_color = QtGui.QColor(255, 0, 0, 100)
+    charformat = QtGui.QTextCharFormat()
+    charformat.setForeground(QtGui.QColor(0, 255, 0))
+    item.apply_char_format(charformat)
+
+    copy = item.create_copy()
+    assert copy.toPlainText() == 'foo bar'
+    assert copy.box_color == QtGui.QColor(255, 0, 0, 100)
+    cursor = copy.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().foreground().color() == QtGui.QColor(0, 255, 0)
 
 
 @patch('beeref.items.BeeTextItem.boundingRect')

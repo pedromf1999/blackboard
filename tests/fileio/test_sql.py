@@ -219,7 +219,10 @@ def test_sqliteio_write_inserts_new_text_item(tmpfile, view):
     assert result[3] == 1.3
     assert result[4] == 33
     assert result[5] == -1
-    assert json.loads(result[6]) == {'text': 'foo bar'}
+    data = json.loads(result[6])
+    assert data['text'] == 'foo bar'
+    assert data['box_color'] == [0, 0, 0, 40]
+    assert 'foo bar' in data['html']
     assert result[7] == 'text'
     assert result[8] is None
     assert result[9] is None
@@ -326,7 +329,9 @@ def test_sqliteio_write_updates_existing_text_item(tmpfile, view):
     assert result[3] == 0.7
     assert result[4] == 100
     assert result[5] == -1
-    assert json.loads(result[6]) == {'text': 'updated'}
+    data = json.loads(result[6])
+    assert data['text'] == 'updated'
+    assert 'updated' in data['html']
     assert result[7] is None
 
 

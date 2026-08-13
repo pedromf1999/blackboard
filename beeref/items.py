@@ -639,7 +639,10 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
     TYPE = 'text'
 
-    def __init__(self, text=None, **kwargs):
+    # The semi-transparent box drawn behind text by default
+    DEFAULT_BOX_COLOR = (0, 0, 0, 40)
+
+    def __init__(self, text=None, html=None, box_color=None, **kwargs):
         super().__init__(text or "Text")
         self.save_id = None
         logger.debug(f'Initialized {self}')
@@ -648,6 +651,11 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.is_editable = True
         self.edit_mode = False
         self.setDefaultTextColor(QtGui.QColor(*COLORS['Scene:Text']))
+        self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
+        if html:
+            # Rich text takes precedence over the plain text version,
+            # which is only kept for compatibility with BeeRef
+            self.setHtml(html)
 
     @classmethod
     def create_from_data(cls, **kwargs):
@@ -659,25 +667,47 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         txt = self.toPlainText()[:40]
         return (f'Text "{txt}"')
 
+    @property
+    def box_color(self):
+        return self._box_color
+
+    @box_color.setter
+    def box_color(self, value):
+        logger.debug(f'Setting box colour for {self} to {value.name()}')
+        self._box_color = value
+        self.update()
+
     def get_extra_save_data(self):
-        return {'text': self.toPlainText()}
+        # 'text' is the plain text version, which BeeRef (and older
+        # versions of this fork) will read; 'html' holds the formatting
+        # and is ignored by anything that doesn't know about it.
+        return {'text': self.toPlainText(),
+                'html': self.toHtml(),
+                'box_color': self.box_color.getRgb()}
 
     def contains(self, point):
         return self.boundingRect().contains(point)
 
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
-        color = QtGui.QColor(0, 0, 0)
-        color.setAlpha(40)
-        brush = QtGui.QBrush(color)
-        painter.setBrush(brush)
+        painter.setBrush(QtGui.QBrush(self.box_color))
         painter.drawRect(QtWidgets.QGraphicsTextItem.boundingRect(self))
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)
 
+    def apply_char_format(self, charformat):
+        """Apply the given char format to the current selection, or to the
+        whole text if nothing is selected."""
+
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        cursor.mergeCharFormat(charformat)
+
     def create_copy(self):
-        item = BeeTextItem(self.toPlainText())
+        item = BeeTextItem(html=self.toHtml(),
+                           box_color=self.box_color.getRgb())
         item.setPos(self.pos())
         item.setZValue(self.zValue())
         item.setScale(self.scale())
@@ -689,7 +719,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def enter_edit_mode(self):
         logger.debug(f'Entering edit mode on {self}')
         self.edit_mode = True
-        self.old_text = self.toPlainText()
+        self.old_text = self.toHtml()
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
         self.scene().edit_item = self
@@ -703,13 +733,13 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.scene().edit_item = None
         if commit:
             self.scene().undo_stack.push(
-                commands.ChangeText(self, self.toPlainText(), self.old_text))
+                commands.ChangeText(self, self.toHtml(), self.old_text))
             if not self.toPlainText().strip():
                 logger.debug('Removing empty text item')
                 self.scene().undo_stack.push(
                     commands.DeleteItems(self.scene(), [self]))
         else:
-            self.setPlainText(self.old_text)
+            self.setHtml(self.old_text)
 
     def has_selection_handles(self):
         return super().has_selection_handles() and not self.edit_mode

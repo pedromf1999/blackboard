@@ -312,6 +312,10 @@ class CropItem(QtGui.QUndoCommand):
 
 
 class ChangeText(QtGui.QUndoCommand):
+    """Change the contents of a text item.
+
+    Texts are handled as html so that formatting is preserved.
+    """
 
     def __init__(self, item, new_text, old_text):
         super().__init__('Change text')
@@ -320,10 +324,50 @@ class ChangeText(QtGui.QUndoCommand):
         self.old_text = old_text
 
     def redo(self):
-        self.item.setPlainText(self.new_text)
+        self.item.setHtml(self.new_text)
 
     def undo(self):
-        self.item.setPlainText(self.old_text)
+        self.item.setHtml(self.old_text)
+
+
+class ChangeTextFormat(QtGui.QUndoCommand):
+    """Change the formatting of text items.
+
+    Since Qt's char formats are applied to the document directly, we
+    store the whole html of each item before and after the change.
+    """
+
+    def __init__(self, items, new_htmls, old_htmls):
+        super().__init__('Change text format')
+        self.items = list(items)
+        self.new_htmls = new_htmls
+        self.old_htmls = old_htmls
+
+    def redo(self):
+        for item, html in zip(self.items, self.new_htmls):
+            item.setHtml(html)
+
+    def undo(self):
+        for item, html in zip(self.items, self.old_htmls):
+            item.setHtml(html)
+
+
+class ChangeTextBoxColor(QtGui.QUndoCommand):
+    """Change the colour of the box drawn behind text items."""
+
+    def __init__(self, items, color):
+        super().__init__('Change text box colour')
+        self.items = list(items)
+        self.color = color
+        self.old_colors = [item.box_color for item in self.items]
+
+    def redo(self):
+        for item in self.items:
+            item.box_color = self.color
+
+    def undo(self):
+        for item, color in zip(self.items, self.old_colors):
+            item.box_color = color
 
 
 class ChangeOpacity(QtGui.QUndoCommand):

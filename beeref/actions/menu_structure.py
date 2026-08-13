@@ -116,6 +116,14 @@ menu_structure = [
         ],
     },
     {
+        'menu': '&Text',
+        'items': [
+            'text_color',
+            'text_highlight_color',
+            'text_box_color',
+        ],
+    },
+    {
         'menu': '&Settings',
         'items': [
             'settings',
