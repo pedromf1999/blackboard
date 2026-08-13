@@ -1,9 +1,11 @@
 import os.path
+from unittest.mock import patch
 
 from PyQt6 import QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
+from beeref.actions.actions import actions
 from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 
 
@@ -42,6 +44,52 @@ def entries(tree):
 
 def test_dock_starts_hidden(view):
     assert view.layers_dock.isVisible() is False
+
+
+def test_closing_dock_hides_it_and_unticks_the_menu(view):
+    view.on_action_show_layers(True)
+    action = actions['show_layers'].qaction
+    action.setChecked(True)
+
+    view.layers_dock.close()
+    assert view.layers_dock.isVisible() is False
+    assert action.isChecked() is False
+
+
+def test_closing_dock_does_not_quit(view):
+    view.on_action_show_layers(True)
+    with patch('PyQt6.QtWidgets.QApplication.quit') as quit_mock:
+        view.layers_dock.close()
+    quit_mock.assert_not_called()
+
+
+def test_dock_can_be_collapsed(view):
+    view.on_action_show_layers(True)
+    dock = view.layers_dock
+    assert dock.collapsed is False
+
+    dock.toggle_collapsed()
+    assert dock.collapsed is True
+    assert dock.tree.isVisible() is False
+    assert dock.maximumHeight() == dock.titlebar.sizeHint().height()
+
+
+def test_dock_can_be_expanded_again(view):
+    view.on_action_show_layers(True)
+    dock = view.layers_dock
+    dock.toggle_collapsed()
+    dock.toggle_collapsed()
+    assert dock.collapsed is False
+    assert dock.tree.isVisible() is True
+    assert dock.maximumHeight() > dock.titlebar.sizeHint().height()
+
+
+def test_collapse_button_arrow_follows_state(view):
+    dock = view.layers_dock
+    button = dock.titlebar.collapse_button
+    assert button.arrowType() == Qt.ArrowType.DownArrow
+    dock.toggle_collapsed()
+    assert button.arrowType() == Qt.ArrowType.RightArrow
 
 
 def test_lists_items_topmost_first(view):

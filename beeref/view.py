@@ -156,6 +156,11 @@ class BeeGraphicsView(MainControlsMixin,
         if checked:
             self.layers_dock.tree.refresh()
 
+    def on_layers_dock_closed(self):
+        """Untick the menu entry when the panel is closed by its button."""
+
+        actions.actions['show_layers'].qaction.setChecked(False)
+
     def on_action_show_grid(self, checked):
         self.show_grid = checked
         self.viewport().update()

@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 ITEM_ROLE = Qt.ItemDataRole.UserRole
 
+# Qt's "no maximum", for undoing a fixed height
+QWIDGETSIZE_MAX = (1 << 24) - 1
+
 
 class LayersTree(QtWidgets.QTreeWidget):
     """The tree of items shown in the layers panel."""
@@ -247,23 +250,74 @@ class LayersTree(QtWidgets.QTreeWidget):
         self.schedule_refresh()
 
 
+class LayersTitleBar(QtWidgets.QWidget):
+    """Title bar with buttons for collapsing and closing the panel."""
+
+    def __init__(self, dock):
+        super().__init__(dock)
+        self.dock = dock
+
+        self.collapse_button = QtWidgets.QToolButton(self)
+        self.collapse_button.setAutoRaise(True)
+        self.collapse_button.setToolTip('Collapse')
+        self.collapse_button.clicked.connect(self.dock.toggle_collapsed)
+
+        close_button = QtWidgets.QToolButton(self)
+        close_button.setAutoRaise(True)
+        close_button.setToolTip('Close')
+        close_button.setIcon(self.style().standardIcon(
+            QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton))
+        close_button.clicked.connect(self.dock.close)
+
+        layout = QtWidgets.QHBoxLayout()
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.addWidget(self.collapse_button)
+        layout.addWidget(QtWidgets.QLabel(dock.windowTitle(), self))
+        layout.addStretch(100)
+        layout.addWidget(close_button)
+        self.setLayout(layout)
+        self.update_collapse_button(False)
+
+    def update_collapse_button(self, collapsed):
+        self.collapse_button.setArrowType(
+            Qt.ArrowType.RightArrow if collapsed else Qt.ArrowType.DownArrow)
+        self.collapse_button.setToolTip('Expand' if collapsed else 'Collapse')
+
+
 class LayersDock(QtWidgets.QDockWidget):
     """The dockable panel holding the layers tree."""
 
     def __init__(self, parent, view):
         super().__init__('Layers', parent)
+        self.view = view
         self.setObjectName('LayersDock')
         self.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea
                              | Qt.DockWidgetArea.RightDockWidgetArea)
         self.tree = LayersTree(self, view)
         self.setWidget(self.tree)
+        self.collapsed = False
+        self.titlebar = LayersTitleBar(self)
+        self.setTitleBarWidget(self.titlebar)
         parent.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self)
         self.hide()
 
+    def toggle_collapsed(self):
+        self.set_collapsed(not self.collapsed)
+
+    def set_collapsed(self, value):
+        """Shrink the panel to just its title bar, or restore it."""
+
+        logger.debug(f'Collapsing layers panel: {value}')
+        self.collapsed = value
+        self.tree.setVisible(not value)
+        self.titlebar.update_collapse_button(value)
+        if value:
+            self.setFixedHeight(self.titlebar.sizeHint().height())
+        else:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(QWIDGETSIZE_MAX)
+
     def closeEvent(self, event):
         # Keep the menu entry in step when closed via the title bar
-        from beeref.actions import actions
-        action = actions['show_layers'].qaction
-        if action is not None:
-            action.setChecked(False)
+        self.view.on_layers_dock_closed()
         super().closeEvent(event)
