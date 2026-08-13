@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from beeref.items import BeeGroupItem, BeeTextItem, item_registry
@@ -80,6 +82,37 @@ def test_set_children_interactive_deselects(view):
     items[0].setSelected(True)
     group.set_children_interactive(False)
     assert items[0].isSelected() is False
+
+
+def test_drop_target_defaults_to_false(qapp):
+    assert BeeGroupItem().drop_target is False
+
+
+def test_drop_target_triggers_repaint(qapp):
+    group = BeeGroupItem()
+    with patch.object(group, 'update') as update_mock:
+        group.drop_target = True
+        update_mock.assert_called_once()
+        # Setting the same value again does not repaint
+        group.drop_target = True
+        update_mock.assert_called_once()
+
+
+@patch('beeref.selection.SelectableMixin.paint_selectable')
+def test_paint_draws_drop_target_highlight(selectable_mock, view):
+    group, items = make_group(view, (0, 0))
+    painter = MagicMock()
+    option = MagicMock()
+
+    group.drop_target = False
+    group.paint(painter, option, 'widget')
+    assert painter.drawRect.call_count == 1
+
+    painter.reset_mock()
+    group.drop_target = True
+    group.paint(painter, option, 'widget')
+    # The box, plus the highlight border on top of it
+    assert painter.drawRect.call_count == 2
 
 
 def test_contains_scene_pos(view):

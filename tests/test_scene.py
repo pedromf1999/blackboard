@@ -914,6 +914,96 @@ def test_refit_group_grows_containing_groups(view):
     assert outer.rect().height() >= inner.rect().height()
 
 
+def test_update_drop_target_highlights_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    drop_onto(loose, group)
+
+    view.scene.update_drop_target([loose])
+    assert view.scene.drop_target is group
+    assert group.drop_target is True
+
+
+def test_update_drop_target_when_not_over_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    loose.setPos(900, 900)
+
+    view.scene.update_drop_target([loose])
+    assert view.scene.drop_target is None
+    assert group.drop_target is False
+
+
+def test_update_drop_target_ignores_own_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    view.scene.update_drop_target([item1])
+    assert group.drop_target is False
+
+
+def test_update_drop_target_not_shown_when_detaching(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    drop_onto(loose, group)
+
+    view.scene.update_drop_target([loose], detach=True)
+    assert group.drop_target is False
+
+
+def test_clear_drop_target(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    drop_onto(loose, group)
+    view.scene.update_drop_target([loose])
+
+    view.scene.clear_drop_target()
+    assert view.scene.drop_target is None
+    assert group.drop_target is False
+
+
+def test_raise_dragged_items(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item1.setZValue(5)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setZValue(-3)
+
+    view.scene.raise_dragged_items([item2])
+    assert item2.zValue() > 5
+
+
+def test_raise_dragged_items_only_once_per_drag(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setZValue(2)
+
+    view.scene.raise_dragged_items([item])
+    raised = item.zValue()
+    view.scene.raise_dragged_items([item])
+    assert item.zValue() == raised
+
+
+def test_reset_dragged_items_restores_z(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setZValue(2)
+
+    view.scene.raise_dragged_items([item])
+    view.scene.reset_dragged_items()
+    assert item.zValue() == 2
+    assert view.scene.dragged_z == []
+
+
+def test_reset_dragged_items_when_nothing_dragged(view):
+    view.scene.reset_dragged_items()
+    assert view.scene.dragged_z == []
+
+
 def test_has_text_selection(view, item):
     textitem = BeeTextItem('foo')
     view.scene.addItem(textitem)

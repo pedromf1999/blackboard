@@ -53,6 +53,10 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.crop_item = None
         # The group whose items can currently be edited individually
         self.active_group = None
+        # The group highlighted as the drop target during a drag
+        self.drop_target = None
+        # Original z values of the items being dragged
+        self.dragged_z = []
         self.settings = BeeSettings()
         self.clear()
         self._clear_ongoing = False
@@ -551,11 +555,58 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             self.rubberband_item.fit(self.event_start, event.scenePos())
             self.setSelectionArea(self.rubberband_item.shape())
             self.views()[0].reset_previous_transform()
+        if self.active_mode == self.MOVE_MODE:
+            items = self.selectedItems(user_only=True)
+            self.raise_dragged_items(items)
+            self.update_drop_target(
+                items,
+                detach=bool(event.modifiers()
+                            & Qt.KeyboardModifier.AltModifier))
         super().mouseMoveEvent(event)
+
+    def raise_dragged_items(self, items):
+        """Draw the items being dragged on top of the others.
+
+        The original z values are put back once the drag is over.
+        """
+
+        if self.dragged_z or not items:
+            return
+        self.dragged_z = [(item, item.zValue()) for item in items]
+        for i, item in enumerate(items):
+            item.setZValue(self.max_z + (i + 1) * self.Z_STEP)
+
+    def reset_dragged_items(self):
+        for item, z in self.dragged_z:
+            if item.scene() is self:
+                item.setZValue(z)
+        self.dragged_z = []
+
+    def update_drop_target(self, items, detach=False):
+        """Highlight the group that the dragged items would land in."""
+
+        target = None
+        if not detach:
+            for item in items:
+                group = self.get_drop_group(item)
+                if group is not None and group is not (
+                        self.get_group_ancestor(item)):
+                    target = group
+                    break
+        if target is self.drop_target:
+            return
+        for group in self.items_by_type('group'):
+            group.drop_target = group is target
+        self.drop_target = target
+
+    def clear_drop_target(self):
+        self.update_drop_target([])
 
     def mouseReleaseEvent(self, event):
         if self.active_mode == self.RUBBERBAND_MODE:
             self.end_rubberband_mode()
+        self.reset_dragged_items()
+        self.clear_drop_target()
         if (self.active_mode == self.MOVE_MODE
                 and self.has_selection()
                 and self.multi_select_item.active_mode is None

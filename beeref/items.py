@@ -129,6 +129,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     DEFAULT_BOX_COLOR = (52, 52, 52, 255)
     # Space between the box edge and the items inside it
     PADDING = 20
+    # Width of the border shown when the group is a drop target
+    DROP_BORDER_SIZE = 4
 
     def __init__(self, box_color=None, locked=False, **kwargs):
         super().__init__()
@@ -139,7 +141,20 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
+        self._drop_target = False
         logger.debug(f'Initialized {self}')
+
+    @property
+    def drop_target(self):
+        """Whether items dragged right now would land in this group."""
+
+        return self._drop_target
+
+    @drop_target.setter
+    def drop_target(self, value):
+        if value != self._drop_target:
+            self._drop_target = value
+            self.update()
 
     @classmethod
     def create_from_data(cls, **kwargs):
@@ -207,7 +222,26 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
         painter.drawRect(self.rect())
+        if self.drop_target:
+            self.paint_drop_target(painter)
         self.paint_selectable(painter, option, widget)
+
+    def paint_drop_target(self, painter):
+        """Show that dropping here will add the item to this group."""
+
+        color = QtGui.QColor(*COLORS['Scene:Selection'])
+        fill = QtGui.QColor(color)
+        fill.setAlpha(40)
+        painter.setBrush(QtGui.QBrush(fill))
+        pen = QtGui.QPen(color)
+        pen.setWidth(
+            int(self.fixed_length_for_viewport(self.DROP_BORDER_SIZE)))
+        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        painter.setPen(pen)
+        # Inset by half the pen width so the border stays inside the box
+        painter.drawRect(self.rect().adjusted(
+            pen.width() / 2, pen.width() / 2,
+            -pen.width() / 2, -pen.width() / 2))
 
     def create_copy(self):
         item = BeeGroupItem(box_color=self.box_color.getRgb(),
