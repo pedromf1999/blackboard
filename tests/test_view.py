@@ -6,10 +6,11 @@ from unittest.mock import MagicMock, patch, mock_open
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
+import pytest
 
 from beeref import commands, widgets
 from beeref.actions import actions
-from beeref.config import logfile_name
+from beeref.config import logfile_name, settings_events
 from beeref.items import BeePixmapItem, BeeTextItem
 from beeref.view import BeeGraphicsView
 
@@ -1141,6 +1142,63 @@ def test_on_action_text_color_when_no_text_selected(color_mock, view):
     view.on_action_text_color()
     color_mock.assert_not_called()
     assert len(view.undo_stack) == 0
+
+
+@pytest.mark.parametrize('zoom', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 20, 100])
+def test_get_grid_step_stays_in_sensible_range(view, zoom):
+    view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
+    onscreen = view.get_grid_step() * zoom
+    assert view.GRID_MIN_SPACING <= onscreen <= view.GRID_MAX_SPACING
+
+
+def test_get_grid_step_uses_setting_when_zoom_neutral(view, settings):
+    settings.setValue('View/grid_size', 50)
+    view.setTransform(QtGui.QTransform.fromScale(1, 1))
+    assert view.get_grid_step() == 50
+
+
+def test_on_action_show_grid(view):
+    view.on_action_show_grid(True)
+    assert view.show_grid is True
+    view.on_action_show_grid(False)
+    assert view.show_grid is False
+
+
+@patch('PyQt6.QtWidgets.QGraphicsView.drawBackground')
+def test_draw_background_draws_grid_when_enabled(super_mock, view):
+    view.show_grid = True
+    painter = MagicMock()
+    view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
+    super_mock.assert_called_once()
+    painter.drawLines.assert_called_once()
+    lines = painter.drawLines.call_args[0][0]
+    # 500x500 at the default spacing of 100: lines at 0, 100 ... 400
+    assert len(lines) == 10
+
+
+@patch('PyQt6.QtWidgets.QGraphicsView.drawBackground')
+def test_draw_background_skips_grid_when_disabled(super_mock, view):
+    view.show_grid = False
+    painter = MagicMock()
+    view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
+    super_mock.assert_called_once()
+    painter.drawLines.assert_not_called()
+
+
+def test_grid_setting_change_emits_grid_changed(settings):
+    callback = MagicMock()
+    settings_events.grid_changed.connect(callback)
+    try:
+        settings.setValue('View/grid_color', '#ff0000')
+        callback.assert_called_once()
+    finally:
+        settings_events.grid_changed.disconnect(callback)
+
+
+def test_on_grid_changed_repaints_viewport(view):
+    with patch.object(view.viewport(), 'update') as update_mock:
+        view.on_grid_changed()
+        update_mock.assert_called_once()
 
 
 @patch('PyQt6.QtWidgets.QMenu.exec')

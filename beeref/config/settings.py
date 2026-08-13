@@ -103,6 +103,8 @@ class BeeSettingsEvents(QtCore.QObject):
     restore_keyboard_defaults = QtCore.pyqtSignal()
     # Emitted with the new colour so the view can repaint immediately
     canvas_color_changed = QtCore.pyqtSignal(str)
+    # Emitted when a grid setting changes, so the view can repaint
+    grid_changed = QtCore.pyqtSignal()
 
 
 # We want to send and receive settings events globally, not per
@@ -146,6 +148,20 @@ class BeeSettings(QtCore.QSettings):
             'validate': lambda x: QtGui.QColor.isValidColorName(x),
             'post_save_callback':
                 lambda value: settings_events.canvas_color_changed.emit(value),
+        },
+        'View/grid_color': {
+            'default': '#787878',
+            'cast': str,
+            'validate': lambda x: QtGui.QColor.isValidColorName(x),
+            'post_save_callback':
+                lambda value: settings_events.grid_changed.emit(),
+        },
+        'View/grid_size': {
+            'default': 100,
+            'cast': int,
+            'validate': lambda x: 5 <= x <= 1000,
+            'post_save_callback':
+                lambda value: settings_events.grid_changed.emit(),
         },
     }
 

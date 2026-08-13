@@ -173,6 +173,22 @@ class CanvasColorWidget(ColorGroup):
     KEY = 'View/canvas_color'
 
 
+class GridColorWidget(ColorGroup):
+    TITLE = 'Grid Colour:'
+    HELPTEXT = 'The colour of the guide grid.'
+    KEY = 'View/grid_color'
+
+
+class GridSizeWidget(IntegerGroup):
+    TITLE = 'Grid Size:'
+    HELPTEXT = ('The spacing of the guide grid. This is scaled up or down'
+                ' automatically so that the grid stays usable at any zoom'
+                ' level.')
+    KEY = 'View/grid_size'
+    MIN = 5
+    MAX = 1000
+
+
 class ArrangeDefaultWidget(RadioGroup):
     TITLE = 'Default Arrange Method:'
     HELPTEXT = ('How images are arranged when inserted in batch')
@@ -254,6 +270,8 @@ class SettingsDialog(QtWidgets.QDialog):
         view_layout = QtWidgets.QGridLayout()
         view.setLayout(view_layout)
         view_layout.addWidget(CanvasColorWidget(), 0, 0)
+        view_layout.addWidget(GridColorWidget(), 0, 1)
+        view_layout.addWidget(GridSizeWidget(), 1, 0)
         tabs.addTab(view, '&View')
 
         layout = QtWidgets.QVBoxLayout()

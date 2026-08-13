@@ -62,6 +62,8 @@ menu_structure = [
             'fit_scene',
             'fit_selection',
             MENU_SEPARATOR,
+            'show_grid',
+            MENU_SEPARATOR,
             'fullscreen',
             'always_on_top',
             'show_scrollbars',

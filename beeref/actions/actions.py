@@ -411,6 +411,13 @@ actions = ActionList([
         callback='on_action_debuglog',
     ),
     Action(
+        id='show_grid',
+        text='Show &Grid',
+        checkable=True,
+        settings='View/show_grid',
+        callback='on_action_show_grid',
+    ),
+    Action(
         id='show_scrollbars',
         text='Show &Scrollbars',
         checkable=True,

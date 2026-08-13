@@ -14,6 +14,7 @@
 # along with BeeRef.  If not, see <https://www.gnu.org/licenses/>.
 
 from functools import partial
+from itertools import cycle
 import logging
 import os
 import os.path
@@ -48,6 +49,10 @@ class BeeGraphicsView(MainControlsMixin,
     ZOOM_MODE = 2
     SAMPLE_COLOR_MODE = 3
 
+    # On-screen bounds in pixels between which the grid spacing is kept
+    GRID_MIN_SPACING = 25
+    GRID_MAX_SPACING = 250
+
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
@@ -56,10 +61,14 @@ class BeeGraphicsView(MainControlsMixin,
         self.keyboard_settings = KeyboardSettings()
         self.welcome_overlay = widgets.welcome_overlay.WelcomeOverlay(self)
 
+        # Set before the actions are built, since the grid toggle acts
+        # on it as soon as it is restored from the settings
+        self.show_grid = False
         self.on_canvas_color_changed(
             self.settings.valueOrDefault('View/canvas_color'))
         settings_events.canvas_color_changed.connect(
             self.on_canvas_color_changed)
+        settings_events.grid_changed.connect(self.on_grid_changed)
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
 
@@ -135,6 +144,64 @@ class BeeGraphicsView(MainControlsMixin,
     def on_canvas_color_changed(self, color):
         logger.debug(f'Canvas colour changed to: {color}')
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(color)))
+
+    def on_action_show_grid(self, checked):
+        self.show_grid = checked
+        self.viewport().update()
+
+    def on_grid_changed(self):
+        self.viewport().update()
+
+    def get_grid_step(self):
+        """The grid spacing in scene coordinates.
+
+        The base spacing from the settings is scaled up or down so that
+        the grid keeps a sensible distance on screen at any zoom level:
+        it never turns into a dense mess when zoomed out, and never
+        disappears when zoomed in.
+        """
+
+        zoom = self.get_scale()
+        step = self.settings.valueOrDefault('View/grid_size')
+        # Alternating factors give a 10/50/100/500 style sequence
+        factors = cycle((5, 2))
+        while step * zoom < self.GRID_MIN_SPACING:
+            step *= next(factors)
+        factors = cycle((2, 5))
+        while step * zoom > self.GRID_MAX_SPACING:
+            step /= next(factors)
+        return step
+
+    def drawBackground(self, painter, rect):
+        """Draws the canvas background, and the grid on top of it.
+
+        The grid lives on the view rather than the scene so that it
+        never ends up in exported images, which render the scene.
+        """
+
+        super().drawBackground(painter, rect)
+        if not self.show_grid:
+            return
+
+        step = self.get_grid_step()
+        pen = QtGui.QPen(
+            QtGui.QColor(self.settings.valueOrDefault('View/grid_color')))
+        # Keep lines one pixel wide whatever the zoom level
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+
+        lines = []
+        start_x = rect.left() - (rect.left() % step)
+        x = start_x
+        while x < rect.right():
+            lines.append(QtCore.QLineF(x, rect.top(), x, rect.bottom()))
+            x += step
+        start_y = rect.top() - (rect.top() % step)
+        y = start_y
+        while y < rect.bottom():
+            lines.append(QtCore.QLineF(rect.left(), y, rect.right(), y))
+            y += step
+        painter.drawLines(lines)
 
     def on_scene_changed(self, region):
         if not self.scene.items():
