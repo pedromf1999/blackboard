@@ -2,6 +2,7 @@ from unittest.mock import patch, MagicMock
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
+import pytest
 
 from beeref.items import BeeTextItem, item_registry
 
@@ -85,6 +86,75 @@ def test_init_falls_back_to_plain_text(qapp):
     item = BeeTextItem(text='plain')
     assert item.toPlainText() == 'plain'
     assert item.box_color == QtGui.QColor(0, 0, 0, 255)
+
+
+@pytest.mark.parametrize(
+    'text,index,expected',
+    [
+        ('see https://example.com/page now', 10,
+         'https://example.com/page'),
+        # First and last character of the url still count as a hit
+        ('see https://example.com now', 4, 'https://example.com'),
+        ('see https://example.com now', 22, 'https://example.com'),
+        # www urls get a scheme added
+        ('go to www.qt.io today', 10, 'http://www.qt.io'),
+        # Sentence punctuation is not part of the address
+        ('see https://example.com, ok', 10, 'https://example.com'),
+        ('see (https://example.com) ok', 10, 'https://example.com'),
+        # Not urls
+        ('just some plain text', 6, None),
+        ('see https://example.com now', 25, None),
+        ('an email foo@example.com here', 12, None),
+    ])
+def test_get_url_at_cursor_pos(qapp, text, index, expected):
+    item = BeeTextItem(text)
+    assert item.get_url_at_cursor_pos(index) == expected
+
+
+def test_get_url_at_cursor_pos_on_second_line(qapp):
+    item = BeeTextItem('first line\nsee https://example.com here')
+    index = item.toPlainText().index('example')
+    assert item.get_url_at_cursor_pos(index) == 'https://example.com'
+
+
+@patch('PyQt6.QtGui.QDesktopServices.openUrl')
+def test_mouse_press_ctrl_click_opens_url(open_mock, qapp):
+    item = BeeTextItem('see https://example.com now')
+    event = MagicMock()
+    event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.ControlModifier
+    with patch.object(item, 'get_url_at', return_value='https://example.com'):
+        item.mousePressEvent(event)
+    open_mock.assert_called_once()
+    assert open_mock.call_args[0][0].toString() == 'https://example.com'
+    event.accept.assert_called_once()
+
+
+@patch('beeref.selection.SelectableMixin.mousePressEvent')
+@patch('PyQt6.QtGui.QDesktopServices.openUrl')
+def test_mouse_press_ctrl_click_without_url_selects_as_usual(
+        open_mock, super_mock, qapp):
+    item = BeeTextItem('just some plain text')
+    event = MagicMock()
+    event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.ControlModifier
+    with patch.object(item, 'get_url_at', return_value=None):
+        item.mousePressEvent(event)
+    open_mock.assert_not_called()
+    super_mock.assert_called_once()
+
+
+@patch('beeref.selection.SelectableMixin.mousePressEvent')
+@patch('PyQt6.QtGui.QDesktopServices.openUrl')
+def test_mouse_press_without_ctrl_does_not_open_url(
+        open_mock, super_mock, qapp):
+    item = BeeTextItem('see https://example.com now')
+    event = MagicMock()
+    event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
+    item.mousePressEvent(event)
+    open_mock.assert_not_called()
+    super_mock.assert_called_once()
 
 
 def test_apply_char_format_applies_to_whole_text(qapp):

@@ -21,6 +21,7 @@ from collections import defaultdict
 from functools import cached_property
 import logging
 import os.path
+import re
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
@@ -643,6 +644,12 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     # readable whatever is behind it
     DEFAULT_BOX_COLOR = (0, 0, 0, 255)
 
+    # Plain URL detection for ctrl+click. Trailing punctuation is
+    # stripped afterwards, since it is usually sentence punctuation
+    # rather than part of the address.
+    URL_RE = re.compile(r'(?:https?://|www\.)\S+', re.IGNORECASE)
+    URL_TRAILING_CHARS = '.,;:!?)]}\'"'
+
     def __init__(self, text=None, html=None, box_color=None, **kwargs):
         super().__init__(text or "Text")
         self.save_id = None
@@ -696,6 +703,40 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)
+
+    def get_url_at(self, pos):
+        """The URL at the given position in item coordinates, if any."""
+
+        layout = self.document().documentLayout()
+        cursor_pos = layout.hitTest(pos, Qt.HitTestAccuracy.ExactHit)
+        if cursor_pos < 0:
+            return None
+        return self.get_url_at_cursor_pos(cursor_pos)
+
+    def get_url_at_cursor_pos(self, cursor_pos):
+        """The URL at the given position in the text, if any."""
+
+        block = self.document().findBlock(cursor_pos)
+        offset = cursor_pos - block.position()
+        for match in self.URL_RE.finditer(block.text()):
+            if match.start() <= offset < match.end():
+                url = match.group().rstrip(self.URL_TRAILING_CHARS)
+                if url.lower().startswith('www.'):
+                    url = f'http://{url}'
+                return url
+        return None
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.MouseButton.LeftButton
+                and event.modifiers() == Qt.KeyboardModifier.ControlModifier):
+            url = self.get_url_at(event.pos())
+            if url:
+                logger.debug(f'Opening url: {url}')
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+                event.accept()
+                return
+
+        super().mousePressEvent(event)
 
     def apply_char_format(self, charformat):
         """Apply the given char format to the current selection, or to the
