@@ -256,6 +256,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             copy = child.create_copy()
             copy.setParentItem(item)
         item.fit_to_children()
+        # The copy has to behave like a group, not like loose items
+        item.set_children_interactive(False)
         return item
 
     def copy_to_clipboard(self, clipboard):

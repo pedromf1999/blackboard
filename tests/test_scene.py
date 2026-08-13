@@ -914,6 +914,40 @@ def test_refit_group_grows_containing_groups(view):
     assert outer.rect().height() >= inner.rect().height()
 
 
+def test_copy_paste_group_keeps_its_items(view):
+    group, item1, item2 = make_group_in_scene(view)
+    group.box_color = QtGui.QColor(70, 50, 90, 255)
+    group.locked = True
+    view.scene.clearSelection()
+    group.setSelected(True)
+
+    view.scene.copy_selection_to_internal_clipboard()
+    view.scene.paste_from_internal_clipboard(QtCore.QPointF(500, 500))
+
+    groups = list(view.scene.items_by_type('group'))
+    assert len(groups) == 2
+    copy = [g for g in groups if g is not group][0]
+    assert len(copy.bee_children()) == 2
+    assert copy.box_color == QtGui.QColor(70, 50, 90, 255)
+    assert copy.locked is True
+    # The copy holds its own items, not the originals
+    assert item1 not in copy.bee_children()
+    assert sorted(c.toPlainText() for c in copy.bee_children()) == [
+        'one', 'two']
+
+
+def test_paste_group_can_be_undone(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.clearSelection()
+    group.setSelected(True)
+    view.scene.copy_selection_to_internal_clipboard()
+    view.scene.paste_from_internal_clipboard(QtCore.QPointF(500, 500))
+
+    view.undo_stack.undo()
+    assert len(list(view.scene.items_by_type('group'))) == 1
+    assert len(group.bee_children()) == 2
+
+
 def test_update_drop_target_highlights_group(view):
     group, item1, item2 = make_group_in_scene(view)
     loose = BeeTextItem('loose')

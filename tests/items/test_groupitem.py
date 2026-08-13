@@ -145,6 +145,40 @@ def test_create_copy(view):
     assert copy.bee_children()[0] is not items[0]
 
 
+def test_create_copy_locks_children_into_the_copy(view):
+    group, items = make_group(view, (0, 0), (0, 80))
+    group.set_children_interactive(False)
+
+    copy = group.create_copy()
+    flag = QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+    assert all(not bool(child.flags() & flag)
+               for child in copy.bee_children())
+
+
+def test_create_copy_copies_nested_groups(view):
+    outer, items = make_group(view, (0, 0), (0, 80))
+    inner, inner_items = make_group(view, (200, 0))
+    inner.setParentItem(outer)
+    outer.fit_to_children()
+
+    copy = outer.create_copy()
+    nested = [child for child in copy.bee_children()
+              if getattr(child, 'TYPE', None) == 'group']
+    assert len(nested) == 1
+    assert nested[0] is not inner
+    assert len(nested[0].bee_children()) == 1
+
+
+def test_create_copy_gives_fresh_save_ids(view):
+    group, items = make_group(view, (0, 0))
+    group.save_id = 3
+    items[0].save_id = 4
+
+    copy = group.create_copy()
+    assert copy.save_id is None
+    assert copy.bee_children()[0].save_id is None
+
+
 def test_get_save_data_includes_parent_group(view):
     group, items = make_group(view, (0, 0))
     group.save_id = 7
