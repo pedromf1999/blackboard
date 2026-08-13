@@ -50,6 +50,12 @@ def test_recent_files_view_size_hint(qapp):
     assert files_view.sizeHint() == QtCore.QSize(53, 25)
 
 
+def test_recent_files_view_size_hint_without_files(qapp):
+    parent = QtWidgets.QMainWindow()
+    files_view = RecentFilesView(parent, None)
+    assert files_view.sizeHint() == QtCore.QSize()
+
+
 def test_recent_files_view_on_click(qapp):
     parent = QtWidgets.QMainWindow()
     view = BeeGraphicsView(qapp, parent)

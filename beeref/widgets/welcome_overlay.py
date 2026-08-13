@@ -65,6 +65,9 @@ class RecentFilesView(QtWidgets.QListView):
 
     def sizeHint(self):
         size = QtCore.QSize()
+        if not self.files:
+            # Nothing to show, and max() below can't handle an empty list
+            return size
         height = sum(
             (self.sizeHintForRow(i) + 2) for i in range(len(self.files)))
         width = max(self.sizeHintForColumn(i) for i in range(len(self.files)))
