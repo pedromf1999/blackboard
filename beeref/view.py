@@ -263,6 +263,20 @@ class BeeGraphicsView(MainControlsMixin,
         return None
 
     def on_context_menu(self, point):
+        # Text items offer the text options, even inside a group, so
+        # that their colours stay reachable
+        item = self.get_text_item_at(point)
+        group = self.scene.get_group_ancestor(item) if item else None
+        if item is not None and not (group is not None and group.locked):
+            if group is not None:
+                # The item has to be reachable for the options to apply
+                self.scene.enter_group(group, item)
+            elif not item.isSelected():
+                self.scene.deselect_all_items()
+                item.setSelected(True)
+            self.text_context_menu.exec(self.mapToGlobal(point))
+            return
+
         group = self.get_group_at(point)
         if group is not None:
             if not group.isSelected():
@@ -272,18 +286,7 @@ class BeeGraphicsView(MainControlsMixin,
             self.group_context_menu.exec(self.mapToGlobal(point))
             return
 
-        item = self.get_text_item_at(point)
-        if item is None:
-            self.context_menu.exec(self.mapToGlobal(point))
-            return
-
-        # Right-clicking a text item offers the text options only. Select
-        # the item first (unless it's part of the current selection), so
-        # that the options apply to what was clicked.
-        if not item.isSelected():
-            self.scene.deselect_all_items()
-            item.setSelected(True)
-        self.text_context_menu.exec(self.mapToGlobal(point))
+        self.context_menu.exec(self.mapToGlobal(point))
 
     def get_supported_image_formats(self, cls):
         formats = []

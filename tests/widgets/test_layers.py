@@ -166,6 +166,95 @@ def test_refresh_rebuilds_when_items_change(view):
     assert len(entries(tree)) == 2
 
 
+def group_of(view, tree):
+    """The tree entry holding the scene's group."""
+
+    group = list(view.scene.items_by_type('group'))[0]
+    for i in range(tree.topLevelItemCount()):
+        entry = tree.topLevelItem(i)
+        if entry.data(0, ITEM_ROLE) is group:
+            return entry, group
+    raise AssertionError('group not in tree')
+
+
+def test_reorder_inside_a_group(view):
+    item1 = add_text(view, 'one', 0)
+    item2 = add_text(view, 'two', 1)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2], group).redo()
+    tree = tree_of(view)
+    group_entry, group = group_of(view, tree)
+
+    # 'two' is listed first; move 'one' above it
+    one_entry = [group_entry.child(i)
+                 for i in range(group_entry.childCount())
+                 if group_entry.child(i).data(0, ITEM_ROLE) is item1][0]
+    group_entry.removeChild(one_entry)
+    group_entry.insertChild(0, one_entry)
+    tree.apply_order([item1], group_entry)
+
+    assert item1.zValue() > item2.zValue()
+    assert item1.parentItem() is group
+
+
+def test_drag_item_into_a_group(view):
+    item1 = add_text(view, 'one', 0)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1], group).redo()
+    loose = add_text(view, 'loose', 5)
+    tree = tree_of(view)
+    group_entry, group = group_of(view, tree)
+
+    loose_entry = [tree.topLevelItem(i)
+                   for i in range(tree.topLevelItemCount())
+                   if tree.topLevelItem(i).data(0, ITEM_ROLE) is loose][0]
+    tree.takeTopLevelItem(tree.indexOfTopLevelItem(loose_entry))
+    group_entry.insertChild(0, loose_entry)
+    tree.apply_order([loose], group_entry)
+
+    assert loose.parentItem() is group
+    assert len(group.bee_children()) == 2
+
+
+def test_drag_item_out_of_a_group(view):
+    item1 = add_text(view, 'one', 0)
+    item2 = add_text(view, 'two', 1)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2], group).redo()
+    tree = tree_of(view)
+    group_entry, group = group_of(view, tree)
+
+    one_entry = [group_entry.child(i)
+                 for i in range(group_entry.childCount())
+                 if group_entry.child(i).data(0, ITEM_ROLE) is item1][0]
+    group_entry.removeChild(one_entry)
+    tree.insertTopLevelItem(0, one_entry)
+    tree.apply_order([item1], None)
+
+    assert item1.parentItem() is None
+    assert item1.scene() is view.scene
+    assert len(group.bee_children()) == 1
+
+
+def test_drag_into_group_can_be_undone(view):
+    item1 = add_text(view, 'one', 0)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1], group).redo()
+    loose = add_text(view, 'loose', 5)
+    tree = tree_of(view)
+    group_entry, group = group_of(view, tree)
+
+    loose_entry = [tree.topLevelItem(i)
+                   for i in range(tree.topLevelItemCount())
+                   if tree.topLevelItem(i).data(0, ITEM_ROLE) is loose][0]
+    tree.takeTopLevelItem(tree.indexOfTopLevelItem(loose_entry))
+    group_entry.insertChild(0, loose_entry)
+    tree.apply_order([loose], group_entry)
+
+    view.undo_stack.undo()
+    assert loose.parentItem() is None
+
+
 def test_reorder_writes_back_z_values(view):
     bottom = add_text(view, 'bottom', 0)
     top = add_text(view, 'top', 1)

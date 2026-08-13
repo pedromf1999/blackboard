@@ -190,27 +190,59 @@ class LayersTree(QtWidgets.QTreeWidget):
         super().dropEvent(event)
         self.apply_order(dragged, target)
 
-    def apply_order(self, dragged, target):
-        """Write the tree order back to the items' z values."""
+    def get_plan(self, entry=None, group=None):
+        """Where the tree says each item should end up.
 
-        if not dragged:
-            return
-        entries = []
-        iterator = QtWidgets.QTreeWidgetItemIterator(self)
-        while iterator.value():
-            entry = iterator.value()
-            item = entry.data(0, ITEM_ROLE)
-            if item is not None and item.parentItem() is None:
-                entries.append(item)
-            iterator += 1
+        Yields (item, group, z) for every entry, walking into groups so
+        that items inside them are ordered too.
+        """
 
-        # The tree shows the topmost item first
-        items = list(reversed(entries))
-        if not items:
-            return
+        if entry is None:
+            count = self.topLevelItemCount()
+            children = [self.topLevelItem(i) for i in range(count)]
+        else:
+            children = [entry.child(i) for i in range(entry.childCount())]
+
         step = self.scene.Z_STEP
-        z_values = [i * step for i in range(len(items))]
-        self.view.undo_stack.push(commands.ReorderItems(items, z_values))
+        for index, child in enumerate(children):
+            item = child.data(0, ITEM_ROLE)
+            if item is None:
+                continue
+            # The tree lists the topmost item first
+            yield (item, group, (len(children) - 1 - index) * step)
+            if getattr(item, 'TYPE', None) == 'group':
+                yield from self.get_plan(child, item)
+
+    def apply_order(self, dragged, target):
+        """Write the tree order back to the items.
+
+        Entries moved into or out of a group node change the item's
+        group as well as its z value.
+        """
+
+        plan = list(self.get_plan())
+        if not plan:
+            return
+
+        moves = []
+        for item, group, z in plan:
+            current = self.scene.get_group_ancestor(item)
+            if current is group:
+                continue
+            if group is not None and item.isAncestorOf(group):
+                # Refuse to put a group inside itself
+                continue
+            moves.append((item, group))
+
+        self.view.undo_stack.beginMacro('Reorder items')
+        for item, group in moves:
+            self.view.undo_stack.push(
+                commands.MoveToGroup(self.scene, [item], group))
+        items = [item for item, group, z in plan]
+        self.view.undo_stack.push(
+            commands.ReorderItems(items, [z for item, group, z in plan]))
+        self.view.undo_stack.endMacro()
+
         self.signature = None
         self.schedule_refresh()
 

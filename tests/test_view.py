@@ -1465,6 +1465,44 @@ def test_on_context_menu_not_over_text_item(exec_mock, view):
     exec_mock.assert_called_once()
 
 
+def test_on_context_menu_over_text_inside_group(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    view.text_context_menu = MagicMock()
+    view.group_context_menu = MagicMock()
+
+    with patch.object(view, 'get_text_item_at', return_value=textitem):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+
+    # The text options stay reachable inside a group
+    view.text_context_menu.exec.assert_called_once()
+    view.group_context_menu.exec.assert_not_called()
+    assert textitem.isSelected() is True
+    assert view.scene.active_group is group
+
+
+def test_on_context_menu_over_text_inside_locked_group(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    group.locked = True
+    view.text_context_menu = MagicMock()
+    view.group_context_menu = MagicMock()
+
+    with patch.object(view, 'get_text_item_at', return_value=textitem), \
+            patch.object(view, 'get_group_at', return_value=group):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+
+    view.text_context_menu.exec.assert_not_called()
+    view.group_context_menu.exec.assert_called_once()
+    assert view.scene.active_group is None
+
+
 def test_get_text_item_at_ignores_non_text_items(view):
     pixmapitem = BeePixmapItem(QtGui.QImage())
     view.scene.addItem(pixmapitem)
