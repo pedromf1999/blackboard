@@ -832,14 +832,52 @@ def test_update_group_membership_adds_item(view):
     assert loose.scenePos() == scene_pos
 
 
-def test_update_group_membership_removes_item(view):
+def test_update_group_membership_removes_item_when_detaching(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    item1.setPos(2000, 2000)
+
+    view.scene.update_group_membership([item1], detach=True)
+    assert item1.parentItem() is None
+    assert item1.scene() is view.scene
+
+
+def test_update_group_membership_keeps_item_dragged_outside_box(view):
     group, item1, item2 = make_group_in_scene(view)
     view.scene.enter_group(group, item1)
     item1.setPos(2000, 2000)
 
     view.scene.update_group_membership([item1])
-    assert item1.parentItem() is None
-    assert item1.scene() is view.scene
+    # Spreading items out within a group must not eject them
+    assert item1.parentItem() is group
+
+
+def test_update_group_membership_grows_box_around_moved_item(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    item1.setPos(2000, 2000)
+
+    view.scene.update_group_membership([item1])
+    assert group.rect().right() > 2000
+
+
+def test_update_group_membership_detach_without_group_does_nothing(view):
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    before = len(view.undo_stack)
+    view.scene.update_group_membership([loose], detach=True)
+    assert len(view.undo_stack) == before
+    assert loose.parentItem() is None
+
+
+def test_update_group_membership_moves_between_groups(view):
+    group1, item1, item2 = make_group_in_scene(view)
+    group2, item3, item4 = make_group_in_scene(view)
+    view.scene.enter_group(group1, item1)
+    drop_onto(item1, group2)
+
+    view.scene.update_group_membership([item1])
+    assert item1.parentItem() is group2
 
 
 def test_update_group_membership_does_nothing_when_unchanged(view):

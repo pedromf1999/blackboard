@@ -125,16 +125,29 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             parent = parent.parentItem()
         return chain
 
-    def update_group_membership(self, items):
-        """Put dragged items into the group they were dropped on, or take
-        them out of their group when dropped outside it."""
+    def update_group_membership(self, items, detach=False):
+        """Update which group the dragged items belong to.
+
+        Items join the group they were dropped on. Items never leave
+        their group just by being dragged outside its box, since that
+        would make it impossible to spread items out within a group;
+        the box grows instead. Dragging with ``detach`` (the alt key)
+        takes an item out of its group.
+        """
 
         for item in items:
             if getattr(item, 'TYPE', None) is None:
                 continue
             current = self.get_group_ancestor(item)
-            target = self.get_drop_group(item)
+            if detach:
+                target = None
+            else:
+                # Falling back to the current group means an item that
+                # is dropped over nothing simply stays where it was
+                target = self.get_drop_group(item) or current
             if target is current:
+                # The box may need to grow around its moved items
+                self.refit_group(current)
                 continue
             logger.debug(f'Moving {item} from {current} to {target}')
             self.undo_stack.push(
@@ -555,7 +568,9 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                                          delta,
                                          ignore_first_redo=True))
                 self.update_group_membership(
-                    self.selectedItems(user_only=True))
+                    self.selectedItems(user_only=True),
+                    detach=bool(event.modifiers()
+                                & Qt.KeyboardModifier.AltModifier))
                 self.undo_stack.endMacro()
         self.active_mode = None
         super().mouseReleaseEvent(event)
