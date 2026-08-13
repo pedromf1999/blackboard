@@ -63,7 +63,7 @@ def test_get_extra_save_data(qapp):
     item = BeeTextItem('foo bar')
     data = item.get_extra_save_data()
     assert data['text'] == 'foo bar'
-    assert data['box_color'] == (0, 0, 0, 40)
+    assert data['box_color'] == (0, 0, 0, 255)
     assert 'foo bar' in data['html']
 
 
@@ -84,7 +84,7 @@ def test_init_from_html_and_box_color(qapp):
 def test_init_falls_back_to_plain_text(qapp):
     item = BeeTextItem(text='plain')
     assert item.toPlainText() == 'plain'
-    assert item.box_color == QtGui.QColor(0, 0, 0, 40)
+    assert item.box_color == QtGui.QColor(0, 0, 0, 255)
 
 
 def test_apply_char_format_applies_to_whole_text(qapp):

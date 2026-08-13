@@ -523,7 +523,7 @@ def test_change_text_box_color():
     assert item1.box_color == QtGui.QColor(255, 0, 0, 100)
     assert item2.box_color == QtGui.QColor(255, 0, 0, 100)
     command.undo()
-    assert item1.box_color == QtGui.QColor(0, 0, 0, 40)
+    assert item1.box_color == QtGui.QColor(0, 0, 0, 255)
     assert item2.box_color == QtGui.QColor(0, 0, 255, 50)
 
 

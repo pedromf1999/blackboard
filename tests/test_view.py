@@ -1143,6 +1143,59 @@ def test_on_action_text_color_when_no_text_selected(color_mock, view):
     assert len(view.undo_stack) == 0
 
 
+@patch('PyQt6.QtWidgets.QMenu.exec')
+def test_on_context_menu_over_text_item(exec_mock, view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    with patch.object(view, 'get_text_item_at', return_value=textitem):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+    # The clicked item gets selected so the options apply to it
+    assert textitem.isSelected() is True
+    exec_mock.assert_called_once()
+
+
+@patch('PyQt6.QtWidgets.QMenu.exec')
+def test_on_context_menu_over_text_item_keeps_existing_selection(
+        exec_mock, view):
+    textitem1 = BeeTextItem('foo')
+    view.scene.addItem(textitem1)
+    textitem1.setSelected(True)
+    textitem2 = BeeTextItem('bar')
+    view.scene.addItem(textitem2)
+    textitem2.setSelected(True)
+
+    with patch.object(view, 'get_text_item_at', return_value=textitem2):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+    assert textitem1.isSelected() is True
+    assert textitem2.isSelected() is True
+
+
+@patch('PyQt6.QtWidgets.QMenu.exec')
+def test_on_context_menu_not_over_text_item(exec_mock, view):
+    with patch.object(view, 'get_text_item_at', return_value=None):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+    exec_mock.assert_called_once()
+
+
+def test_get_text_item_at_ignores_non_text_items(view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    with patch.object(view.scene, 'items', return_value=[pixmapitem]):
+        assert view.get_text_item_at(QtCore.QPoint(0, 0)) is None
+
+
+def test_get_text_item_at_finds_text_below_other_items(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    # A multi select item has no TYPE at all and must not blow up
+    with patch.object(view.scene, 'items',
+                      return_value=[view.scene.multi_select_item,
+                                    textitem]):
+        assert view.get_text_item_at(QtCore.QPoint(0, 0)) == textitem
+
+
 def test_cancel_active_modes_when_sample_color_mode(view):
     view.active_mode = view.SAMPLE_COLOR_MODE
     view.sample_color_widget = widgets.SampleColorWidget(

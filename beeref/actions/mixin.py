@@ -20,7 +20,7 @@ import os.path
 from PyQt6 import QtGui, QtWidgets
 
 from .actions import Action, actions
-from .menu_structure import menu_structure, MENU_SEPARATOR
+from .menu_structure import menu_structure, MENU_SEPARATOR, TEXT_MENU
 
 
 class ActionsMixin:
@@ -37,9 +37,21 @@ class ActionsMixin:
         self._post_create_functions = []
         self._create_actions()
         self._create_menu(self.context_menu, menu_structure)
+        # A short menu shown when right-clicking a text item
+        self.text_context_menu = QtWidgets.QMenu(self)
+        self._create_menu(self.text_context_menu, self._get_text_menu_items())
         for func, arg in self._post_create_functions:
             func(arg)
         del self._post_create_functions
+
+    def _get_text_menu_items(self):
+        """The items of the Text menu, which double as the context menu
+        for text items."""
+
+        for item in menu_structure:
+            if isinstance(item, dict) and item.get('menu') == TEXT_MENU:
+                return item['items']
+        return []
 
     def update_menu_and_actions(self):
         self._build_recent_files()

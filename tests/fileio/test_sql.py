@@ -221,7 +221,7 @@ def test_sqliteio_write_inserts_new_text_item(tmpfile, view):
     assert result[5] == -1
     data = json.loads(result[6])
     assert data['text'] == 'foo bar'
-    assert data['box_color'] == [0, 0, 0, 40]
+    assert data['box_color'] == [0, 0, 0, 255]
     assert 'foo bar' in data['html']
     assert result[7] == 'text'
     assert result[8] is None

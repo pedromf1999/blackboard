@@ -365,7 +365,7 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         """The currently selected text items."""
 
         return [item for item in self.selectedItems(user_only=True)
-                if item.TYPE == 'text']
+                if getattr(item, 'TYPE', None) == 'text']
 
     def has_single_image_selection(self):
         """Checks whether the current selection is a single image."""

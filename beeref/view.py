@@ -160,8 +160,28 @@ class BeeGraphicsView(MainControlsMixin,
     def on_undo_clean_changed(self, clean):
         self.update_window_title()
 
+    def get_text_item_at(self, point):
+        """The topmost text item at the given view position, if any."""
+
+        for item in self.scene.items(self.mapToScene(point)):
+            # Not every item in the scene is a user item (e.g. the
+            # multi-select rectangle), so TYPE may be missing
+            if getattr(item, 'TYPE', None) == 'text':
+                return item
+
     def on_context_menu(self, point):
-        self.context_menu.exec(self.mapToGlobal(point))
+        item = self.get_text_item_at(point)
+        if item is None:
+            self.context_menu.exec(self.mapToGlobal(point))
+            return
+
+        # Right-clicking a text item offers the text options only. Select
+        # the item first (unless it's part of the current selection), so
+        # that the options apply to what was clicked.
+        if not item.isSelected():
+            self.scene.deselect_all_items()
+            item.setSelected(True)
+        self.text_context_menu.exec(self.mapToGlobal(point))
 
     def get_supported_image_formats(self, cls):
         formats = []

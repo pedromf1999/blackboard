@@ -15,6 +15,10 @@
 
 MENU_SEPARATOR = 0
 
+# The contents of this menu are also used on their own as the context
+# menu when right-clicking a text item
+TEXT_MENU = '&Text'
+
 menu_structure = [
     {
         'menu': '&File',
@@ -116,7 +120,7 @@ menu_structure = [
         ],
     },
     {
-        'menu': '&Text',
+        'menu': TEXT_MENU,
         'items': [
             'text_color',
             'text_highlight_color',

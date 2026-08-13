@@ -639,8 +639,9 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
     TYPE = 'text'
 
-    # The semi-transparent box drawn behind text by default
-    DEFAULT_BOX_COLOR = (0, 0, 0, 40)
+    # The box drawn behind text by default: fully opaque, so text stays
+    # readable whatever is behind it
+    DEFAULT_BOX_COLOR = (0, 0, 0, 255)
 
     def __init__(self, text=None, html=None, box_color=None, **kwargs):
         super().__init__(text or "Text")
