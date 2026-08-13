@@ -20,7 +20,8 @@ import os.path
 from PyQt6 import QtGui, QtWidgets
 
 from .actions import Action, actions
-from .menu_structure import menu_structure, MENU_SEPARATOR, TEXT_MENU
+from .menu_structure import (
+    menu_structure, MENU_SEPARATOR, GROUP_MENU, TEXT_MENU)
 
 
 class ActionsMixin:
@@ -37,19 +38,26 @@ class ActionsMixin:
         self._post_create_functions = []
         self._create_actions()
         self._create_menu(self.context_menu, menu_structure)
-        # A short menu shown when right-clicking a text item
+        # Short menus shown when right-clicking a text item or a group
         self.text_context_menu = QtWidgets.QMenu(self)
-        self._create_menu(self.text_context_menu, self._get_text_menu_items())
+        self._create_menu(
+            self.text_context_menu, self._get_menu_items(TEXT_MENU))
+        self.group_context_menu = QtWidgets.QMenu(self)
+        self._create_menu(
+            self.group_context_menu, self._get_menu_items(GROUP_MENU))
         for func, arg in self._post_create_functions:
             func(arg)
         del self._post_create_functions
 
-    def _get_text_menu_items(self):
-        """The items of the Text menu, which double as the context menu
-        for text items."""
+    def _get_menu_items(self, menu_name):
+        """The items of the given top level menu.
+
+        The Text and Group menus double as context menus, so their
+        contents are only defined once, in the menu structure.
+        """
 
         for item in menu_structure:
-            if isinstance(item, dict) and item.get('menu') == TEXT_MENU:
+            if isinstance(item, dict) and item.get('menu') == menu_name:
                 return item['items']
         return []
 

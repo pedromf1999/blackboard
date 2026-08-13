@@ -238,7 +238,31 @@ class BeeGraphicsView(MainControlsMixin,
             if getattr(item, 'TYPE', None) == 'text':
                 return item
 
+    def get_group_at(self, point):
+        """The group at the given view position, if any.
+
+        Items inside a group count as the group itself, unless the group
+        has been opened up for editing.
+        """
+
+        for item in self.scene.items(self.mapToScene(point)):
+            group = self.scene.get_group_ancestor(item)
+            if group is not None and group is not self.scene.active_group:
+                return group
+            if getattr(item, 'TYPE', None) == BeeGroupItem.TYPE:
+                return item
+        return None
+
     def on_context_menu(self, point):
+        group = self.get_group_at(point)
+        if group is not None:
+            if not group.isSelected():
+                self.scene.deselect_all_items()
+                group.setSelected(True)
+            actions.actions['lock_group'].qaction.setChecked(group.locked)
+            self.group_context_menu.exec(self.mapToGlobal(point))
+            return
+
         item = self.get_text_item_at(point)
         if item is None:
             self.context_menu.exec(self.mapToGlobal(point))
@@ -458,6 +482,15 @@ class BeeGraphicsView(MainControlsMixin,
             return
         logger.debug(f'Ungrouping {len(groups)} groups')
         self.undo_stack.push(commands.UngroupItems(self.scene, groups))
+
+    def on_action_lock_group(self, checked):
+        groups = [item for item in self.scene.selectedItems(user_only=True)
+                  if item.TYPE == BeeGroupItem.TYPE]
+        for group in groups:
+            logger.debug(f'Setting locked for {group} to {checked}')
+            group.locked = checked
+            if checked and self.scene.active_group is group:
+                self.scene.exit_group()
 
     def on_action_group_box_color(self):
         groups = [item for item in self.scene.selectedItems(user_only=True)
@@ -955,6 +988,8 @@ class BeeGraphicsView(MainControlsMixin,
             item = self.scene.selectedItems(user_only=True)[0]
             grayscale = getattr(item, 'grayscale', False)
             actions.actions['grayscale'].qaction.setChecked(grayscale)
+            actions.actions['lock_group'].qaction.setChecked(
+                getattr(item, 'locked', False))
         self.viewport().repaint()
 
     def on_cursor_changed(self, cursor):

@@ -15,9 +15,10 @@
 
 MENU_SEPARATOR = 0
 
-# The contents of this menu are also used on their own as the context
-# menu when right-clicking a text item
+# The contents of these menus are also used on their own as the context
+# menu when right-clicking a text item or a group
 TEXT_MENU = '&Text'
+GROUP_MENU = '&Group'
 
 menu_structure = [
     {
@@ -54,10 +55,6 @@ menu_structure = [
             'copy',
             'paste',
             'delete',
-            MENU_SEPARATOR,
-            'group_items',
-            'ungroup_items',
-            'group_box_color',
             MENU_SEPARATOR,
             'raise_to_top',
             'lower_to_bottom',
@@ -126,6 +123,16 @@ menu_structure = [
             MENU_SEPARATOR,
             'show_color_gamut',
             'sample_color',
+        ],
+    },
+    {
+        'menu': GROUP_MENU,
+        'items': [
+            'group_items',
+            'ungroup_items',
+            MENU_SEPARATOR,
+            'group_box_color',
+            'lock_group',
         ],
     },
     {

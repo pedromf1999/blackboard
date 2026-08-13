@@ -130,13 +130,15 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # Space between the box edge and the items inside it
     PADDING = 20
 
-    def __init__(self, box_color=None, **kwargs):
+    def __init__(self, box_color=None, locked=False, **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
         self.init_selectable()
         self.is_editable = False
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
+        # A locked group can't be opened up to edit the items inside it
+        self.locked = locked
         logger.debug(f'Initialized {self}')
 
     @classmethod
@@ -158,7 +160,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self.update()
 
     def get_extra_save_data(self):
-        return {'box_color': self.box_color.getRgb()}
+        return {'box_color': self.box_color.getRgb(),
+                'locked': self.locked}
 
     def bee_children(self):
         """The items grouped inside this one."""
@@ -207,7 +210,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self.paint_selectable(painter, option, widget)
 
     def create_copy(self):
-        item = BeeGroupItem(box_color=self.box_color.getRgb())
+        item = BeeGroupItem(box_color=self.box_color.getRgb(),
+                            locked=self.locked)
         item.setPos(self.pos())
         item.setZValue(self.zValue())
         item.setScale(self.scale())

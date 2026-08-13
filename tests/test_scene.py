@@ -8,7 +8,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
-from beeref.items import BeePixmapItem, BeeTextItem
+from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 
 
 def test_add_remove_item(view, item):
@@ -701,6 +701,79 @@ def test_has_multi_selection_when_multi_selection(view):
     view.scene.addItem(item2)
     item2.setSelected(True)
     assert view.scene.has_multi_selection() is True
+
+
+def make_group_in_scene(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setPos(0, 80)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2], group).redo()
+    return group, item1, item2
+
+
+SELECTABLE = QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+
+
+def test_get_group_ancestor(view):
+    group, item1, item2 = make_group_in_scene(view)
+    assert view.scene.get_group_ancestor(item1) is group
+    assert view.scene.get_group_ancestor(group) is None
+
+
+def test_get_group_ancestor_when_nested(view):
+    group, item1, item2 = make_group_in_scene(view)
+    outer = BeeGroupItem()
+    view.scene.addItem(outer)
+    group.setParentItem(outer)
+    assert view.scene.get_group_ancestor(item1) is group
+
+
+def test_enter_group_makes_items_editable(view):
+    group, item1, item2 = make_group_in_scene(view)
+    assert bool(item1.flags() & SELECTABLE) is False
+
+    view.scene.enter_group(group, item1)
+    assert view.scene.active_group is group
+    assert bool(item1.flags() & SELECTABLE) is True
+    assert item1.isSelected() is True
+    assert item1.parentItem() is group
+
+
+def test_exit_group_restores_group_behaviour(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    view.scene.exit_group()
+    assert view.scene.active_group is None
+    assert bool(item1.flags() & SELECTABLE) is False
+    assert item1.isSelected() is False
+
+
+def test_enter_group_leaves_previous_group(view):
+    group1, item1, item2 = make_group_in_scene(view)
+    group2, item3, item4 = make_group_in_scene(view)
+    view.scene.enter_group(group1, item1)
+    view.scene.enter_group(group2, item3)
+    assert view.scene.active_group is group2
+    assert bool(item1.flags() & SELECTABLE) is False
+    assert bool(item3.flags() & SELECTABLE) is True
+
+
+def test_deselect_all_items_exits_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    view.scene.deselect_all_items()
+    assert view.scene.active_group is None
+
+
+def test_exit_group_refits_box_to_moved_items(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    item1.setPos(400, 400)
+    view.scene.exit_group()
+    assert group.rect().right() > 400
 
 
 def test_has_text_selection(view, item):

@@ -51,6 +51,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.items_to_add = Queue()
         self.edit_item = None
         self.crop_item = None
+        # The group whose items can currently be edited individually
+        self.active_group = None
         self.settings = BeeSettings()
         self.clear()
         self._clear_ongoing = False
@@ -77,6 +79,48 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         """
         self.cancel_crop_mode()
         self.end_rubberband_mode()
+
+    def get_group_ancestor(self, item):
+        """The nearest group containing the given item, if any."""
+
+        parent = item.parentItem()
+        while parent is not None:
+            if getattr(parent, 'TYPE', None) == 'group':
+                return parent
+            parent = parent.parentItem()
+        return None
+
+    def enter_group(self, group, item=None):
+        """Allow the items inside the given group to be edited individually.
+
+        This is what double-clicking an item inside a group does: the
+        group stops behaving like a single object until the user clicks
+        somewhere else.
+        """
+
+        if self.active_group is not group:
+            self.exit_group()
+            logger.debug(f'Entering {group}')
+            self.active_group = group
+            group.set_children_interactive(True)
+        if item is not None:
+            self.clearSelection()
+            item.setSelected(True)
+
+    def exit_group(self):
+        """Make the active group behave like a single object again."""
+
+        group = self.active_group
+        if group is None:
+            return
+        logger.debug(f'Leaving {group}')
+        # Cleared first: deselecting the items below triggers selection
+        # handling that can call this method again
+        self.active_group = None
+        if group.scene() is self:
+            group.set_children_interactive(False)
+            # Items may have been moved around inside the group
+            group.fit_to_children()
 
     def end_rubberband_mode(self):
         if self.rubberband_item.scene():
@@ -339,6 +383,7 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
 
     def deselect_all_items(self):
         self.cancel_active_modes()
+        self.exit_group()
         self.clearSelection()
 
     def has_selection(self):
@@ -397,6 +442,14 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 else:
                     super().mousePressEvent(event)
                     return
+            if self.active_group is not None:
+                # Clicking outside the active group makes it behave
+                # like a single object again
+                if (item_at_pos is None
+                        or not (item_at_pos is self.active_group
+                                or self.active_group.isAncestorOf(
+                                    item_at_pos))):
+                    self.exit_group()
             if item_at_pos:
                 self.active_mode = self.MOVE_MODE
             elif self.items():
@@ -408,6 +461,12 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.cancel_active_modes()
         item = self.itemAt(event.scenePos(), self.views()[0].transform())
         if item:
+            group = self.get_group_ancestor(item)
+            if group is not None and not group.locked:
+                # Double-clicking an item inside a group selects that
+                # item so that it can be moved and scaled on its own
+                self.enter_group(group, item)
+                return
             if not item.isSelected():
                 item.setSelected(True)
             if item.is_editable:

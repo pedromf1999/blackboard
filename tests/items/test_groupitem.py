@@ -38,8 +38,13 @@ def test_init_with_box_color(qapp):
 
 
 def test_get_extra_save_data(qapp):
-    group = BeeGroupItem(box_color=(255, 0, 0, 100))
-    assert group.get_extra_save_data() == {'box_color': (255, 0, 0, 100)}
+    group = BeeGroupItem(box_color=(255, 0, 0, 100), locked=True)
+    assert group.get_extra_save_data() == {
+        'box_color': (255, 0, 0, 100), 'locked': True}
+
+
+def test_init_locked_defaults_to_false(qapp):
+    assert BeeGroupItem().locked is False
 
 
 def test_bee_children(view):
@@ -96,10 +101,12 @@ def test_moving_group_moves_children(view):
 def test_create_copy(view):
     group, items = make_group(view, (0, 0), (0, 80))
     group.box_color = QtGui.QColor(255, 0, 0, 100)
+    group.locked = True
     group.setPos(20, 30)
 
     copy = group.create_copy()
     assert copy.box_color == QtGui.QColor(255, 0, 0, 100)
+    assert copy.locked is True
     assert copy.pos() == QtCore.QPointF(20, 30)
     assert len(copy.bee_children()) == 2
     assert copy.bee_children()[0] is not items[0]

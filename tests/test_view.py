@@ -1201,6 +1201,69 @@ def test_on_action_group_box_color(color_mock, view):
     assert len(view.undo_stack) == 2
 
 
+def test_on_action_lock_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+
+    view.on_action_lock_group(True)
+    assert group.locked is True
+    view.on_action_lock_group(False)
+    assert group.locked is False
+
+
+def test_on_action_lock_group_closes_open_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    view.scene.enter_group(group, item)
+    group.setSelected(True)
+
+    view.on_action_lock_group(True)
+    assert view.scene.active_group is None
+
+
+@patch('PyQt6.QtWidgets.QMenu.exec')
+def test_on_context_menu_over_group(exec_mock, view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+
+    with patch.object(view, 'get_group_at', return_value=group):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+    assert group.isSelected() is True
+    exec_mock.assert_called_once()
+
+
+def test_get_group_at_returns_group_for_child(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+
+    with patch.object(view.scene, 'items', return_value=[item, group]):
+        assert view.get_group_at(QtCore.QPoint(0, 0)) is group
+
+
+def test_get_group_at_ignores_open_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    view.scene.enter_group(group, item)
+
+    with patch.object(view.scene, 'items', return_value=[item]):
+        assert view.get_group_at(QtCore.QPoint(0, 0)) is None
+
+
 @patch('PyQt6.QtWidgets.QColorDialog.getColor')
 def test_on_action_group_box_color_when_no_group(color_mock, view):
     item = BeeTextItem('one')

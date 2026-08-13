@@ -301,6 +301,13 @@ actions = ActionList([
         group='active_when_selection',
     ),
     Action(
+        id='lock_group',
+        text='&Lock Group',
+        checkable=True,
+        callback='on_action_lock_group',
+        group='active_when_selection',
+    ),
+    Action(
         id='find_text',
         text='&Find Text...',
         shortcuts=['Ctrl+F'],
