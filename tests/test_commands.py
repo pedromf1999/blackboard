@@ -507,6 +507,63 @@ def test_group_items(view):
     assert item1.isSelected() is True
 
 
+def test_group_items_inside_a_group_nests(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setPos(0, 80)
+    item3 = BeeTextItem('three')
+    view.scene.addItem(item3)
+    item3.setPos(0, 160)
+    outer = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2, item3], outer).redo()
+
+    inner = BeeGroupItem()
+    command = commands.GroupItems(view.scene, [item1, item2], inner)
+    command.redo()
+    assert inner.parentItem() is outer
+    assert set(inner.bee_children()) == {item1, item2}
+    assert set(outer.bee_children()) == {item3, inner}
+
+    command.undo()
+    assert item1.parentItem() is outer
+    assert inner.scene() is None
+    assert set(outer.bee_children()) == {item1, item2, item3}
+
+
+def test_group_items_inside_a_group_keeps_positions(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    item2 = BeeTextItem('two')
+    view.scene.addItem(item2)
+    item2.setPos(0, 80)
+    outer = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, item2], outer).redo()
+    # A moved group would shift its contents if coordinates were wrong
+    outer.setPos(120, 60)
+    before = item1.scenePos()
+
+    commands.GroupItems(view.scene, [item1], BeeGroupItem()).redo()
+    assert item1.scenePos() == before
+
+
+def test_group_items_with_mixed_parents_stays_at_top_level(view):
+    item1 = BeeTextItem('one')
+    view.scene.addItem(item1)
+    outer = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1], outer).redo()
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    before = item1.scenePos()
+
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item1, loose], group).redo()
+    assert group.parentItem() is None
+    # Items still must not jump around
+    assert item1.scenePos() == before
+
+
 def test_group_items_restores_positions_on_undo(view):
     item = BeeTextItem('one')
     view.scene.addItem(item)

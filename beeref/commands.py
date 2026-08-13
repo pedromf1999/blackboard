@@ -321,27 +321,59 @@ class GroupItems(QtGui.QUndoCommand):
         self.group = group
         # Positions are relative to the parent, so they need restoring
         # when the items are taken out of the group again
+        self.old_parents = [item.parentItem() for item in self.items]
         self.old_positions = [item.pos() for item in self.items]
 
+        # Grouping items that are already in a group creates a group
+        # inside that one, rather than pulling them out of it
+        parents = set(self.old_parents)
+        parent = parents.pop() if len(parents) == 1 else None
+        self.parent_group = (
+            parent if getattr(parent, 'TYPE', None) == 'group' else None)
+
+    def restore_parent_state(self):
+        """Put the surrounding group back the way it was."""
+
+        if self.parent_group is None:
+            self.scene.deselect_all_items()
+            return
+        self.scene.refit_group(self.parent_group)
+        self.parent_group.set_children_interactive(
+            self.parent_group is self.scene.active_group)
+        # Not deselect_all_items(), which would close the parent group
+        self.scene.clearSelection()
+
     def redo(self):
-        self.scene.addItem(self.group)
+        if self.parent_group is None:
+            self.scene.addItem(self.group)
+        else:
+            self.group.setParentItem(self.parent_group)
+        self.group.setPos(0, 0)
         self.group.setZValue(
             min(item.zValue() for item in self.items) - self.scene.Z_STEP)
         for item in self.items:
+            # Keep the items where they appear on screen, whatever the
+            # surrounding group is doing
+            scene_pos = item.scenePos()
             item.setParentItem(self.group)
+            item.setPos(self.group.mapFromScene(scene_pos))
         self.group.fit_to_children()
         self.group.set_children_interactive(False)
-        self.scene.deselect_all_items()
+        self.restore_parent_state()
         self.group.setSelected(True)
 
     def undo(self):
         self.group.set_children_interactive(True)
-        for item, pos in zip(self.items, self.old_positions):
-            item.setParentItem(None)
+        for item, parent, pos in zip(
+                self.items, self.old_parents, self.old_positions):
+            item.setParentItem(parent)
+            if item.scene() is None:
+                self.scene.addItem(item)
             item.setPos(pos)
-            self.scene.addItem(item)
-        self.scene.removeItem(self.group)
-        self.scene.deselect_all_items()
+        if self.group.scene() is not None:
+            self.group.setParentItem(None)
+            self.scene.removeItem(self.group)
+        self.restore_parent_state()
         for item in self.items:
             item.setSelected(True)
 
