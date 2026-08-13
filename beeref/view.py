@@ -915,6 +915,13 @@ class BeeGraphicsView(MainControlsMixin,
         pos = self.mapToScene(self.mapFromGlobal(self.cursor().pos()))
         item.setScale(1 / self.get_scale())
         self.undo_stack.push(commands.InsertItems(self.scene, [item], pos))
+        # Start editing straight away, with the placeholder selected so
+        # that typing replaces it
+        item.enter_edit_mode()
+        item.setFocus()
+        cursor = item.textCursor()
+        cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        item.setTextCursor(cursor)
 
     def on_action_copy(self):
         logger.debug('Copying to clipboard...')

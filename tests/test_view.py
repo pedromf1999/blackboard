@@ -694,6 +694,12 @@ def test_on_action_insert_text(clear_mock, view):
     assert item.toPlainText() == 'Text'
     assert item.isSelected() is True
     view.cancel_active_modes.assert_called_once_with()
+    # Ready to type straight away, with the placeholder selected
+    assert item.edit_mode is True
+    assert view.scene.edit_item is item
+    assert view.scene.focusItem() is item
+    assert item.textCursor().hasSelection() is True
+    assert item.textCursor().selectedText() == 'Text'
 
 
 @patch('PyQt6.QtWidgets.QApplication.clipboard')
