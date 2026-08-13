@@ -281,6 +281,20 @@ actions = ActionList([
         group='active_when_selection',
     ),
     Action(
+        id='find_text',
+        text='&Find Text...',
+        shortcuts=['Ctrl+F'],
+        callback='on_action_find_text',
+        group='active_when_items_in_scene',
+    ),
+    Action(
+        id='find_next',
+        text='Find &Next',
+        shortcuts=['F3'],
+        callback='on_action_find_next',
+        group='active_when_items_in_scene',
+    ),
+    Action(
         id='text_color',
         text='&Text Colour...',
         callback='on_action_text_color',

@@ -1144,6 +1144,100 @@ def test_on_action_text_color_when_no_text_selected(color_mock, view):
     assert len(view.undo_stack) == 0
 
 
+def add_text_items(view, *texts):
+    items = []
+    for i, text in enumerate(texts):
+        item = BeeTextItem(text)
+        view.scene.addItem(item)
+        item.setPos(0, i * 100)
+        items.append(item)
+    return items
+
+
+def test_get_text_search_matches_is_case_insensitive(view):
+    item1, item2, item3 = add_text_items(
+        view, 'Hello World', 'nothing here', 'hello again')
+    view.text_search_query = 'HELLO'
+    assert view.get_text_search_matches() == [item1, item3]
+
+
+def test_get_text_search_matches_ordered_top_to_bottom(view):
+    item1, item2 = add_text_items(view, 'match one', 'match two')
+    item1.setPos(0, 500)
+    item2.setPos(0, 100)
+    view.text_search_query = 'match'
+    assert view.get_text_search_matches() == [item2, item1]
+
+
+def test_find_next_text_match_selects_and_centres(view):
+    item1, item2 = add_text_items(view, 'find me', 'other')
+    view.text_search_query = 'find me'
+    with patch.object(view, 'centerOn') as center_mock:
+        view.find_next_text_match()
+    assert item1.isSelected() is True
+    assert item2.isSelected() is False
+    center_mock.assert_called_once()
+
+
+def test_find_next_text_match_cycles(view):
+    item1, item2 = add_text_items(view, 'match one', 'match two')
+    view.text_search_query = 'match'
+    with patch.object(view, 'centerOn'):
+        view.find_next_text_match()
+        assert item1.isSelected() is True
+        view.find_next_text_match()
+        assert item2.isSelected() is True
+        assert item1.isSelected() is False
+        # Wraps around to the first match again
+        view.find_next_text_match()
+        assert item1.isSelected() is True
+
+
+def test_find_next_text_match_when_no_matches(view):
+    add_text_items(view, 'nothing here')
+    view.text_search_query = 'absent'
+    with patch.object(view, 'centerOn') as center_mock:
+        view.find_next_text_match()
+    center_mock.assert_not_called()
+    assert view.text_search_index == -1
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getText', return_value=('me', True))
+def test_on_action_find_text(dialog_mock, view):
+    item1, item2 = add_text_items(view, 'find me', 'other')
+    with patch.object(view, 'centerOn'):
+        view.on_action_find_text()
+    assert view.text_search_query == 'me'
+    assert item1.isSelected() is True
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getText', return_value=('', False))
+def test_on_action_find_text_when_cancelled(dialog_mock, view):
+    add_text_items(view, 'find me')
+    view.text_search_query = 'previous'
+    view.on_action_find_text()
+    assert view.text_search_query == 'previous'
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getText', return_value=('me', True))
+def test_on_action_find_next_asks_for_query_when_none_yet(dialog_mock, view):
+    add_text_items(view, 'find me')
+    with patch.object(view, 'centerOn'):
+        view.on_action_find_next()
+    dialog_mock.assert_called_once()
+    assert view.text_search_query == 'me'
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getText')
+def test_on_action_find_next_reuses_existing_query(dialog_mock, view):
+    item1, _ = add_text_items(view, 'find me', 'other')
+    view.text_search_query = 'find'
+    with patch.object(view, 'centerOn'):
+        view.on_action_find_next()
+    dialog_mock.assert_not_called()
+    assert item1.isSelected() is True
+
+
 @pytest.mark.parametrize('zoom', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 20, 100])
 def test_get_grid_step_stays_in_sensible_range(view, zoom):
     view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))

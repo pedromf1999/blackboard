@@ -81,6 +81,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.filename = None
         self.previous_transform = None
         self.active_mode = None
+        self.text_search_query = ''
+        self.text_search_index = -1
 
         self.scene = BeeGraphicsScene(self.undo_stack)
         self.scene.changed.connect(self.on_scene_changed)
@@ -439,6 +441,54 @@ class BeeGraphicsView(MainControlsMixin,
         if images:
             self.undo_stack.push(
                 commands.ToggleGrayscale(images, checked))
+
+    def on_action_find_text(self):
+        query, ok = QtWidgets.QInputDialog.getText(
+            self, 'Find Text', 'Find:', text=self.text_search_query)
+        if not ok or not query:
+            return
+        self.text_search_query = query
+        self.text_search_index = -1
+        self.find_next_text_match()
+
+    def on_action_find_next(self):
+        if self.text_search_query:
+            self.find_next_text_match()
+        else:
+            self.on_action_find_text()
+
+    def get_text_search_matches(self):
+        """The text items containing the current search query, ordered
+        top to bottom so that cycling through them is predictable."""
+
+        query = self.text_search_query.lower()
+        matches = [item for item in self.scene.items_by_type('text')
+                   if query in item.toPlainText().lower()]
+        return sorted(
+            matches,
+            key=lambda item: (item.sceneBoundingRect().top(),
+                              item.sceneBoundingRect().left()))
+
+    def find_next_text_match(self):
+        """Select the next match and centre the view on it."""
+
+        matches = self.get_text_search_matches()
+        if not matches:
+            self.text_search_index = -1
+            widgets.BeeNotification(
+                self, f'No text matching "{self.text_search_query}"')
+            return
+
+        self.text_search_index = (self.text_search_index + 1) % len(matches)
+        item = matches[self.text_search_index]
+        logger.debug(f'Text search match {self.text_search_index}: {item}')
+        self.scene.deselect_all_items()
+        item.setSelected(True)
+        self.centerOn(item.sceneBoundingRect().center())
+        widgets.BeeNotification(
+            self,
+            f'Match {self.text_search_index + 1} of {len(matches)}'
+            f' for "{self.text_search_query}"')
 
     def on_action_text_color(self):
         self.change_text_char_format('Text Colour', foreground=True)
