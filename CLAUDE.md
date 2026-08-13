@@ -45,7 +45,7 @@ launch and behave normally.
   databases; images live in an `sqlar` table, item properties in JSON.
 - `beeref/config/` — settings system and the settings dialog.
 - `beeref/assets/` — icons and images.
-- `BeeRef.spec` — PyInstaller build spec (executable name and icon).
+- `BVRef.spec` — PyInstaller build spec (executable name and icon).
 
 Checks available: `pytest --cov .` for tests, `flake8 .` for style. Run them
 before committing; existing tests must keep passing.

@@ -590,9 +590,10 @@ class BeeGraphicsView(MainControlsMixin,
             f'About {constants.APPNAME}',
             (f'<h2>{constants.APPNAME} {constants.VERSION}</h2>'
              f'<p>{constants.APPNAME_FULL}</p>'
+             f'<p>Based on {constants.UPSTREAM_NAME}</p>'
              f'<p>{constants.COPYRIGHT}</p>'
              f'<p><a href="{constants.WEBSITE}">'
-             f'Visit the {constants.APPNAME} website</a></p>'))
+             f'Visit the {constants.UPSTREAM_NAME} website</a></p>'))
 
     def on_action_debuglog(self):
         widgets.DebugLogDialog(self)

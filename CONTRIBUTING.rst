@@ -49,7 +49,7 @@ Building the app
 
 To build the app, run::
 
-  pyinstaller BeeRef.spec
+  pyinstaller BVRef.spec
 
 You will find the generated executable in the folder ``dist``.
 

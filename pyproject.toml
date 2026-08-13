@@ -9,9 +9,9 @@ include = ["beeref*"]
 "*" = ["*.html", "*.png"]
 
 [project]
-name = "BeeRef"
+name = "BVRef"
 version = "0.3.4-dev"
-description = "A simple reference image viewer"
+description = "A simple reference image viewer (personal fork of BeeRef)"
 readme = "README.rst"
 license = {file = "LICENSE"}
 authors = [
