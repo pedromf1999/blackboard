@@ -31,7 +31,7 @@ def test_paint(paint_mock, qapp):
     option = MagicMock()
     item.paint(painter, option, 'widget')
     item.paint_selectable.assert_called_once()
-    painter.drawRect.assert_called_once()
+    painter.drawRoundedRect.assert_called_once()
     assert option.state == QtWidgets.QStyle.StateFlag.State_Enabled
     paint_mock.assert_called_once_with(painter, option, 'widget')
 

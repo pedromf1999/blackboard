@@ -28,7 +28,7 @@ from PyQt6.QtCore import Qt
 
 from beeref import commands
 from beeref.config import BeeSettings
-from beeref.constants import COLORS
+from beeref.constants import COLORS, CORNER_RADIUS
 from beeref.selection import SelectableMixin
 
 
@@ -239,7 +239,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
-        painter.drawRect(self.rect())
+        painter.drawRoundedRect(self.rect(), CORNER_RADIUS, CORNER_RADIUS)
         if self.drop_target:
             self.paint_drop_target(painter)
         self.paint_selectable(painter, option, widget)
@@ -257,9 +257,11 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         painter.setPen(pen)
         # Inset by half the pen width so the border stays inside the box
-        painter.drawRect(self.rect().adjusted(
-            pen.width() / 2, pen.width() / 2,
-            -pen.width() / 2, -pen.width() / 2))
+        painter.drawRoundedRect(
+            self.rect().adjusted(
+                pen.width() / 2, pen.width() / 2,
+                -pen.width() / 2, -pen.width() / 2),
+            CORNER_RADIUS, CORNER_RADIUS)
 
     def create_copy(self):
         item = BeeGroupItem(box_color=self.box_color.getRgb(),
@@ -887,7 +889,9 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
-        painter.drawRect(QtWidgets.QGraphicsTextItem.boundingRect(self))
+        painter.drawRoundedRect(
+            QtWidgets.QGraphicsTextItem.boundingRect(self),
+            CORNER_RADIUS, CORNER_RADIUS)
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)
@@ -1034,7 +1038,9 @@ class BeeErrorItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         color = QtGui.QColor(200, 0, 0)
         brush = QtGui.QBrush(color)
         painter.setBrush(brush)
-        painter.drawRect(QtWidgets.QGraphicsTextItem.boundingRect(self))
+        painter.drawRoundedRect(
+            QtWidgets.QGraphicsTextItem.boundingRect(self),
+            CORNER_RADIUS, CORNER_RADIUS)
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)

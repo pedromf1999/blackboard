@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 from beeref.assets import BeeAssets
 from beeref import commands
 from beeref.config import CommandlineArgs
-from beeref.constants import COLORS
+from beeref.constants import COLORS, CORNER_RADIUS
 from beeref import utils
 
 
@@ -226,8 +226,11 @@ class SelectableMixin(BaseItemMixin):
         painter.setPen(pen)
         painter.setBrush(QtGui.QBrush())
 
-        # Draw the main selection rectangle
-        painter.drawRect(self.bounding_rect_unselected())
+        # Draw the main selection rectangle. The radius is adjusted for
+        # the viewport so the rounding looks the same at any zoom level.
+        radius = self.fixed_length_for_viewport(CORNER_RADIUS)
+        painter.drawRoundedRect(
+            self.bounding_rect_unselected(), radius, radius)
 
         # If it's a single selection, draw the handles:
         if self.has_selection_handles():
@@ -701,6 +704,15 @@ class RubberbandItem(BaseItemMixin, QtWidgets.QGraphicsRectItem):
 
     def __str__(self):
         return (f'RubberbandItem {self.width} x {self.height}')
+
+    def paint(self, painter, option, widget):
+        painter.setPen(self.pen())
+        painter.setBrush(self.brush())
+        # The rubberband is drawn in scene coordinates, so the radius
+        # has to be scaled down to stay the same size on screen
+        scale = self.scene().views()[0].get_scale() if self.scene() else 1
+        radius = CORNER_RADIUS / scale
+        painter.drawRoundedRect(self.rect(), radius, radius)
 
     def fit(self, point1, point2):
         """Updates itself to fit the two given points."""

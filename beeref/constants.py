@@ -22,6 +22,9 @@ COPYRIGHT = 'Copyright © 2021-2024 Rebecca Breu'
 
 CHANGED_SYMBOL = '✎'
 
+# Corner radius for the rectangles the application draws
+CORNER_RADIUS = 8
+
 COLORS = {
     # Qt:
     'Active:Base': (60, 60, 60),

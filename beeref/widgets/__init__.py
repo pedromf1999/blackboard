@@ -292,7 +292,9 @@ class SampleColorWidget(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.setBrush(QtGui.QBrush(color))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRect(0, 0, self.SIZE, self.SIZE)
+        painter.drawRoundedRect(
+            0, 0, self.SIZE, self.SIZE,
+            constants.CORNER_RADIUS, constants.CORNER_RADIUS)
 
     def update(self, pos, color):
         self.set_pos(pos)

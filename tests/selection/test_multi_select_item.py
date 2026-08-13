@@ -20,7 +20,7 @@ def test_paint():
     painter = MagicMock()
     item.paint(painter, None, None)
     item.paint_selectable.assert_called_once()
-    painter.drawRect.assert_not_called()
+    painter.drawRoundedRect.assert_not_called()
 
 
 def test_has_selection_outline():

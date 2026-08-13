@@ -113,7 +113,7 @@ def test_paint_when_not_selected(debug_mock, view, item):
     item.setSelected(False)
     item.paint(painter, None, None)
     painter.drawPixmap.assert_called_once()
-    painter.drawRect.assert_not_called()
+    painter.drawRoundedRect.assert_not_called()
     painter.drawPoint.assert_not_called()
     debug_mock.assert_not_called()
 
@@ -127,7 +127,7 @@ def test_paint_when_selected_single_selection(view, item):
     item.setSelected(True)
     item.paint(painter, None, None)
     painter.drawPixmap.assert_called_once()
-    painter.drawRect.assert_called_once()
+    painter.drawRoundedRect.assert_called_once()
     assert painter.drawPoint.call_count == 4
 
 
@@ -143,7 +143,7 @@ def test_paint_when_selected_multi_selection(view, item):
     item.setSelected(True)
     item.paint(painter, None, None)
     painter.drawPixmap.assert_called_once()
-    painter.drawRect.assert_called_once()
+    painter.drawRoundedRect.assert_called_once()
     painter.drawPoint.assert_not_called()
 
 

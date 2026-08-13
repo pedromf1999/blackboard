@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from PyQt6 import QtCore, QtWidgets, QtGui
 from PyQt6.QtCore import Qt
 
+from beeref import constants
 from beeref.config import logfile_name
 from beeref.widgets import (
     BeeNotification,
@@ -128,7 +129,8 @@ def test_sample_color_widget_paint_event_when_color(view):
         widget.paintEvent(MagicMock())
         brush = QtGui.QBrush(QtGui.QColor(255, 0, 0))
         painter_mock.setBrush.assert_called_once_with(brush)
-        painter_mock.drawRect.assert_called_once_with(0, 0, 50, 50)
+        painter_mock.drawRoundedRect.assert_called_once_with(
+            0, 0, 50, 50, constants.CORNER_RADIUS, constants.CORNER_RADIUS)
 
 
 def test_sample_color_widget_paint_event_when_no_color(view):
@@ -139,7 +141,8 @@ def test_sample_color_widget_paint_event_when_no_color(view):
         widget.paintEvent(MagicMock())
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         painter_mock.setBrush.assert_called_once_with(brush)
-        painter_mock.drawRect.assert_called_once_with(0, 0, 50, 50)
+        painter_mock.drawRoundedRect.assert_called_once_with(
+            0, 0, 50, 50, constants.CORNER_RADIUS, constants.CORNER_RADIUS)
 
 
 def test_export_images_file_exists_dialog(view):

@@ -106,13 +106,13 @@ def test_paint_draws_drop_target_highlight(selectable_mock, view):
 
     group.drop_target = False
     group.paint(painter, option, 'widget')
-    assert painter.drawRect.call_count == 1
+    assert painter.drawRoundedRect.call_count == 1
 
     painter.reset_mock()
     group.drop_target = True
     group.paint(painter, option, 'widget')
     # The box, plus the highlight border on top of it
-    assert painter.drawRect.call_count == 2
+    assert painter.drawRoundedRect.call_count == 2
 
 
 def test_contains_scene_pos(view):
