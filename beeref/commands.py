@@ -385,6 +385,56 @@ class UngroupItems(QtGui.QUndoCommand):
             group.setSelected(True)
 
 
+class MoveToGroup(QtGui.QUndoCommand):
+    """Move items into a group, or out of their current one.
+
+    This is what happens when items are dragged onto a group's box, or
+    dragged out of it. ``group`` of ``None`` means "not in any group".
+    """
+
+    def __init__(self, scene, items, group):
+        super().__init__('Move items to group')
+        self.scene = scene
+        self.items = list(items)
+        self.group = group
+        self.old_parents = [item.parentItem() for item in self.items]
+        self.old_positions = [item.pos() for item in self.items]
+
+    def reparent(self, item, group):
+        """Re-parent the item, keeping it where it appears on screen."""
+
+        scene_pos = item.scenePos()
+        item.setParentItem(group)
+        if group is None:
+            if item.scene() is None:
+                self.scene.addItem(item)
+            item.setPos(scene_pos)
+        else:
+            item.setPos(group.mapFromScene(scene_pos))
+
+    def refit(self, groups):
+        for group in groups:
+            if group is not None and group.scene() is not None:
+                self.scene.refit_group(group)
+                if group is not self.scene.active_group:
+                    group.set_children_interactive(False)
+
+    def redo(self):
+        for item in self.items:
+            self.reparent(item, self.group)
+        self.refit(set(self.old_parents) | {self.group})
+        if self.group is not None:
+            self.scene.clearSelection()
+            self.group.setSelected(True)
+
+    def undo(self):
+        for item, parent, pos in zip(
+                self.items, self.old_parents, self.old_positions):
+            self.reparent(item, parent)
+            item.setPos(pos)
+        self.refit(set(self.old_parents) | {self.group})
+
+
 class ChangeGroupBoxColor(QtGui.QUndoCommand):
     """Change the colour of the box behind grouped items."""
 

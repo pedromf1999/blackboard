@@ -776,6 +776,106 @@ def test_exit_group_refits_box_to_moved_items(view):
     assert group.rect().right() > 400
 
 
+def drop_onto(item, group):
+    """Move the item so that its centre lands on the group's box."""
+
+    delta = (group.mapToScene(group.center)
+             - item.mapToScene(item.center))
+    item.setPos(item.pos() + delta)
+
+
+def test_get_drop_group_when_over_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    loose.setPos(900, 900)
+    assert view.scene.get_drop_group(loose) is None
+
+    drop_onto(loose, group)
+    assert view.scene.get_drop_group(loose) is group
+
+
+def test_get_drop_group_ignores_locked_group(view):
+    group, item1, item2 = make_group_in_scene(view)
+    group.locked = True
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    drop_onto(loose, group)
+    assert view.scene.get_drop_group(loose) is None
+
+
+def test_get_drop_group_never_returns_itself(view):
+    group, item1, item2 = make_group_in_scene(view)
+    assert view.scene.get_drop_group(group) is not group
+
+
+def test_get_drop_group_never_returns_own_child_group(view):
+    outer, item1, item2 = make_group_in_scene(view)
+    inner = BeeGroupItem()
+    view.scene.addItem(inner)
+    item1.setParentItem(inner)
+    inner.fit_to_children()
+    inner.setParentItem(outer)
+    assert view.scene.get_drop_group(outer) is None
+
+
+def test_update_group_membership_adds_item(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    drop_onto(loose, group)
+    scene_pos = loose.scenePos()
+
+    view.scene.update_group_membership([loose])
+    assert loose.parentItem() is group
+    # The item stays where it was dropped
+    assert loose.scenePos() == scene_pos
+
+
+def test_update_group_membership_removes_item(view):
+    group, item1, item2 = make_group_in_scene(view)
+    view.scene.enter_group(group, item1)
+    item1.setPos(2000, 2000)
+
+    view.scene.update_group_membership([item1])
+    assert item1.parentItem() is None
+    assert item1.scene() is view.scene
+
+
+def test_update_group_membership_does_nothing_when_unchanged(view):
+    group, item1, item2 = make_group_in_scene(view)
+    loose = BeeTextItem('loose')
+    view.scene.addItem(loose)
+    loose.setPos(900, 900)
+    before = len(view.undo_stack)
+
+    view.scene.update_group_membership([loose])
+    assert len(view.undo_stack) == before
+    assert loose.parentItem() is None
+
+
+def test_update_group_membership_nests_groups(view):
+    outer, item1, item2 = make_group_in_scene(view)
+    inner, item3, item4 = make_group_in_scene(view)
+    drop_onto(inner, outer)
+
+    view.scene.update_group_membership([inner])
+    assert inner.parentItem() is outer
+    assert view.scene.group_chain(item3) == [inner, outer]
+
+
+def test_refit_group_grows_containing_groups(view):
+    outer, item1, item2 = make_group_in_scene(view)
+    inner, item3, item4 = make_group_in_scene(view)
+    drop_onto(inner, outer)
+    view.scene.update_group_membership([inner])
+
+    view.scene.enter_group(inner, item3)
+    item3.setPos(item3.pos() + QtCore.QPointF(0, 600))
+    view.scene.refit_group(inner)
+    assert outer.rect().height() >= inner.rect().height()
+
+
 def test_has_text_selection(view, item):
     textitem = BeeTextItem('foo')
     view.scene.addItem(textitem)

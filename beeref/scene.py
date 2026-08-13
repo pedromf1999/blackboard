@@ -83,12 +83,62 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def get_group_ancestor(self, item):
         """The nearest group containing the given item, if any."""
 
+        chain = self.group_chain(item)
+        return chain[0] if chain else None
+
+    def refit_group(self, group):
+        """Refit a group's box and those of the groups containing it."""
+
+        while group is not None:
+            if group.scene() is self:
+                group.fit_to_children()
+            group = self.get_group_ancestor(group)
+
+    def get_drop_group(self, item):
+        """The group the given item would land in at its current position.
+
+        Returns ``None`` when the item isn't over any group. Groups the
+        item itself contains are skipped, so that a group can't be
+        dropped inside itself.
+        """
+
+        center = item.mapToScene(item.center)
+        candidates = [
+            group for group in self.items_by_type('group')
+            if group is not item
+            and not item.isAncestorOf(group)
+            and not group.locked
+            and group.contains_scene_pos(center)]
+        if not candidates:
+            return None
+        # Innermost group wins, so dropping into a nested group works
+        return max(candidates, key=lambda group: len(self.group_chain(group)))
+
+    def group_chain(self, item):
+        """The groups containing the given item, innermost first."""
+
+        chain = []
         parent = item.parentItem()
         while parent is not None:
             if getattr(parent, 'TYPE', None) == 'group':
-                return parent
+                chain.append(parent)
             parent = parent.parentItem()
-        return None
+        return chain
+
+    def update_group_membership(self, items):
+        """Put dragged items into the group they were dropped on, or take
+        them out of their group when dropped outside it."""
+
+        for item in items:
+            if getattr(item, 'TYPE', None) is None:
+                continue
+            current = self.get_group_ancestor(item)
+            target = self.get_drop_group(item)
+            if target is current:
+                continue
+            logger.debug(f'Moving {item} from {current} to {target}')
+            self.undo_stack.push(
+                commands.MoveToGroup(self, [item], target))
 
     def enter_group(self, group, item=None):
         """Allow the items inside the given group to be edited individually.
@@ -120,7 +170,7 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         if group.scene() is self:
             group.set_children_interactive(False)
             # Items may have been moved around inside the group
-            group.fit_to_children()
+            self.refit_group(group)
 
     def end_rubberband_mode(self):
         if self.rubberband_item.scene():
@@ -499,10 +549,14 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 and self.selectedItems()[0].active_mode is None):
             delta = event.scenePos() - self.event_start
             if not delta.isNull():
+                self.undo_stack.beginMacro('Move items')
                 self.undo_stack.push(
                     commands.MoveItemsBy(self.selectedItems(),
                                          delta,
                                          ignore_first_redo=True))
+                self.update_group_membership(
+                    self.selectedItems(user_only=True))
+                self.undo_stack.endMacro()
         self.active_mode = None
         super().mouseReleaseEvent(event)
 
@@ -676,6 +730,10 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             item.setParentItem(group)
             item.setPos(pos)
 
-        for group in groups.values():
+        # Innermost groups first: an outer group's box can only be
+        # sized once the groups inside it know their own size
+        for group in sorted(groups.values(),
+                            key=lambda g: len(self.group_chain(g)),
+                            reverse=True):
             group.fit_to_children()
             group.set_children_interactive(False)

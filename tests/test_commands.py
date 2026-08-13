@@ -537,6 +537,42 @@ def test_ungroup_items(view):
     assert group.scene() is view.scene
 
 
+def test_move_to_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setPos(30, 40)
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    group.setRect(0, 0, 200, 200)
+    scene_pos = item.scenePos()
+
+    command = commands.MoveToGroup(view.scene, [item], group)
+    command.redo()
+    assert item.parentItem() is group
+    assert item.scenePos() == scene_pos
+    assert group.isSelected() is True
+
+    command.undo()
+    assert item.parentItem() is None
+    assert item.pos() == QtCore.QPointF(30, 40)
+    assert item.scene() is view.scene
+
+
+def test_move_to_group_out_of_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+
+    command = commands.MoveToGroup(view.scene, [item], None)
+    command.redo()
+    assert item.parentItem() is None
+    assert item.scene() is view.scene
+
+    command.undo()
+    assert item.parentItem() is group
+
+
 def test_change_group_box_color(view):
     group1 = BeeGroupItem()
     group2 = BeeGroupItem(box_color=(0, 0, 255, 50))
