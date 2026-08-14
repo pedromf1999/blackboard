@@ -115,6 +115,16 @@ def main():
     app = BeeRefApplication(sys.argv)
     palette = create_palette_from_dict(constants.COLORS)
     app.setPalette(palette)
+
+    # The bundled font is used everywhere: menus, dialogs and the text
+    # items on the canvas. Falls back to the system font if it can't be
+    # loaded, so the application still works without it.
+    family = BeeAssets().font_family
+    if family:
+        logger.info(f'Using font: {family}')
+        font = app.font()
+        font.setFamily(family)
+        app.setFont(font)
     bee = BeeRefMainWindow(app)  # NOQA:F841
 
     signal.signal(signal.SIGINT, handle_sigint)

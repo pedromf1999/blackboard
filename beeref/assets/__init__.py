@@ -37,6 +37,7 @@ class BeeAssets:
     def on_new(self):
         logger.debug(f'Assets path: {self.PATH}')
 
+        self.font_family = self.load_fonts()
         self.logo = QtGui.QIcon(str(self.PATH.joinpath('logo.png')))
         assert self.logo.isNull() is False
         self.cursor_rotate = self.cursor_from_image(
@@ -45,6 +46,32 @@ class BeeAssets:
             'cursor_flip_h.png', (20, 20))
         self.cursor_flip_v = self.cursor_from_image(
             'cursor_flip_v.png', (20, 20))
+
+    def load_fonts(self):
+        """Load the bundled fonts, so that they work without being
+        installed on the system.
+
+        Returns the font family to use, or ``None`` when the fonts
+        can't be loaded, in which case the default font is kept.
+        """
+
+        families = set()
+        fontdir = self.PATH.joinpath('fonts')
+        for filename in sorted(fontdir.iterdir()):
+            if filename.suffix.lower() not in ('.otf', '.ttf'):
+                continue
+            font_id = QtGui.QFontDatabase.addApplicationFont(str(filename))
+            if font_id == -1:
+                logger.warning(f'Could not load font: {filename.name}')
+                continue
+            families.update(
+                QtGui.QFontDatabase.applicationFontFamilies(font_id))
+
+        if not families:
+            logger.warning('No bundled fonts loaded; using the default font')
+            return None
+        logger.debug(f'Loaded font families: {sorted(families)}')
+        return sorted(families)[0]
 
     def cursor_from_image(self, filename, hotspot):
         app = QtWidgets.QApplication.instance()

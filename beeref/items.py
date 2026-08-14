@@ -848,6 +848,22 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             # Rich text takes precedence over the plain text version,
             # which is only kept for compatibility with BeeRef
             self.setHtml(html)
+            self.apply_app_font()
+
+    def apply_app_font(self):
+        """Make the text use the application font.
+
+        Stored rich text carries its font family with it, so text
+        written before the application font changed would otherwise
+        keep the old one.
+        """
+
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+        charformat = QtGui.QTextCharFormat()
+        charformat.setFontFamilies([app.font().family()])
+        self.apply_char_format(charformat)
 
     @classmethod
     def create_from_data(cls, **kwargs):
