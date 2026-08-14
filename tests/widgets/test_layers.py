@@ -159,8 +159,8 @@ def style_option(tree, row, selected=False):
     return option
 
 
-def test_selected_row_keeps_its_colours(view):
-    """Selection must not repaint the row; the marker shows it instead."""
+def test_selection_is_never_painted(view):
+    """The row must not be drawn as selected, whatever the style does."""
 
     item = add_text(view, 'one', 0)
     group = BeeGroupItem(box_color=(255, 255, 255, 255))
@@ -168,9 +168,31 @@ def test_selected_row_keeps_its_colours(view):
     tree = tree_of(view)
 
     option = style_option(tree, 0, selected=True)
-    assert option.palette.highlight().color() == QtGui.QColor(
-        255, 255, 255)
-    assert option.palette.highlightedText().color() == QtGui.QColor(0, 0, 0)
+    assert not (option.state & QtWidgets.QStyle.StateFlag.State_Selected)
+
+
+def test_hover_is_never_painted(view):
+    add_text(view, 'one', 0)
+    tree = tree_of(view)
+
+    index = tree.indexFromItem(tree.topLevelItem(0))
+    option = QtWidgets.QStyleOptionViewItem()
+    option.initFrom(tree)
+    option.state |= QtWidgets.QStyle.StateFlag.State_MouseOver
+    tree.itemDelegate().initStyleOption(option, index)
+    assert not (option.state & QtWidgets.QStyle.StateFlag.State_MouseOver)
+
+
+def test_selected_row_keeps_its_text_colour(view):
+    """A selected light row still gets dark text."""
+
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(255, 255, 255, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    option = style_option(tree, 0, selected=True)
+    assert option.palette.text().color() == QtGui.QColor(0, 0, 0)
 
 
 def test_selected_dark_row_keeps_light_text(view):
@@ -180,18 +202,15 @@ def test_selected_dark_row_keeps_light_text(view):
     tree = tree_of(view)
 
     option = style_option(tree, 0, selected=True)
-    assert option.palette.highlightedText().color() == QtGui.QColor(
-        255, 255, 255)
+    assert option.palette.text().color() == QtGui.QColor(255, 255, 255)
 
 
-def test_rows_without_a_colour_are_left_alone(view):
+def test_rows_without_a_colour_keep_the_usual_text(view):
     item = BeePixmapItem(QtGui.QImage())
     view.scene.addItem(item)
     tree = tree_of(view)
-    # No background set, so the delegate keeps the usual palette
     option = style_option(tree, 0, selected=True)
-    assert option.palette.highlightedText().color() == (
-        view.palette().highlightedText().color())
+    assert option.palette.text().color() == view.palette().text().color()
 
 
 def marker_of(tree, row):

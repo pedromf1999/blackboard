@@ -33,26 +33,24 @@ QWIDGETSIZE_MAX = (1 << 24) - 1
 
 
 class LayersDelegate(QtWidgets.QStyledItemDelegate):
-    """Keeps an entry looking the same whether or not it is selected.
+    """Draws entries in their own colours, never as selected.
 
-    Qt would paint a selected row in the highlight colour with its own
-    text colour, losing the item's colour. Selection is shown by the
-    marker in front of the name instead, so the colours stay put.
+    Selection is shown by the marker in front of the name, so the row
+    itself must not be repainted for it.
     """
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
+        # Selection is never painted, whatever the platform's style
+        # would normally do with it
+        option.state &= ~QtWidgets.QStyle.StateFlag.State_Selected
+        option.state &= ~QtWidgets.QStyle.StateFlag.State_MouseOver
+
         background = index.data(Qt.ItemDataRole.BackgroundRole)
         if background is None:
             return
-
-        color = background.color()
-        text = readable_grey(color)
-        option.palette.setColor(QtGui.QPalette.ColorRole.Text, text)
-        # Selected rows keep the item's own colours
-        option.palette.setColor(QtGui.QPalette.ColorRole.Highlight, color)
-        option.palette.setColor(
-            QtGui.QPalette.ColorRole.HighlightedText, text)
+        option.palette.setColor(QtGui.QPalette.ColorRole.Text,
+                                readable_grey(background.color()))
 
 
 class LayersTree(QtWidgets.QTreeWidget):
@@ -84,6 +82,19 @@ class LayersTree(QtWidgets.QTreeWidget):
         self.scene.changed.connect(self.schedule_refresh)
         self.scene.selectionChanged.connect(self.update_selection)
         self.refresh_pending = False
+
+    def drawRow(self, painter, option, index):
+        """Draw rows as if nothing were selected.
+
+        The row background and the expand arrow are painted by the view
+        rather than the delegate, and on some platforms the style paints
+        a selected row in its own colour, which would cover the item's.
+        """
+
+        option = QtWidgets.QStyleOptionViewItem(option)
+        option.state &= ~QtWidgets.QStyle.StateFlag.State_Selected
+        option.state &= ~QtWidgets.QStyle.StateFlag.State_MouseOver
+        super().drawRow(painter, option, index)
 
     # Building the tree
 
