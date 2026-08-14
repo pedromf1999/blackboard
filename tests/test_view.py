@@ -1084,6 +1084,94 @@ def test_on_action_grayscale(view):
     assert pixmapitem2.grayscale is False
 
 
+def char_format_at(item, pos):
+    cursor = item.textCursor()
+    cursor.setPosition(pos)
+    return cursor.charFormat()
+
+
+def test_on_action_text_bold(view):
+    textitem = BeeTextItem('make this bold')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_bold()
+    assert char_format_at(textitem, 3).fontWeight() == QtGui.QFont.Weight.Bold
+    assert len(view.undo_stack) == 1
+
+    view.undo_stack.undo()
+    assert char_format_at(textitem, 3).fontWeight() != QtGui.QFont.Weight.Bold
+
+
+def test_on_action_text_bold_toggles_off(view):
+    textitem = BeeTextItem('make this bold')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_bold()
+    view.on_action_text_bold()
+    assert char_format_at(textitem, 3).fontWeight() == (
+        QtGui.QFont.Weight.Normal)
+
+
+def test_on_action_text_bold_applies_to_selection_only(view):
+    textitem = BeeTextItem('bold words plain words')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    cursor = textitem.textCursor()
+    cursor.setPosition(0)
+    cursor.setPosition(10, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    textitem.setTextCursor(cursor)
+
+    view.on_action_text_bold()
+    assert char_format_at(textitem, 3).fontWeight() == QtGui.QFont.Weight.Bold
+    assert char_format_at(textitem, 15).fontWeight() != (
+        QtGui.QFont.Weight.Bold)
+
+
+def test_on_action_text_bold_without_text_selected(view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_text_bold()
+    assert len(view.undo_stack) == 0
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getInt', return_value=(28, True))
+def test_on_action_text_size(dialog_mock, view):
+    textitem = BeeTextItem('bigger please')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_size()
+    assert char_format_at(textitem, 3).fontPointSize() == 28
+    assert len(view.undo_stack) == 1
+
+    view.undo_stack.undo()
+    assert char_format_at(textitem, 3).fontPointSize() != 28
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getInt', return_value=(28, False))
+def test_on_action_text_size_when_cancelled(dialog_mock, view):
+    textitem = BeeTextItem('bigger please')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    view.on_action_text_size()
+    assert len(view.undo_stack) == 0
+
+
+@patch('PyQt6.QtWidgets.QInputDialog.getInt')
+def test_on_action_text_size_offers_the_current_size(dialog_mock, view):
+    dialog_mock.return_value = (20, False)
+    textitem = BeeTextItem('some text')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_size()
+    # The dialog starts at the size the text already has
+    assert dialog_mock.call_args[0][3] == textitem.font().pointSize()
+
+
 @patch('PyQt6.QtWidgets.QColorDialog.getColor',
        return_value=QtGui.QColor(255, 0, 0))
 def test_on_action_text_color(color_mock, view):

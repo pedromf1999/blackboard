@@ -53,6 +53,10 @@ class BeeGraphicsView(MainControlsMixin,
     GRID_MIN_SPACING = 25
     GRID_MAX_SPACING = 250
 
+    # Range offered when changing the size of text
+    TEXT_SIZE_MIN = 4
+    TEXT_SIZE_MAX = 400
+
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self.app = app
@@ -575,6 +579,59 @@ class BeeGraphicsView(MainControlsMixin,
             f'Match {self.text_search_index + 1} of {len(matches)}'
             f' for "{self.text_search_query}"')
 
+    def on_action_text_bold(self):
+        """Toggle bold on the selected words, or the whole text."""
+
+        items = self.scene.selected_text_items()
+        if not items:
+            return
+        charformat = QtGui.QTextCharFormat()
+        # Toggle based on what the first item currently is, so that a
+        # second press turns it off again
+        weight = (QtGui.QFont.Weight.Normal if self.text_is_bold(items[0])
+                  else QtGui.QFont.Weight.Bold)
+        charformat.setFontWeight(weight)
+        self.apply_text_char_format(items, charformat)
+
+    def text_is_bold(self, item):
+        cursor = item.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        return cursor.charFormat().fontWeight() > QtGui.QFont.Weight.Normal
+
+    def on_action_text_size(self):
+        """Change the size of the selected words, or the whole text."""
+
+        items = self.scene.selected_text_items()
+        if not items:
+            return
+        size, ok = QtWidgets.QInputDialog.getInt(
+            self, 'Text Size', 'Size:', self.get_text_size(items[0]),
+            self.TEXT_SIZE_MIN, self.TEXT_SIZE_MAX)
+        if not ok:
+            return
+        charformat = QtGui.QTextCharFormat()
+        charformat.setFontPointSize(size)
+        self.apply_text_char_format(items, charformat)
+
+    def get_text_size(self, item):
+        cursor = item.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        size = cursor.charFormat().fontPointSize()
+        # Text that has never been sized reports zero
+        return int(size) or int(item.font().pointSize())
+
+    def apply_text_char_format(self, items, charformat):
+        """Apply the format to the given items, as one undo step."""
+
+        old_htmls = [item.toHtml() for item in items]
+        for item in items:
+            item.apply_char_format(charformat)
+        new_htmls = [item.toHtml() for item in items]
+        self.undo_stack.push(
+            commands.ChangeTextFormat(items, new_htmls, old_htmls))
+
     def on_action_text_color(self):
         self.change_text_char_format('Text Colour', foreground=True)
 
@@ -601,13 +658,7 @@ class BeeGraphicsView(MainControlsMixin,
             charformat.setForeground(color)
         else:
             charformat.setBackground(color)
-
-        old_htmls = [item.toHtml() for item in items]
-        for item in items:
-            item.apply_char_format(charformat)
-        new_htmls = [item.toHtml() for item in items]
-        self.undo_stack.push(
-            commands.ChangeTextFormat(items, new_htmls, old_htmls))
+        self.apply_text_char_format(items, charformat)
 
     def on_action_text_box_color(self):
         items = self.scene.selected_text_items()

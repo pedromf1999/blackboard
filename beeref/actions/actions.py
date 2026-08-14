@@ -322,6 +322,19 @@ actions = ActionList([
         group='active_when_items_in_scene',
     ),
     Action(
+        id='text_bold',
+        text='&Bold',
+        shortcuts=['Ctrl+B'],
+        callback='on_action_text_bold',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_size',
+        text='Text &Size...',
+        callback='on_action_text_size',
+        group='active_when_text_selection',
+    ),
+    Action(
         id='text_color',
         text='&Text Colour...',
         callback='on_action_text_color',
