@@ -96,6 +96,78 @@ def qcolor_to_hex(color):
     return f'{rgb}{alpha}'
 
 
+def relative_luminance(color):
+    """How bright a colour appears, on a scale of 0 to 1.
+
+    This is the sRGB formula used for contrast ratios, which weights
+    the channels by how bright the eye perceives them.
+    """
+
+    def channel(value):
+        value = value / 255
+        if value <= 0.03928:
+            return value / 12.92
+        return ((value + 0.055) / 1.055) ** 2.4
+
+    return (0.2126 * channel(color.red())
+            + 0.7152 * channel(color.green())
+            + 0.0722 * channel(color.blue()))
+
+
+def contrast_ratio(lum1, lum2):
+    """The contrast between two luminance values, from 1 to 21."""
+
+    lighter = max(lum1, lum2)
+    darker = min(lum1, lum2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def blend_over(color, background):
+    """The colour that a translucent colour appears as over a background."""
+
+    alpha = color.alphaF()
+    if alpha >= 1:
+        return QtGui.QColor(color.red(), color.green(), color.blue())
+    return QtGui.QColor(
+        round(color.red() * alpha + background.red() * (1 - alpha)),
+        round(color.green() * alpha + background.green() * (1 - alpha)),
+        round(color.blue() * alpha + background.blue() * (1 - alpha)))
+
+
+# How much contrast text keeps against its background. Chosen so that
+# text on the default black box stays as bright as it has always been;
+# lower it for softer text, at the cost of readability.
+TEXT_CONTRAST = 12.0
+
+
+def readable_grey(background, min_contrast=TEXT_CONTRAST):
+    """A grey that stays readable on the given background colour.
+
+    The grey closest to the background that still reaches the contrast
+    target is chosen, so text tracks the brightness of its background
+    instead of always jumping to black or white. Falls back to whichever
+    of black or white contrasts most when the target can't be met.
+    """
+
+    bg_lum = relative_luminance(background)
+    candidates = []
+    for value in range(256):
+        grey = QtGui.QColor(value, value, value)
+        ratio = contrast_ratio(relative_luminance(grey), bg_lum)
+        if ratio >= min_contrast:
+            candidates.append((abs(value - background.lightness()), grey))
+
+    if candidates:
+        return min(candidates, key=lambda item: item[0])[1]
+
+    white = QtGui.QColor(255, 255, 255)
+    black = QtGui.QColor(0, 0, 0)
+    if (contrast_ratio(relative_luminance(white), bg_lum)
+            >= contrast_ratio(relative_luminance(black), bg_lum)):
+        return white
+    return black
+
+
 class ActionList(OrderedDict):
 
     def __init__(self, actions):

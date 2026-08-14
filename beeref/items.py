@@ -32,6 +32,7 @@ from beeref.assets import BeeAssets
 from beeref.config import BeeSettings
 from beeref.constants import COLORS, CORNER_RADIUS
 from beeref.selection import SelectableMixin
+from beeref.utils import blend_over, readable_grey
 
 
 logger = logging.getLogger(__name__)
@@ -874,7 +875,8 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.init_selectable()
         self.is_editable = True
         self.edit_mode = False
-        self.setDefaultTextColor(QtGui.QColor(*COLORS['Scene:Text']))
+        self.settings = BeeSettings()
+        # Setting the box colour also picks the text colour to go with it
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         self.setFont(self.get_text_font())
         if html:
@@ -936,7 +938,19 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def box_color(self, value):
         logger.debug(f'Setting box colour for {self} to {value.name()}')
         self._box_color = value
+        self.setDefaultTextColor(readable_grey(self.visible_box_color()))
         self.update()
+
+    def visible_box_color(self):
+        """The box colour as it actually appears.
+
+        A translucent box lets the canvas show through, so that is what
+        the text has to be readable against.
+        """
+
+        canvas = QtGui.QColor(
+            self.settings.valueOrDefault('View/canvas_color'))
+        return blend_over(self.box_color, canvas)
 
     def get_extra_save_data(self):
         # 'text' is the plain text version, which BeeRef (and older

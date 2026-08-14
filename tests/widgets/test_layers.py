@@ -6,10 +6,16 @@ from PyQt6.QtCore import Qt
 
 from beeref import commands
 from beeref.actions.actions import actions
+from beeref.utils import contrast_ratio, relative_luminance
 from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 
 
 ITEM_ROLE = Qt.ItemDataRole.UserRole
+
+
+def ratio_against(color, background):
+    return contrast_ratio(relative_luminance(color),
+                          relative_luminance(background))
 
 
 def add_text(view, text, z):
@@ -112,16 +118,21 @@ def test_group_entry_uses_the_group_colour(view):
 
 def test_group_entry_text_stays_readable(view):
     item = add_text(view, 'one', 0)
-    light = BeeGroupItem(box_color=(240, 220, 120, 255))
-    commands.GroupItems(view.scene, [item], light).redo()
+    group = BeeGroupItem(box_color=(240, 220, 120, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
     tree = tree_of(view)
-    assert tree.topLevelItem(0).foreground(0).color() == QtGui.QColor(
-        0, 0, 0)
 
-    light.box_color = QtGui.QColor(40, 40, 60, 255)
+    # A light group gets dark text
+    on_light = tree.topLevelItem(0).foreground(0).color()
+    assert on_light.lightness() < 127
+    assert ratio_against(on_light, group.box_color) >= 8
+
+    group.box_color = QtGui.QColor(40, 40, 60, 255)
     tree.refresh()
-    assert tree.topLevelItem(0).foreground(0).color() == QtGui.QColor(
-        255, 255, 255)
+    # ... and a dark one gets light text
+    on_dark = tree.topLevelItem(0).foreground(0).color()
+    assert on_dark.lightness() > 127
+    assert ratio_against(on_dark, group.box_color) >= 8
 
 
 def test_group_entry_colour_follows_changes(view):

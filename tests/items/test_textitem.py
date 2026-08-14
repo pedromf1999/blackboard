@@ -68,6 +68,26 @@ def test_get_extra_save_data(qapp):
     assert 'foo bar' in data['html']
 
 
+def test_text_colour_follows_the_box_colour(qapp):
+    item = BeeTextItem('foo bar')
+    on_black = item.defaultTextColor()
+
+    item.box_color = QtGui.QColor(245, 225, 90, 255)
+    on_yellow = item.defaultTextColor()
+    # Light box gets dark text, dark box gets light text
+    assert on_black.lightness() > 127
+    assert on_yellow.lightness() < 127
+
+
+def test_text_colour_accounts_for_a_translucent_box(qapp):
+    """A see-through box shows the canvas, which is what text sits on."""
+
+    item = BeeTextItem('foo bar')
+    item.box_color = QtGui.QColor(255, 255, 255, 0)
+    # Fully transparent over the dark canvas, so the text stays light
+    assert item.defaultTextColor().lightness() > 127
+
+
 def test_get_extra_save_data_with_box_color(qapp):
     item = BeeTextItem('foo bar')
     item.box_color = QtGui.QColor(255, 0, 0, 100)

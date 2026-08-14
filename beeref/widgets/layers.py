@@ -21,6 +21,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
+from beeref.utils import readable_grey
 
 
 logger = logging.getLogger(__name__)
@@ -149,9 +150,7 @@ class LayersTree(QtWidgets.QTreeWidget):
         color = group.box_color
         entry.setBackground(0, QtGui.QBrush(color))
         # Keep the name readable whatever colour the group has been given
-        text = (QtGui.QColor(0, 0, 0) if color.lightness() > 127
-                else QtGui.QColor(255, 255, 255))
-        entry.setForeground(0, QtGui.QBrush(text))
+        entry.setForeground(0, QtGui.QBrush(readable_grey(color)))
 
     # Keeping selection in sync
 
