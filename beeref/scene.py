@@ -152,6 +152,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             if target is current:
                 # The box may need to grow around its moved items
                 self.refit_group(current)
+                if current is not None:
+                    current.touch()
                 continue
             logger.debug(f'Moving {item} from {current} to {target}')
             self.undo_stack.push(

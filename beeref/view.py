@@ -513,6 +513,7 @@ class BeeGraphicsView(MainControlsMixin,
         for group in groups:
             logger.debug(f'Setting locked for {group} to {checked}')
             group.locked = checked
+            group.touch()
             if checked and self.scene.active_group is group:
                 self.scene.exit_group()
 

@@ -18,6 +18,7 @@ text).
 """
 
 from collections import defaultdict
+import datetime
 from functools import cached_property
 import logging
 import os.path
@@ -148,7 +149,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # Width of the border shown when the group is a drop target
     DROP_BORDER_SIZE = 4
 
-    def __init__(self, box_color=None, locked=False, **kwargs):
+    def __init__(self, box_color=None, locked=False,
+                 created=None, modified=None, **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
@@ -158,7 +160,34 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
+        # Groups loaded from a file keep their dates; new ones start now
+        now = datetime.datetime.now().isoformat(timespec='seconds')
+        self.created = created or now
+        self.modified = modified or self.created
         logger.debug(f'Initialized {self}')
+
+    def touch(self):
+        """Record that the group has just been changed."""
+
+        self.modified = datetime.datetime.now().isoformat(timespec='seconds')
+
+    @staticmethod
+    def format_date(value):
+        """A stored date as something readable, for the layers panel."""
+
+        if not value:
+            return 'unknown'
+        try:
+            return datetime.datetime.fromisoformat(value).strftime(
+                '%d %b %Y, %H:%M')
+        except ValueError:
+            return value
+
+    def get_details(self):
+        """The group's dates, shown in the layers panel."""
+
+        return (f'Created: {self.format_date(self.created)}\n'
+                f'Last edited: {self.format_date(self.modified)}')
 
     @property
     def drop_target(self):
@@ -195,7 +224,9 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
 
     def get_extra_save_data(self):
         return {'box_color': self.box_color.getRgb(),
-                'locked': self.locked}
+                'locked': self.locked,
+                'created': self.created,
+                'modified': self.modified}
 
     def bee_children(self):
         """The items grouped inside this one."""

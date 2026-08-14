@@ -100,6 +100,29 @@ def test_lists_items_topmost_first(view):
     assert entries(tree) == [(0, 'top'), (0, 'middle'), (0, 'bottom')]
 
 
+def test_group_entries_show_their_dates(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(created='2026-01-02T03:04:05',
+                         modified='2026-02-03T04:05:06')
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    tooltip = tree.topLevelItem(0).toolTip(0)
+    assert 'Created: 02 Jan 2026, 03:04' in tooltip
+    assert 'Last edited: 03 Feb 2026, 04:05' in tooltip
+
+
+def test_group_entry_dates_are_refreshed(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    group.modified = '2026-12-25T09:30:00'
+    tree.refresh()
+    assert '25 Dec 2026' in tree.topLevelItem(0).toolTip(0)
+
+
 def test_lists_groups_as_nodes(view):
     item1 = add_text(view, 'one', 0)
     item2 = add_text(view, 'two', 1)

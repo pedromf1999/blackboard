@@ -426,11 +426,16 @@ class RenameItem(QtGui.QUndoCommand):
         self.name = name or None
         self.old_name = item.name
 
+    def set_name(self, name):
+        self.item.name = name
+        if hasattr(self.item, 'touch'):
+            self.item.touch()
+
     def redo(self):
-        self.item.name = self.name
+        self.set_name(self.name)
 
     def undo(self):
-        self.item.name = self.old_name
+        self.set_name(self.old_name)
 
 
 class ReorderItems(QtGui.QUndoCommand):
@@ -482,6 +487,7 @@ class MoveToGroup(QtGui.QUndoCommand):
         for group in groups:
             if group is not None and group.scene() is not None:
                 self.scene.refit_group(group)
+                group.touch()
                 if group is not self.scene.active_group:
                     group.set_children_interactive(False)
 
@@ -513,10 +519,12 @@ class ChangeGroupBoxColor(QtGui.QUndoCommand):
     def redo(self):
         for group in self.groups:
             group.box_color = self.color
+            group.touch()
 
     def undo(self):
         for group, color in zip(self.groups, self.old_colors):
             group.box_color = color
+            group.touch()
 
 
 class ChangeText(QtGui.QUndoCommand):

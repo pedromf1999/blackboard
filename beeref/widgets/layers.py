@@ -79,7 +79,9 @@ class LayersTree(QtWidgets.QTreeWidget):
         def describe(items, depth=0):
             for item in items:
                 yield (id(item), depth, item.zValue(),
-                       item.get_display_name())
+                       item.get_display_name(),
+                       # So the dates shown for groups stay current
+                       getattr(item, 'modified', None))
                 if getattr(item, 'TYPE', None) == 'group':
                     yield from describe(self.get_items(item), depth + 1)
 
@@ -125,6 +127,8 @@ class LayersTree(QtWidgets.QTreeWidget):
             entry = QtWidgets.QTreeWidgetItem(parent)
             entry.setText(0, item.get_display_name())
             entry.setData(0, ITEM_ROLE, item)
+            if hasattr(item, 'get_details'):
+                entry.setToolTip(0, item.get_details())
             entry.setFlags(entry.flags()
                            | Qt.ItemFlag.ItemIsEditable
                            | Qt.ItemFlag.ItemIsDragEnabled)

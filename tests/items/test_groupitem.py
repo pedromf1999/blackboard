@@ -41,12 +41,72 @@ def test_init_with_box_color(qapp):
 
 def test_get_extra_save_data(qapp):
     group = BeeGroupItem(box_color=(255, 0, 0, 100), locked=True)
-    assert group.get_extra_save_data() == {
-        'box_color': (255, 0, 0, 100), 'locked': True}
+    data = group.get_extra_save_data()
+    assert data['box_color'] == (255, 0, 0, 100)
+    assert data['locked'] is True
 
 
 def test_init_locked_defaults_to_false(qapp):
     assert BeeGroupItem().locked is False
+
+
+def test_new_group_records_its_creation_date(qapp):
+    group = BeeGroupItem()
+    assert group.created
+    # Nothing has happened to it yet
+    assert group.modified == group.created
+
+
+def test_group_keeps_dates_it_was_given(qapp):
+    group = BeeGroupItem(created='2026-01-02T03:04:05',
+                         modified='2026-02-03T04:05:06')
+    assert group.created == '2026-01-02T03:04:05'
+    assert group.modified == '2026-02-03T04:05:06'
+
+
+def test_touch_updates_only_the_edit_date(qapp):
+    group = BeeGroupItem(created='2026-01-02T03:04:05',
+                         modified='2026-01-02T03:04:05')
+    group.touch()
+    assert group.created == '2026-01-02T03:04:05'
+    assert group.modified != '2026-01-02T03:04:05'
+
+
+def test_dates_are_saved(qapp):
+    group = BeeGroupItem(created='2026-01-02T03:04:05',
+                         modified='2026-02-03T04:05:06')
+    data = group.get_extra_save_data()
+    assert data['created'] == '2026-01-02T03:04:05'
+    assert data['modified'] == '2026-02-03T04:05:06'
+
+
+def test_details_are_readable(qapp):
+    group = BeeGroupItem(created='2026-01-02T03:04:05',
+                         modified='2026-02-03T04:05:06')
+    assert group.get_details() == (
+        'Created: 02 Jan 2026, 03:04\n'
+        'Last edited: 03 Feb 2026, 04:05')
+
+
+def test_details_when_dates_are_missing(qapp):
+    """Groups from files written before dates existed."""
+
+    group = BeeGroupItem()
+    group.created = None
+    group.modified = None
+    assert group.get_details() == 'Created: unknown\nLast edited: unknown'
+
+
+def test_details_when_date_is_unreadable(qapp):
+    group = BeeGroupItem(created='not a date', modified='not a date')
+    assert 'not a date' in group.get_details()
+
+
+def test_copy_of_a_group_is_new(qapp, view):
+    group, items = make_group(view, (0, 0))
+    group.created = '2020-01-01T00:00:00'
+    copy = group.create_copy()
+    assert copy.created != group.created
 
 
 def test_bee_children(view):
