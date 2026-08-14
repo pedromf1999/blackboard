@@ -8,8 +8,8 @@ from beeref import constants
 
 
 block_cipher = None
-# No space in the executable name; constants.APPNAME has one
-appname = f'BVRef-{constants.VERSION}'
+# Executable name, from the application name
+appname = f'Blackboard-{constants.VERSION}'
 
 if sys.platform.startswith('win'):
     icon = 'logo.ico'
@@ -62,7 +62,7 @@ exe = EXE(
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='BVRef.app',
+        name='Blackboard.app',
         icon=join('beeref', 'assets', icon),
         bundle_identifier='org.bvref.app',
         version=f'{constants.VERSION}',

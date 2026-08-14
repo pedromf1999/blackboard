@@ -1,10 +1,10 @@
-# BV Ref — personal fork of BeeRef
+# Blackboard — personal fork of BeeRef
 
 ## What this is
 
 This repo is a fork of [BeeRef](https://github.com/rbreu/beeref) (reference image
 viewer, Python + PyQt6, GPL-3), being customised for personal use under the name
-**BV Ref**. Upstream version at fork point: `0.3.4.dev0` (branch `main`, after the
+**Blackboard**. Upstream version at fork point: `0.3.4.dev0` (branch `main`, after the
 v0.3.3 release).
 
 The owner is a product/industrial designer, not a professional Python developer.
@@ -45,7 +45,7 @@ launch and behave normally.
   databases; images live in an `sqlar` table, item properties in JSON.
 - `beeref/config/` — settings system and the settings dialog.
 - `beeref/assets/` — icons and images.
-- `BVRef.spec` — PyInstaller build spec (executable name and icon).
+- `Blackboard.spec` — PyInstaller build spec (executable name and icon).
 
 Checks available: `pytest --cov .` for tests, `flake8 .` for style. Run them
 before committing; existing tests must keep passing.
@@ -55,7 +55,7 @@ before committing; existing tests must keep passing.
 Do these one at a time. Confirm each works and is committed before starting
 the next. Ask before making changes that go beyond the feature at hand.
 
-### 1. Rename to BV Ref
+### 1. Rename to Blackboard
 Application name, organisation name, window title, about box, icon, and the
 PyInstaller spec. Renaming the organisation/app also moves the settings folder,
 which is desirable: it keeps this fork's config separate from the stock BeeRef

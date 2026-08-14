@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with BeeRef.  If not, see <https://www.gnu.org/licenses/>.
 
-APPNAME = 'BV Ref'
+APPNAME = 'Blackboard'
 APPNAME_FULL = f'{APPNAME} Reference Image Viewer'
 VERSION = '0.3.4-dev'
 UPSTREAM_NAME = 'BeeRef'
