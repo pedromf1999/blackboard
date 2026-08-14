@@ -47,15 +47,19 @@ def test_font_files_are_shipped():
     assert 'FFL.txt' in names
 
 
-def test_text_items_use_the_application_font(qapp):
+def test_text_items_use_the_bundled_font(qapp):
     from beeref.items import BeeTextItem
 
-    font = QtWidgets.QApplication.instance().font()
-    item = BeeTextItem('foo')
-    assert item.font().family() == font.family()
+    assert BeeTextItem('foo').font().family() == 'Ranade'
 
 
-def test_stored_text_gets_the_application_font(qapp):
+def test_interface_keeps_the_system_font(qapp):
+    """The menus stay on the system font, which suits small sizes."""
+
+    assert QtWidgets.QApplication.instance().font().family() != 'Ranade'
+
+
+def test_stored_text_gets_the_canvas_font(qapp):
     """Text written before the font changed is brought up to date."""
 
     from beeref.items import BeeTextItem
@@ -68,6 +72,20 @@ def test_stored_text_gets_the_application_font(qapp):
 
     cursor = item.textCursor()
     cursor.select(QtGui.QTextCursor.SelectionType.Document)
-    expected = QtWidgets.QApplication.instance().font().family()
-    assert cursor.charFormat().font().family() == expected
+    assert cursor.charFormat().font().family() == 'Ranade'
     assert item.toPlainText() == 'an old note'
+
+
+def test_text_items_fall_back_when_font_missing(qapp):
+    """Without the bundled font, text items still work."""
+
+    from beeref.items import BeeTextItem
+
+    BeeAssets._instance = None
+    with patch('PyQt6.QtGui.QFontDatabase.addApplicationFont',
+               return_value=-1):
+        BeeAssets()
+        item = BeeTextItem('foo')
+        assert item.toPlainText() == 'foo'
+        assert item.font().family()
+    BeeAssets._instance = None

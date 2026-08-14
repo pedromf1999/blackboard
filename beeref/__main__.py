@@ -21,7 +21,7 @@ import platform
 import signal
 import sys
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
 
 from beeref import constants
 from beeref.assets import BeeAssets
@@ -116,19 +116,10 @@ def main():
     palette = create_palette_from_dict(constants.COLORS)
     app.setPalette(palette)
 
-    # The bundled font is used everywhere: menus, dialogs and the text
-    # items on the canvas. Falls back to the system font if it can't be
-    # loaded, so the application still works without it.
-    family = BeeAssets().font_family
-    if family:
-        logger.info(f'Using font: {family}')
-        font = app.font()
-        font.setFamily(family)
-        # Snap stems to the pixel grid, which keeps small text legible
-        font.setHintingPreference(
-            QtGui.QFont.HintingPreference.PreferFullHinting)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        app.setFont(font)
+    # Register the bundled font, which text items on the canvas use.
+    # The interface keeps the system font: it is hinted for small sizes,
+    # so menus and panels stay crisp.
+    logger.info(f'Canvas font: {BeeAssets().font_family}')
     bee = BeeRefMainWindow(app)  # NOQA:F841
 
     signal.signal(signal.SIGINT, handle_sigint)

@@ -27,6 +27,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
+from beeref.assets import BeeAssets
 from beeref.config import BeeSettings
 from beeref.constants import COLORS, CORNER_RADIUS
 from beeref.selection import SelectableMixin
@@ -844,25 +845,40 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.edit_mode = False
         self.setDefaultTextColor(QtGui.QColor(*COLORS['Scene:Text']))
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
+        self.setFont(self.get_text_font())
         if html:
             # Rich text takes precedence over the plain text version,
             # which is only kept for compatibility with BeeRef
             self.setHtml(html)
-            self.apply_app_font()
+            # Stored text brings its own font family along, which has to
+            # be overridden; new text already uses the font set above
+            self.apply_text_font()
 
-    def apply_app_font(self):
-        """Make the text use the application font.
+    def get_text_font(self):
+        """The font for text on the canvas.
 
-        Stored rich text carries its font family with it, so text
-        written before the application font changed would otherwise
-        keep the old one.
+        This is the bundled font rather than the interface font, which
+        stays as the system one because it is hinted for small sizes.
         """
 
-        app = QtWidgets.QApplication.instance()
-        if app is None:
-            return
+        font = self.font()
+        family = BeeAssets().font_family
+        if family:
+            font.setFamily(family)
+        font.setHintingPreference(
+            QtGui.QFont.HintingPreference.PreferFullHinting)
+        return font
+
+    def apply_text_font(self):
+        """Make the whole text use the canvas font.
+
+        Stored rich text carries its font family with it, so text
+        written before the font changed would otherwise keep the old
+        one.
+        """
+
         charformat = QtGui.QTextCharFormat()
-        charformat.setFontFamilies([app.font().family()])
+        charformat.setFontFamilies([self.get_text_font().family()])
         self.apply_char_format(charformat)
 
     @classmethod
