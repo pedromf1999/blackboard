@@ -147,8 +147,41 @@ def test_group_entry_colour_follows_changes(view):
         10, 120, 30, 255)
 
 
-def test_plain_items_are_not_tinted(view):
-    add_text(view, 'loose', 0)
+def test_white_group_gets_black_text(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(255, 255, 255, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    entry = tree.topLevelItem(0)
+    assert entry.foreground(0).color() == QtGui.QColor(0, 0, 0)
+
+
+def test_text_items_use_their_box_colour(view):
+    item = add_text(view, 'loose', 0)
+    item.box_color = QtGui.QColor(255, 255, 255, 255)
+    tree = tree_of(view)
+
+    entry = tree.topLevelItem(0)
+    assert entry.background(0).color() == QtGui.QColor(255, 255, 255)
+    assert entry.foreground(0).color() == QtGui.QColor(0, 0, 0)
+
+
+def test_text_item_entry_matches_the_canvas(view):
+    """The panel shows the colour the box actually appears as."""
+
+    item = add_text(view, 'loose', 0)
+    item.box_color = QtGui.QColor(200, 40, 40, 255)
+    tree = tree_of(view)
+
+    entry = tree.topLevelItem(0)
+    assert entry.background(0).color() == item.visible_box_color()
+    assert entry.foreground(0).color() == item.defaultTextColor()
+
+
+def test_images_are_not_tinted(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
     tree = tree_of(view)
     # An unset background brush has no style
     assert tree.topLevelItem(0).background(0).style() == Qt.BrushStyle.NoBrush

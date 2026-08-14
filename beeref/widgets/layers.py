@@ -136,20 +136,31 @@ class LayersTree(QtWidgets.QTreeWidget):
             entry.setFlags(entry.flags()
                            | Qt.ItemFlag.ItemIsEditable
                            | Qt.ItemFlag.ItemIsDragEnabled)
+            self.set_entry_colors(entry, item)
             if getattr(item, 'TYPE', None) == 'group':
                 entry.setFlags(entry.flags() | Qt.ItemFlag.ItemIsDropEnabled)
-                self.set_group_colors(entry, item)
                 self.build_items(entry, self.get_items(item), expanded)
                 entry.setExpanded(id(item) in expanded)
             else:
                 entry.setFlags(entry.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
 
-    def set_group_colors(self, entry, group):
-        """Show the group's own colour on its entry."""
+    def set_entry_colors(self, entry, item):
+        """Show the item's own box colour on its entry.
 
-        color = group.box_color
+        Groups and text items both have a coloured box, so the panel
+        shows the same colours that are on the canvas.
+        """
+
+        if not hasattr(item, 'box_color'):
+            return
+        # Translucent boxes show the canvas through them, so use the
+        # colour they actually appear as
+        if hasattr(item, 'visible_box_color'):
+            color = item.visible_box_color()
+        else:
+            color = item.box_color
         entry.setBackground(0, QtGui.QBrush(color))
-        # Keep the name readable whatever colour the group has been given
+        # Keep the name readable whatever colour has been chosen
         entry.setForeground(0, QtGui.QBrush(readable_grey(color)))
 
     # Keeping selection in sync

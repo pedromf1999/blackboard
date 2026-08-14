@@ -7,7 +7,6 @@ from beeref.utils import (
     contrast_ratio,
     readable_grey,
     relative_luminance,
-    TEXT_CONTRAST,
 )
 
 
@@ -44,44 +43,33 @@ def test_readable_grey_is_grey(rgb):
     assert grey.red() == grey.green() == grey.blue()
 
 
+def test_readable_grey_on_white_is_black():
+    assert readable_grey(QtGui.QColor(255, 255, 255)) == QtGui.QColor(0, 0, 0)
+
+
+def test_readable_grey_on_black_is_white():
+    assert readable_grey(QtGui.QColor(0, 0, 0)) == QtGui.QColor(
+        255, 255, 255)
+
+
 @pytest.mark.parametrize(
     'rgb',
-    [(0, 0, 0), (52, 52, 52), (200, 200, 200), (255, 255, 255),
-     (140, 20, 20), (245, 225, 90), (25, 40, 90)])
-def test_readable_grey_keeps_contrast(rgb):
+    [(0, 0, 0), (52, 52, 52), (128, 128, 128), (200, 200, 200),
+     (255, 255, 255), (140, 20, 20), (245, 225, 90), (25, 40, 90)])
+def test_readable_grey_picks_the_best_contrast(rgb):
+    """Whichever of black or white stands out more is the one used."""
+
     background = QtGui.QColor(*rgb)
-    assert ratio_against(readable_grey(background), background) >= 8
-
-
-def test_readable_grey_tracks_the_background():
-    """The grey shifts with the background rather than being fixed."""
-
-    darker = readable_grey(QtGui.QColor(0, 0, 0))
-    lighter = readable_grey(QtGui.QColor(60, 60, 60))
-    assert lighter.lightness() > darker.lightness()
+    chosen = readable_grey(background)
+    other = (QtGui.QColor(0, 0, 0) if chosen.lightness() > 127
+             else QtGui.QColor(255, 255, 255))
+    assert ratio_against(chosen, background) >= ratio_against(
+        other, background)
 
 
 def test_readable_grey_flips_for_light_backgrounds():
-    on_dark = readable_grey(QtGui.QColor(20, 20, 20))
-    on_light = readable_grey(QtGui.QColor(240, 240, 240))
-    assert on_dark.lightness() > 127
-    assert on_light.lightness() < 127
-
-
-def test_readable_grey_falls_back_for_mid_tones():
-    """Mid greys can't reach the target, so contrast is maximised."""
-
-    background = QtGui.QColor(128, 128, 128)
-    grey = readable_grey(background)
-    assert ratio_against(grey, background) >= 4.5
-    assert grey in (QtGui.QColor(0, 0, 0), QtGui.QColor(255, 255, 255))
-
-
-def test_readable_grey_target_is_configurable():
-    background = QtGui.QColor(0, 0, 0)
-    soft = readable_grey(background, 5)
-    strong = readable_grey(background, TEXT_CONTRAST)
-    assert strong.lightness() > soft.lightness()
+    assert readable_grey(QtGui.QColor(20, 20, 20)).lightness() > 127
+    assert readable_grey(QtGui.QColor(240, 240, 240)).lightness() < 127
 
 
 def test_blend_over_opaque_colour_is_unchanged():

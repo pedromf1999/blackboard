@@ -134,32 +134,14 @@ def blend_over(color, background):
         round(color.blue() * alpha + background.blue() * (1 - alpha)))
 
 
-# How much contrast text keeps against its background. Chosen so that
-# text on the default black box stays as bright as it has always been;
-# lower it for softer text, at the cost of readability.
-TEXT_CONTRAST = 12.0
+def readable_grey(background):
+    """The shade that contrasts most with the given background colour.
 
-
-def readable_grey(background, min_contrast=TEXT_CONTRAST):
-    """A grey that stays readable on the given background colour.
-
-    The grey closest to the background that still reaches the contrast
-    target is chosen, so text tracks the brightness of its background
-    instead of always jumping to black or white. Falls back to whichever
-    of black or white contrasts most when the target can't be met.
+    Black or white, whichever stands out more, so text is always as
+    readable as it can be on whatever colour it sits on.
     """
 
     bg_lum = relative_luminance(background)
-    candidates = []
-    for value in range(256):
-        grey = QtGui.QColor(value, value, value)
-        ratio = contrast_ratio(relative_luminance(grey), bg_lum)
-        if ratio >= min_contrast:
-            candidates.append((abs(value - background.lightness()), grey))
-
-    if candidates:
-        return min(candidates, key=lambda item: item[0])[1]
-
     white = QtGui.QColor(255, 255, 255)
     black = QtGui.QColor(0, 0, 0)
     if (contrast_ratio(relative_luminance(white), bg_lum)
