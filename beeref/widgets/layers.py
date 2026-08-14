@@ -21,7 +21,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
-from beeref.utils import readable_grey
+from beeref.utils import blend_over, readable_grey
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,39 @@ ITEM_ROLE = Qt.ItemDataRole.UserRole
 
 # Qt's "no maximum", for undoing a fixed height
 QWIDGETSIZE_MAX = (1 << 24) - 1
+
+
+class LayersDelegate(QtWidgets.QStyledItemDelegate):
+    """Keeps entry colours when a row is selected.
+
+    Qt paints selected rows in the highlight colour with its own text
+    colour, which throws away the item's colour and can leave the name
+    hard to read. The selection is drawn as a tint of the item's own
+    colour instead, and the name takes whatever contrasts with it.
+    """
+
+    # How strongly the selection shows through the item's colour
+    SELECTION_ALPHA = 120
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        background = index.data(Qt.ItemDataRole.BackgroundRole)
+        if background is None:
+            return
+
+        color = background.color()
+        if option.state & QtWidgets.QStyle.StateFlag.State_Selected:
+            highlight = QtGui.QColor(option.palette.highlight().color())
+            highlight.setAlpha(self.SELECTION_ALPHA)
+            color = blend_over(highlight, color)
+            option.palette.setColor(
+                QtGui.QPalette.ColorRole.Highlight, color)
+            option.palette.setColor(
+                QtGui.QPalette.ColorRole.HighlightedText,
+                readable_grey(color))
+        else:
+            option.palette.setColor(
+                QtGui.QPalette.ColorRole.Text, readable_grey(color))
 
 
 class LayersTree(QtWidgets.QTreeWidget):
@@ -47,6 +80,7 @@ class LayersTree(QtWidgets.QTreeWidget):
         self.setEditTriggers(
             QtWidgets.QAbstractItemView.EditTrigger.DoubleClicked
             | QtWidgets.QAbstractItemView.EditTrigger.EditKeyPressed)
+        self.setItemDelegate(LayersDelegate(self))
 
         # Guards against reacting to changes we made ourselves
         self.updating = False

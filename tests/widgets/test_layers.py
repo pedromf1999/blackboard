@@ -147,6 +147,69 @@ def test_group_entry_colour_follows_changes(view):
         10, 120, 30, 255)
 
 
+def style_option(tree, row, selected=False):
+    """What the delegate would paint for the given row."""
+
+    index = tree.indexFromItem(tree.topLevelItem(row))
+    option = QtWidgets.QStyleOptionViewItem()
+    option.initFrom(tree)
+    if selected:
+        option.state |= QtWidgets.QStyle.StateFlag.State_Selected
+    tree.itemDelegate().initStyleOption(option, index)
+    return option
+
+
+def test_selected_light_row_keeps_dark_text(view):
+    """Selecting a row must not throw away its readable text colour."""
+
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(255, 255, 255, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    option = style_option(tree, 0, selected=True)
+    background = option.palette.highlight().color()
+    text = option.palette.highlightedText().color()
+    assert text == QtGui.QColor(0, 0, 0)
+    assert ratio_against(text, background) >= 7
+
+
+def test_selected_dark_row_keeps_light_text(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(30, 30, 40, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    option = style_option(tree, 0, selected=True)
+    background = option.palette.highlight().color()
+    text = option.palette.highlightedText().color()
+    assert text == QtGui.QColor(255, 255, 255)
+    assert ratio_against(text, background) >= 4.5
+
+
+def test_selection_still_looks_selected(view):
+    """The row is tinted towards the highlight, not left as it was."""
+
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(255, 255, 255, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    selected = style_option(tree, 0, selected=True)
+    assert selected.palette.highlight().color() != QtGui.QColor(
+        255, 255, 255)
+
+
+def test_rows_without_a_colour_are_left_alone(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    tree = tree_of(view)
+    # No background set, so the delegate keeps the usual palette
+    option = style_option(tree, 0, selected=True)
+    assert option.palette.highlightedText().color() == (
+        view.palette().highlightedText().color())
+
+
 def test_white_group_gets_black_text(view):
     item = add_text(view, 'one', 0)
     group = BeeGroupItem(box_color=(255, 255, 255, 255))
