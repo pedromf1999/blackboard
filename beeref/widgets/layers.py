@@ -35,22 +35,54 @@ QWIDGETSIZE_MAX = (1 << 24) - 1
 class LayersDelegate(QtWidgets.QStyledItemDelegate):
     """Draws entries in their own colours, never as selected.
 
-    Selection is shown by the marker in front of the name, so the row
-    itself must not be repainted for it.
+    The entries are painted here rather than by the platform's style,
+    which paints selected rows and their text in its own colours and
+    would override the colour each item is meant to have. Selection is
+    shown by the marker in front of the name instead.
     """
+
+    # Space around the marker and the name
+    PADDING = 4
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
-        # Selection is never painted, whatever the platform's style
-        # would normally do with it
+        # Belt and braces: nothing should paint these anyway
         option.state &= ~QtWidgets.QStyle.StateFlag.State_Selected
         option.state &= ~QtWidgets.QStyle.StateFlag.State_MouseOver
 
+    def paint(self, painter, option, index):
+        option = QtWidgets.QStyleOptionViewItem(option)
+        self.initStyleOption(option, index)
+
         background = index.data(Qt.ItemDataRole.BackgroundRole)
         if background is None:
-            return
-        option.palette.setColor(QtGui.QPalette.ColorRole.Text,
-                                readable_grey(background.color()))
+            text_color = option.palette.text().color()
+        else:
+            text_color = readable_grey(background.color())
+
+        painter.save()
+        if background is not None:
+            painter.fillRect(option.rect, background)
+
+        rect = option.rect.adjusted(self.PADDING, 0, -self.PADDING, 0)
+        icon = index.data(Qt.ItemDataRole.DecorationRole)
+        if icon is not None and not icon.isNull():
+            size = option.decorationSize
+            icon.paint(painter, QtCore.QRect(
+                rect.left(),
+                option.rect.center().y() - size.height() // 2 + 1,
+                size.width(), size.height()))
+            rect.setLeft(rect.left() + size.width() + self.PADDING)
+
+        painter.setPen(text_color)
+        painter.setFont(option.font)
+        painter.drawText(
+            rect,
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            option.fontMetrics.elidedText(
+                index.data(Qt.ItemDataRole.DisplayRole) or '',
+                Qt.TextElideMode.ElideRight, rect.width()))
+        painter.restore()
 
 
 class LayersTree(QtWidgets.QTreeWidget):

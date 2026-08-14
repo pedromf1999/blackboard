@@ -1,7 +1,7 @@
 import os.path
 from unittest.mock import patch
 
-from PyQt6 import QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
@@ -157,6 +157,76 @@ def style_option(tree, row, selected=False):
         option.state |= QtWidgets.QStyle.StateFlag.State_Selected
     tree.itemDelegate().initStyleOption(option, index)
     return option
+
+
+def paint_row(tree, row, selected=False):
+    """Paint an entry and hand back the pixels.
+
+    Checking the colours stored on the entry isn't enough: the platform
+    style can paint something else entirely.
+    """
+
+    width, height = 220, 20
+    pixmap = QtGui.QPixmap(width, height)
+    # A colour that is never used, so anything left over is visible
+    pixmap.fill(QtGui.QColor(0, 255, 0))
+    painter = QtGui.QPainter(pixmap)
+    option = QtWidgets.QStyleOptionViewItem()
+    option.initFrom(tree)
+    option.rect = QtCore.QRect(0, 0, width, height)
+    option.decorationSize = QtCore.QSize(tree.MARKER_SIZE, tree.MARKER_SIZE)
+    if selected:
+        option.state |= QtWidgets.QStyle.StateFlag.State_Selected
+    index = tree.indexFromItem(tree.topLevelItem(row))
+    tree.itemDelegate().paint(painter, option, index)
+    painter.end()
+    return pixmap.toImage()
+
+
+def painted_colors(image):
+    return [image.pixelColor(x, y)
+            for x in range(image.width())
+            for y in range(image.height())]
+
+
+def test_name_is_painted_dark_on_a_light_row(view):
+    item = add_text(view, 'my note', 0)
+    item.box_color = QtGui.QColor(250, 230, 90, 255)
+    tree = tree_of(view)
+
+    colors = painted_colors(paint_row(tree, 0))
+    assert min(c.lightness() for c in colors) < 60
+
+
+def test_name_is_painted_light_on_a_dark_row(view):
+    item = add_text(view, 'my note', 0)
+    item.box_color = QtGui.QColor(20, 20, 20, 255)
+    tree = tree_of(view)
+
+    colors = painted_colors(paint_row(tree, 0))
+    assert max(c.lightness() for c in colors) > 200
+
+
+def test_row_is_painted_in_its_own_colour(view):
+    item = add_text(view, 'my note', 0)
+    item.box_color = QtGui.QColor(250, 230, 90, 255)
+    tree = tree_of(view)
+
+    image = paint_row(tree, 0)
+    # The far right of the row is past the name, so it shows the box
+    assert image.pixelColor(image.width() - 3, 10) == QtGui.QColor(
+        250, 230, 90)
+
+
+def test_selected_row_is_painted_the_same(view):
+    item = add_text(view, 'my note', 0)
+    item.box_color = QtGui.QColor(250, 230, 90, 255)
+    tree = tree_of(view)
+
+    normal = paint_row(tree, 0, selected=False)
+    chosen = paint_row(tree, 0, selected=True)
+    assert normal.pixelColor(normal.width() - 3, 10) == chosen.pixelColor(
+        chosen.width() - 3, 10)
 
 
 def test_selection_is_never_painted(view):
