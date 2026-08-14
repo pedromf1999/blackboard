@@ -21,7 +21,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
-from beeref.utils import blend_over, readable_grey
+from beeref.utils import readable_grey
 
 
 logger = logging.getLogger(__name__)
@@ -33,16 +33,12 @@ QWIDGETSIZE_MAX = (1 << 24) - 1
 
 
 class LayersDelegate(QtWidgets.QStyledItemDelegate):
-    """Keeps entry colours when a row is selected.
+    """Keeps an entry looking the same whether or not it is selected.
 
-    Qt paints selected rows in the highlight colour with its own text
-    colour, which throws away the item's colour and can leave the name
-    hard to read. The selection is drawn as a tint of the item's own
-    colour instead, and the name takes whatever contrasts with it.
+    Qt would paint a selected row in the highlight colour with its own
+    text colour, losing the item's colour. Selection is shown by the
+    marker in front of the name instead, so the colours stay put.
     """
-
-    # How strongly the selection shows through the item's colour
-    SELECTION_ALPHA = 120
 
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
@@ -51,22 +47,19 @@ class LayersDelegate(QtWidgets.QStyledItemDelegate):
             return
 
         color = background.color()
-        if option.state & QtWidgets.QStyle.StateFlag.State_Selected:
-            highlight = QtGui.QColor(option.palette.highlight().color())
-            highlight.setAlpha(self.SELECTION_ALPHA)
-            color = blend_over(highlight, color)
-            option.palette.setColor(
-                QtGui.QPalette.ColorRole.Highlight, color)
-            option.palette.setColor(
-                QtGui.QPalette.ColorRole.HighlightedText,
-                readable_grey(color))
-        else:
-            option.palette.setColor(
-                QtGui.QPalette.ColorRole.Text, readable_grey(color))
+        text = readable_grey(color)
+        option.palette.setColor(QtGui.QPalette.ColorRole.Text, text)
+        # Selected rows keep the item's own colours
+        option.palette.setColor(QtGui.QPalette.ColorRole.Highlight, color)
+        option.palette.setColor(
+            QtGui.QPalette.ColorRole.HighlightedText, text)
 
 
 class LayersTree(QtWidgets.QTreeWidget):
     """The tree of items shown in the layers panel."""
+
+    # Size of the circle marking whether an item is selected
+    MARKER_SIZE = 14
 
     def __init__(self, parent, view):
         super().__init__(parent)
@@ -171,12 +164,42 @@ class LayersTree(QtWidgets.QTreeWidget):
                            | Qt.ItemFlag.ItemIsEditable
                            | Qt.ItemFlag.ItemIsDragEnabled)
             self.set_entry_colors(entry, item)
+            self.set_entry_marker(entry, item)
             if getattr(item, 'TYPE', None) == 'group':
                 entry.setFlags(entry.flags() | Qt.ItemFlag.ItemIsDropEnabled)
                 self.build_items(entry, self.get_items(item), expanded)
                 entry.setExpanded(id(item) in expanded)
             else:
                 entry.setFlags(entry.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
+
+    def marker_icon(self, color, selected):
+        """A filled circle for a selected item, an outline for the rest."""
+
+        size = self.MARKER_SIZE
+        pixmap = QtGui.QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pen = QtGui.QPen(color)
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(color) if selected
+                         else QtGui.QBrush(Qt.BrushStyle.NoBrush))
+        inset = 3
+        painter.drawEllipse(inset, inset,
+                            size - 2 * inset, size - 2 * inset)
+        painter.end()
+        return QtGui.QIcon(pixmap)
+
+    def set_entry_marker(self, entry, item):
+        """Show whether the item is selected on the canvas."""
+
+        background = entry.background(0)
+        if background.style() == Qt.BrushStyle.NoBrush:
+            color = self.palette().text().color()
+        else:
+            color = readable_grey(background.color())
+        entry.setIcon(0, self.marker_icon(color, item.isSelected()))
 
     def set_entry_colors(self, entry, item):
         """Show the item's own box colour on its entry.
@@ -210,7 +233,10 @@ class LayersTree(QtWidgets.QTreeWidget):
         iterator = QtWidgets.QTreeWidgetItemIterator(self)
         while iterator.value():
             entry = iterator.value()
-            entry.setSelected(id(entry.data(0, ITEM_ROLE)) in selected)
+            item = entry.data(0, ITEM_ROLE)
+            entry.setSelected(id(item) in selected)
+            if item is not None:
+                self.set_entry_marker(entry, item)
             iterator += 1
         self.updating = False
 

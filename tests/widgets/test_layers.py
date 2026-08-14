@@ -159,8 +159,8 @@ def style_option(tree, row, selected=False):
     return option
 
 
-def test_selected_light_row_keeps_dark_text(view):
-    """Selecting a row must not throw away its readable text colour."""
+def test_selected_row_keeps_its_colours(view):
+    """Selection must not repaint the row; the marker shows it instead."""
 
     item = add_text(view, 'one', 0)
     group = BeeGroupItem(box_color=(255, 255, 255, 255))
@@ -168,10 +168,9 @@ def test_selected_light_row_keeps_dark_text(view):
     tree = tree_of(view)
 
     option = style_option(tree, 0, selected=True)
-    background = option.palette.highlight().color()
-    text = option.palette.highlightedText().color()
-    assert text == QtGui.QColor(0, 0, 0)
-    assert ratio_against(text, background) >= 7
+    assert option.palette.highlight().color() == QtGui.QColor(
+        255, 255, 255)
+    assert option.palette.highlightedText().color() == QtGui.QColor(0, 0, 0)
 
 
 def test_selected_dark_row_keeps_light_text(view):
@@ -181,22 +180,7 @@ def test_selected_dark_row_keeps_light_text(view):
     tree = tree_of(view)
 
     option = style_option(tree, 0, selected=True)
-    background = option.palette.highlight().color()
-    text = option.palette.highlightedText().color()
-    assert text == QtGui.QColor(255, 255, 255)
-    assert ratio_against(text, background) >= 4.5
-
-
-def test_selection_still_looks_selected(view):
-    """The row is tinted towards the highlight, not left as it was."""
-
-    item = add_text(view, 'one', 0)
-    group = BeeGroupItem(box_color=(255, 255, 255, 255))
-    commands.GroupItems(view.scene, [item], group).redo()
-    tree = tree_of(view)
-
-    selected = style_option(tree, 0, selected=True)
-    assert selected.palette.highlight().color() != QtGui.QColor(
+    assert option.palette.highlightedText().color() == QtGui.QColor(
         255, 255, 255)
 
 
@@ -208,6 +192,50 @@ def test_rows_without_a_colour_are_left_alone(view):
     option = style_option(tree, 0, selected=True)
     assert option.palette.highlightedText().color() == (
         view.palette().highlightedText().color())
+
+
+def marker_of(tree, row):
+    icon = tree.topLevelItem(row).icon(0)
+    return icon.pixmap(tree.MARKER_SIZE, tree.MARKER_SIZE).toImage()
+
+
+def filled_pixels(image):
+    """How much of the marker is painted, to tell a disc from a ring."""
+
+    return sum(1 for x in range(image.width())
+               for y in range(image.height())
+               if image.pixelColor(x, y).alpha() > 0)
+
+
+def test_every_entry_has_a_marker(view):
+    add_text(view, 'one', 0)
+    tree = tree_of(view)
+    assert not tree.topLevelItem(0).icon(0).isNull()
+
+
+def test_selected_marker_is_filled(view):
+    item = add_text(view, 'one', 0)
+    tree = tree_of(view)
+    empty = filled_pixels(marker_of(tree, 0))
+
+    item.setSelected(True)
+    tree.update_selection()
+    full = filled_pixels(marker_of(tree, 0))
+    # The filled disc covers more than the outline ring
+    assert full > empty
+
+
+def test_marker_follows_canvas_selection(view):
+    item = add_text(view, 'one', 0)
+    tree = tree_of(view)
+
+    item.setSelected(True)
+    tree.update_selection()
+    selected = filled_pixels(marker_of(tree, 0))
+
+    item.setSelected(False)
+    tree.update_selection()
+    assert filled_pixels(marker_of(tree, 0)) < selected
 
 
 def test_white_group_gets_black_text(view):
