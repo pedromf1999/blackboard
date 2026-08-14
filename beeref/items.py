@@ -903,15 +903,16 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         return font
 
     def apply_text_font(self):
-        """Make the whole text use the canvas font.
+        """Make the whole text use the canvas font and box text colour.
 
-        Stored rich text carries its font family with it, so text
-        written before the font changed would otherwise keep the old
-        one.
+        Stored rich text carries its own font family and colours, so
+        text written earlier would otherwise keep them instead of
+        following the box it sits in.
         """
 
         charformat = QtGui.QTextCharFormat()
         charformat.setFontFamilies([self.get_text_font().family()])
+        charformat.setForeground(self.defaultTextColor())
         self.apply_char_format(charformat)
 
     @classmethod

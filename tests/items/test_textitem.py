@@ -208,7 +208,8 @@ def test_create_copy_keeps_formatting(qapp):
     item = BeeTextItem('foo bar')
     item.box_color = QtGui.QColor(255, 0, 0, 100)
     charformat = QtGui.QTextCharFormat()
-    charformat.setForeground(QtGui.QColor(0, 255, 0))
+    charformat.setFontWeight(QtGui.QFont.Weight.Bold)
+    charformat.setBackground(QtGui.QColor(0, 255, 0))
     item.apply_char_format(charformat)
 
     copy = item.create_copy()
@@ -216,7 +217,22 @@ def test_create_copy_keeps_formatting(qapp):
     assert copy.box_color == QtGui.QColor(255, 0, 0, 100)
     cursor = copy.textCursor()
     cursor.select(QtGui.QTextCursor.SelectionType.Document)
-    assert cursor.charFormat().foreground().color() == QtGui.QColor(0, 255, 0)
+    assert cursor.charFormat().fontWeight() == QtGui.QFont.Weight.Bold
+    assert cursor.charFormat().background().color() == QtGui.QColor(0, 255, 0)
+
+
+def test_stored_text_colour_follows_the_box(qapp):
+    """An old note with its own text colour is brought into line."""
+
+    old_html = (
+        '<html><body><p><span style=" color:#00ff00;">'
+        'green text</span></p></body></html>')
+    item = BeeTextItem(html=old_html)
+
+    cursor = item.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    assert cursor.charFormat().foreground().color() == (
+        item.defaultTextColor())
 
 
 @patch('beeref.items.BeeTextItem.boundingRect')

@@ -142,7 +142,6 @@ menu_structure = [
             'text_bold',
             'text_size',
             MENU_SEPARATOR,
-            'text_color',
             'text_highlight_color',
             'text_box_color',
         ],

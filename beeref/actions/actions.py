@@ -335,12 +335,6 @@ actions = ActionList([
         group='active_when_text_selection',
     ),
     Action(
-        id='text_color',
-        text='&Text Colour...',
-        callback='on_action_text_color',
-        group='active_when_text_selection',
-    ),
-    Action(
         id='text_highlight_color',
         text='&Highlight Colour...',
         callback='on_action_text_highlight_color',

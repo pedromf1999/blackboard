@@ -633,32 +633,25 @@ class BeeGraphicsView(MainControlsMixin,
         self.undo_stack.push(
             commands.ChangeTextFormat(items, new_htmls, old_htmls))
 
-    def on_action_text_color(self):
-        self.change_text_char_format('Text Colour', foreground=True)
-
     def on_action_text_highlight_color(self):
-        self.change_text_char_format('Highlight Colour', foreground=False)
-
-    def change_text_char_format(self, title, foreground):
-        """Ask for a colour and apply it to the selected text items.
+        """Ask for a highlight colour and apply it to the selected text.
 
         While editing an item, this applies to the selected words only;
         otherwise it applies to the whole text of each selected item.
+        The text colour itself comes from the box colour, so there is
+        nothing to pick for it.
         """
 
         items = self.scene.selected_text_items()
         if not items:
             return
         color = QtWidgets.QColorDialog.getColor(
-            QtGui.QColor(), self, f'Choose {title}')
+            QtGui.QColor(), self, 'Choose Highlight Colour')
         if not color.isValid():
             return
 
         charformat = QtGui.QTextCharFormat()
-        if foreground:
-            charformat.setForeground(color)
-        else:
-            charformat.setBackground(color)
+        charformat.setBackground(color)
         self.apply_text_char_format(items, charformat)
 
     def on_action_text_box_color(self):

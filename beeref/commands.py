@@ -577,13 +577,18 @@ class ChangeTextBoxColor(QtGui.QUndoCommand):
         self.color = color
         self.old_colors = [item.box_color for item in self.items]
 
+    def set_color(self, item, color):
+        item.box_color = color
+        # The text colour comes from the box, so it changes along with it
+        item.apply_text_font()
+
     def redo(self):
         for item in self.items:
-            item.box_color = self.color
+            self.set_color(item, self.color)
 
     def undo(self):
         for item, color in zip(self.items, self.old_colors):
-            item.box_color = color
+            self.set_color(item, color)
 
 
 class ChangeOpacity(QtGui.QUndoCommand):
