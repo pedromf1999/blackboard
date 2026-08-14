@@ -17,7 +17,7 @@
 
 import logging
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
@@ -78,10 +78,13 @@ class LayersTree(QtWidgets.QTreeWidget):
 
         def describe(items, depth=0):
             for item in items:
+                box_color = getattr(item, 'box_color', None)
                 yield (id(item), depth, item.zValue(),
                        item.get_display_name(),
                        # So the dates shown for groups stay current
-                       getattr(item, 'modified', None))
+                       getattr(item, 'modified', None),
+                       # ... and so does the colour of the entry
+                       box_color.name() if box_color else None)
                 if getattr(item, 'TYPE', None) == 'group':
                     yield from describe(self.get_items(item), depth + 1)
 
@@ -134,10 +137,21 @@ class LayersTree(QtWidgets.QTreeWidget):
                            | Qt.ItemFlag.ItemIsDragEnabled)
             if getattr(item, 'TYPE', None) == 'group':
                 entry.setFlags(entry.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+                self.set_group_colors(entry, item)
                 self.build_items(entry, self.get_items(item), expanded)
                 entry.setExpanded(id(item) in expanded)
             else:
                 entry.setFlags(entry.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
+
+    def set_group_colors(self, entry, group):
+        """Show the group's own colour on its entry."""
+
+        color = group.box_color
+        entry.setBackground(0, QtGui.QBrush(color))
+        # Keep the name readable whatever colour the group has been given
+        text = (QtGui.QColor(0, 0, 0) if color.lightness() > 127
+                else QtGui.QColor(255, 255, 255))
+        entry.setForeground(0, QtGui.QBrush(text))
 
     # Keeping selection in sync
 

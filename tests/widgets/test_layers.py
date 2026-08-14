@@ -100,6 +100,49 @@ def test_lists_items_topmost_first(view):
     assert entries(tree) == [(0, 'top'), (0, 'middle'), (0, 'bottom')]
 
 
+def test_group_entry_uses_the_group_colour(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem(box_color=(150, 60, 60, 255))
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    entry = tree.topLevelItem(0)
+    assert entry.background(0).color() == QtGui.QColor(150, 60, 60, 255)
+
+
+def test_group_entry_text_stays_readable(view):
+    item = add_text(view, 'one', 0)
+    light = BeeGroupItem(box_color=(240, 220, 120, 255))
+    commands.GroupItems(view.scene, [item], light).redo()
+    tree = tree_of(view)
+    assert tree.topLevelItem(0).foreground(0).color() == QtGui.QColor(
+        0, 0, 0)
+
+    light.box_color = QtGui.QColor(40, 40, 60, 255)
+    tree.refresh()
+    assert tree.topLevelItem(0).foreground(0).color() == QtGui.QColor(
+        255, 255, 255)
+
+
+def test_group_entry_colour_follows_changes(view):
+    item = add_text(view, 'one', 0)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+    tree = tree_of(view)
+
+    group.box_color = QtGui.QColor(10, 120, 30, 255)
+    tree.refresh()
+    assert tree.topLevelItem(0).background(0).color() == QtGui.QColor(
+        10, 120, 30, 255)
+
+
+def test_plain_items_are_not_tinted(view):
+    add_text(view, 'loose', 0)
+    tree = tree_of(view)
+    # An unset background brush has no style
+    assert tree.topLevelItem(0).background(0).style() == Qt.BrushStyle.NoBrush
+
+
 def test_group_entries_show_their_dates(view):
     item = add_text(view, 'one', 0)
     group = BeeGroupItem(created='2026-01-02T03:04:05',
