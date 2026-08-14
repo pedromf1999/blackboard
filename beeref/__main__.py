@@ -21,7 +21,7 @@ import platform
 import signal
 import sys
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from beeref import constants
 from beeref.assets import BeeAssets
@@ -124,6 +124,10 @@ def main():
         logger.info(f'Using font: {family}')
         font = app.font()
         font.setFamily(family)
+        # Snap stems to the pixel grid, which keeps small text legible
+        font.setHintingPreference(
+            QtGui.QFont.HintingPreference.PreferFullHinting)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         app.setFont(font)
     bee = BeeRefMainWindow(app)  # NOQA:F841
 

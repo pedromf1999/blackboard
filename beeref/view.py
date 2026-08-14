@@ -70,6 +70,9 @@ class BeeGraphicsView(MainControlsMixin,
             self.on_canvas_color_changed)
         settings_events.grid_changed.connect(self.on_grid_changed)
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        # Without this, text on the canvas is left to whatever the
+        # painter defaults to, which reads poorly at small sizes
+        self.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing)
         self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
 
         self.undo_stack = QtGui.QUndoStack(self)
