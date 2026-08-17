@@ -2,6 +2,9 @@
 requires = ["setuptools>=61.0.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.dynamic]
+version = {attr = "beeref.constants.VERSION"}
+
 [tool.setuptools.packages.find]
 include = ["beeref*"]
 
@@ -10,7 +13,9 @@ include = ["beeref*"]
 
 [project]
 name = "Blackboard"
-version = "0.3.4-dev"
+# Read from beeref/constants.py so the version can never drift between the
+# two files. See [tool.setuptools.dynamic] below.
+dynamic = ["version"]
 description = "A simple reference image viewer (personal fork of BeeRef)"
 readme = "README.rst"
 license = {file = "LICENSE"}

@@ -33,8 +33,54 @@ launch and behave normally.
   `main` holds the untouched upstream code — do not commit to it.
 - Commit after each feature that works, with a short descriptive message.
   Do not batch several unrelated features into one commit.
+- **Every commit raises `VERSION` by one**, in the same commit as the change
+  itself. See "Versioning and releases" below.
 - If a change breaks the app and cannot be fixed quickly, revert rather than
   layering fixes on top.
+
+## Versioning and releases
+
+The application is developed on one PC and used on another. That works only if
+both machines can name which build they have, and if a board always opens in
+the newest installed version.
+
+**Version numbers.** `VERSION` in `beeref/constants.py` is the single source of
+truth; `pyproject.toml` reads it from there via `[tool.setuptools.dynamic]`, so
+the two can never drift. Blackboard numbers itself, starting at **3.6** —
+BeeRef's `0.3.x` numbering is gone and upstream releases are not tracked. Raise
+`VERSION` by one on every commit, so the number in Help → About identifies the
+exact commit a build came from.
+
+**Install location, and why it is fixed.** A `.blk` file records nothing about
+which version wrote it, and Windows does not remember which program created a
+file. Boards opening in an outdated version is always the same bug: two
+executables, with the file association pointing at the one that never got
+refreshed. So the association points at one fixed path
+
+    %LOCALAPPDATA%\Programs\Blackboard\Blackboard.exe
+
+and updating means replacing the file there. **Never point the association at
+`dist\`** — `Blackboard.spec` puts the version in the built filename, so that
+path changes with every release and would go stale immediately.
+
+**Cutting a release.** Commit first (the script refuses a dirty tree, so the
+version identifies exactly the released code), then:
+
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1
+
+It checks style, runs the tests against the baseline, builds, packages
+`dist\Blackboard-<version>.zip`, installs that same package locally, and tags
+the commit `v<version>`. The zip is the only file the other computer needs: it
+holds `Install.cmd` plus `app\Blackboard.exe`, and `Install.cmd` does the copy
+and the association in pure `cmd`/`reg` — no admin rights, no Python, no
+PowerShell policy to fight. It deliberately leaves `.bee` alone so a stock
+BeeRef install keeps its own files.
+
+**Two-machine hazard.** `fileio/sql.py` selects non-image items with an explicit
+`WHERE items.type IN (…)` list, so item types it does not know are dropped
+**silently** on load. A board saved by a newer build can therefore lose content
+in an older one. Until the loader warns instead of discarding, keep the other
+PC updated before opening boards written elsewhere.
 
 ## Codebase map
 

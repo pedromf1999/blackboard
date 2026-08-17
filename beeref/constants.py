@@ -15,7 +15,13 @@
 
 APPNAME = 'Blackboard'
 APPNAME_FULL = f'{APPNAME} Reference Image Viewer'
-VERSION = '0.3.4-dev'
+
+# Blackboard's own version, unrelated to BeeRef's numbering. It goes up by
+# one on every commit, so the version in the About box names the exact
+# commit a build came from. This is the only place it is written down;
+# pyproject.toml reads it from here.
+VERSION = '3.6'
+
 UPSTREAM_NAME = 'BeeRef'
 WEBSITE = 'https://github.com/rbreu/beeref'
 COPYRIGHT = 'Copyright © 2021-2024 Rebecca Breu'
