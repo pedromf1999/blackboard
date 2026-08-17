@@ -616,7 +616,8 @@ def test_sqliteio_write_updates_progress(tmpfile, view):
     view.scene.addItem(item)
     io.write()
     worker.begin_processing.emit.assert_called_once_with(1)
-    worker.progress.emit.assert_called_once_with(0)
+    # One-based, so the bar actually reaches full when the last item is done
+    worker.progress.emit.assert_called_once_with(1)
     worker.finished.emit.assert_called_once_with(tmpfile, [])
 
 
@@ -629,7 +630,7 @@ def test_sqliteio_write_canceled(tmpfile, view):
     view.scene.addItem(item)
     io.write()
     worker.begin_processing.emit.assert_called_once_with(2)
-    worker.progress.emit.assert_called_once_with(0)
+    worker.progress.emit.assert_called_once_with(1)
     worker.finished.emit.assert_called_once_with(tmpfile, [])
 
 
@@ -907,3 +908,31 @@ def test_version_as_numbers_orders_double_digits():
     """3.10 is newer than 3.9, which string comparison gets wrong."""
 
     assert version_as_numbers('3.10') > version_as_numbers('3.9')
+
+
+def test_sqliteio_write_progress_reaches_the_total(tmpfile, view):
+    """The bar has to fill up, or it looks stuck at the last item."""
+
+    worker = MagicMock(canceled=False)
+    io = SQLiteIO(tmpfile, view.scene, create_new=True, worker=worker)
+    for i in range(4):
+        item = BeeTextItem(text=f'item {i}')
+        view.scene.addItem(item)
+    io.write()
+    total = worker.begin_processing.emit.call_args[0][0]
+    last = worker.progress.emit.call_args_list[-1][0][0]
+    assert last == total
+
+
+def test_sqliteio_resaving_unchanged_board_deletes_nothing(tmpfile, view):
+    """Nothing to delete means no VACUUM, which is what made saves slow."""
+
+    for i in range(3):
+        view.scene.addItem(BeeTextItem(text=f'item {i}'))
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    io = SQLiteIO(tmpfile, view.scene)
+    with patch.object(io, 'ex', wraps=io.ex) as ex_mock:
+        io.write()
+    statements = [call[0][0] for call in ex_mock.call_args_list]
+    assert not any('VACUUM' in text for text in statements)

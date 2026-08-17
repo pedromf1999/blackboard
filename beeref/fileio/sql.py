@@ -362,7 +362,11 @@ class SQLiteIO:
             else:
                 self.insert_item(item)
             if self.worker:
-                self.worker.progress.emit(i)
+                # One-based: emitting the index left the bar one item short
+                # of full, so it sat at 99% for everything that happens
+                # after this loop -- deleting, committing, vacuuming -- and
+                # looked like a hang at the very end of every save.
+                self.worker.progress.emit(i + 1)
                 if self.worker.canceled:
                     break
         self.delete_items(to_delete)
