@@ -78,7 +78,11 @@ if ($LASTEXITCODE -ne 0) { Fail "flake8 reported problems" }
 Write-Host "   clean"
 
 Step "Running tests (about 90 seconds)"
-$testOutput = & $python -m pytest tests -q 2>&1
+# Do not redirect stderr here. In Windows PowerShell 5.1, capturing a native
+# command's stderr wraps every line in an error record, which $ErrorActionPreference
+# = 'Stop' then treats as a fatal error -- and the Qt tests do write to stderr.
+# pytest's summary line goes to stdout, which is all this needs.
+$testOutput = & $python -m pytest tests -q
 $summary = $testOutput | Select-String -Pattern '(\d+) failed, (\d+) passed' | Select-Object -Last 1
 if ($summary) {
     $failed = [int]$summary.Matches[0].Groups[1].Value
