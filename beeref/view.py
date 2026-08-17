@@ -42,15 +42,23 @@ commandline_args = CommandlineArgs()
 logger = logging.getLogger(__name__)
 
 
-def file_dialog_filter():
-    """What the open and save dialogs offer.
+def save_dialog_filter():
+    """What the save dialog offers: our own files only."""
 
-    Both our own files and the ones BeeRef writes, so older boards can
-    still be opened.
+    return f'{constants.APPNAME} File (*{constants.FILE_EXT})'
+
+
+def open_dialog_filter():
+    """What the open dialog offers.
+
+    Our own files, and separately the ones BeeRef writes, so older
+    boards can still be opened without cluttering the usual case.
     """
 
-    extensions = ' '.join(f'*{ext}' for ext in constants.FILE_EXTS)
-    return f'{constants.APPNAME} Files ({extensions})'
+    return (f'{constants.APPNAME} Files (*{constants.FILE_EXT});;'
+            f'{constants.UPSTREAM_NAME} Files '
+            f'(*{constants.LEGACY_FILE_EXT});;'
+            'All Files (*)')
 
 
 class BeeGraphicsView(MainControlsMixin,
@@ -890,7 +898,7 @@ class BeeGraphicsView(MainControlsMixin,
         filename, f = QtWidgets.QFileDialog.getOpenFileName(
             parent=self,
             caption='Open file',
-            filter=file_dialog_filter())
+            filter=open_dialog_filter())
         if filename:
             filename = os.path.normpath(filename)
             self.open_from_file(filename)
@@ -926,7 +934,7 @@ class BeeGraphicsView(MainControlsMixin,
             parent=self,
             caption='Save file',
             directory=directory,
-            filter=file_dialog_filter())
+            filter=save_dialog_filter())
         if filename:
             self.do_save(filename, create_new=True)
 
