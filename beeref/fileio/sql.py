@@ -43,9 +43,12 @@ logger = logging.getLogger(__name__)
 
 
 def is_bee_file(path):
-    """Check whether the file at the given path is a bee file."""
+    """Check whether the file at the given path is one of ours.
 
-    return os.path.splitext(path)[1] == '.bee'
+    Files saved by BeeRef count too, so older boards still open.
+    """
+
+    return os.path.splitext(path)[1].lower() in constants.FILE_EXTS
 
 
 def handle_sqlite_errors(func):
@@ -136,7 +139,8 @@ class SQLiteIO:
                 self._connection.close()
                 self._tmpdir = tempfile.TemporaryDirectory(
                     prefix=constants.APPNAME)
-                tmpname = os.path.join(self._tmpdir.name, 'mig.bee')
+                tmpname = os.path.join(
+                    self._tmpdir.name, f'mig{constants.FILE_EXT}')
                 shutil.copyfile(self.filename, tmpname)
                 self._connection = sqlite3.connect(tmpname)
                 self._cursor = self.connection.cursor()

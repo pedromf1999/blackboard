@@ -42,6 +42,17 @@ commandline_args = CommandlineArgs()
 logger = logging.getLogger(__name__)
 
 
+def file_dialog_filter():
+    """What the open and save dialogs offer.
+
+    Both our own files and the ones BeeRef writes, so older boards can
+    still be opened.
+    """
+
+    extensions = ' '.join(f'*{ext}' for ext in constants.FILE_EXTS)
+    return f'{constants.APPNAME} Files ({extensions})'
+
+
 class BeeGraphicsView(MainControlsMixin,
                       QtWidgets.QGraphicsView,
                       ActionsMixin):
@@ -120,7 +131,7 @@ class BeeGraphicsView(MainControlsMixin,
         # Load files given via command line
         if commandline_args.filenames:
             fn = commandline_args.filenames[0]
-            if os.path.splitext(fn)[1] == '.bee':
+            if fileio.is_bee_file(fn):
                 self.open_from_file(fn)
             else:
                 self.do_insert_images(commandline_args.filenames)
@@ -879,7 +890,7 @@ class BeeGraphicsView(MainControlsMixin,
         filename, f = QtWidgets.QFileDialog.getOpenFileName(
             parent=self,
             caption='Open file',
-            filter=f'{constants.APPNAME} File (*.bee)')
+            filter=file_dialog_filter())
         if filename:
             filename = os.path.normpath(filename)
             self.open_from_file(filename)
@@ -898,7 +909,7 @@ class BeeGraphicsView(MainControlsMixin,
 
     def do_save(self, filename, create_new):
         if not fileio.is_bee_file(filename):
-            filename = f'{filename}.bee'
+            filename = f'{filename}{constants.FILE_EXT}'
         self.worker = fileio.ThreadedIO(
             fileio.save_bee, filename, self.scene, create_new=create_new)
         self.worker.finished.connect(self.on_saving_finished)
@@ -915,7 +926,7 @@ class BeeGraphicsView(MainControlsMixin,
             parent=self,
             caption='Save file',
             directory=directory,
-            filter=f'{constants.APPNAME} File (*.bee)')
+            filter=file_dialog_filter())
         if filename:
             self.do_save(filename, create_new=True)
 

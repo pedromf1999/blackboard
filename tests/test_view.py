@@ -8,7 +8,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 import pytest
 
-from beeref import commands, widgets
+from beeref import commands, constants, widgets
 from beeref.actions import actions
 from beeref.config import logfile_name, settings_events
 from beeref.items import BeePixmapItem, BeeTextItem
@@ -355,7 +355,7 @@ def test_on_action_save_as_when_no_filename(
 
 
 @patch('PyQt6.QtWidgets.QFileDialog.getSaveFileName')
-def test_on_action_save_as_filename_doesnt_end_with_bee(
+def test_on_action_save_as_filename_without_extension(
         dialog_mock, view, qtbot, imgfilename3x3, tmpdir):
     item = BeePixmapItem(QtGui.QImage(imgfilename3x3))
     view.scene.addItem(item)
@@ -366,8 +366,9 @@ def test_on_action_save_as_filename_doesnt_end_with_bee(
     dialog_mock.return_value = (filename, None)
     view.on_action_save_as()
     qtbot.waitUntil(lambda: view.on_saving_finished.called is True)
-    assert os.path.exists(f'{filename}.bee') is True
-    view.on_saving_finished.assert_called_once_with(f'{filename}.bee', [])
+    saved = f'{filename}{constants.FILE_EXT}'
+    assert os.path.exists(saved) is True
+    view.on_saving_finished.assert_called_once_with(saved, [])
     view.cancel_active_modes.assert_called_once_with()
 
 

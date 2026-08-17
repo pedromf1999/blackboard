@@ -22,6 +22,12 @@ COPYRIGHT = 'Copyright © 2021-2024 Rebecca Breu'
 
 CHANGED_SYMBOL = '✎'
 
+# Files are saved with this extension; the one BeeRef uses is still
+# opened, so boards made before the rename keep working
+FILE_EXT = '.blk'
+LEGACY_FILE_EXT = '.bee'
+FILE_EXTS = (FILE_EXT, LEGACY_FILE_EXT)
+
 # Corner radius for the rectangles the application draws
 CORNER_RADIUS = 8
 

@@ -16,11 +16,32 @@ from beeref.items import (
 
 
 @pytest.mark.parametrize('filename,expected',
-                         [(os.path.join('foo', 'bar.bee'), True),
+                         [(os.path.join('foo', 'bar.blk'), True),
+                          # Boards saved by BeeRef still count
+                          (os.path.join('foo', 'bar.bee'), True),
+                          (os.path.join('foo', 'bar.BLK'), True),
                           (os.path.join('foo', 'bar.png'), False),
                           (os.path.join('foo', 'bar'), False)])
 def test_is_bee_file(filename, expected):
     assert is_bee_file(filename) is expected
+
+
+def test_old_bee_files_still_open(tmpdir, view):
+    """A board saved with the old extension has to keep working."""
+
+    item = BeeTextItem(text='from an older board')
+    view.scene.addItem(item)
+    old = os.path.join(tmpdir, 'board.bee')
+    SQLiteIO(old, view.scene, create_new=True).write()
+
+    for existing in list(view.scene.items_for_save()):
+        if existing.parentItem() is None:
+            view.scene.removeItem(existing)
+
+    SQLiteIO(old, view.scene).read()
+    view.scene.add_queued_items()
+    texts = [i.toPlainText() for i in view.scene.items_by_type('text')]
+    assert texts == ['from an older board']
 
 
 def test_sqliteio_migrate_does_nothing_when_version_ok(tmpfile):

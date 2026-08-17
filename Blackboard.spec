@@ -71,7 +71,7 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleDocumentTypes': [
                 {
-                    'CFBundleTypeExtensions': [ 'bee' ],
+                    'CFBundleTypeExtensions': [ 'blk', 'bee' ],
                     'CFBundleTypeRole': 'Viewer'
                 }
             ]
