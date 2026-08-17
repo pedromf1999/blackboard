@@ -21,6 +21,7 @@ from collections import defaultdict
 import datetime
 from functools import cached_property
 import logging
+import math
 import os.path
 import re
 
@@ -139,6 +140,171 @@ class BeeItemMixin(SelectableMixin):
         stretch = kwargs.get('data', {}).get('stretch')
         if stretch:
             self.set_stretch(*stretch)
+
+
+@register_item
+class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
+    """Something drawn by hand: a sketch, a line, a curve or an arrow."""
+
+    TYPE = 'draw'
+
+    SKETCH = 'sketch'
+    LINE = 'line'
+    SPLINE = 'spline'
+    ARROW = 'arrow'
+    SPLINE_ARROW = 'spline_arrow'
+    KINDS = (SKETCH, LINE, SPLINE, ARROW, SPLINE_ARROW)
+
+    NAMES = {
+        SKETCH: 'Sketch',
+        LINE: 'Line',
+        SPLINE: 'Curve',
+        ARROW: 'Arrow',
+        SPLINE_ARROW: 'Curved Arrow',
+    }
+
+    DEFAULT_COLOR = (235, 235, 235, 255)
+    DEFAULT_WIDTH = 4
+    # Length of the arrow head, as a multiple of the line width
+    ARROW_SIZE = 4
+
+    def __init__(self, points=None, kind=SKETCH, color=None,
+                 width=None, **kwargs):
+        super().__init__()
+        self.save_id = None
+        self.is_image = False
+        self.init_selectable()
+        self.is_editable = False
+        self.kind = kind if kind in self.KINDS else self.SKETCH
+        self.color = QtGui.QColor(*(color or self.DEFAULT_COLOR))
+        self.line_width = width or self.DEFAULT_WIDTH
+        self.set_points(points or [])
+        logger.debug(f'Initialized {self}')
+
+    def __str__(self):
+        return f'{self.NAMES[self.kind]} ({len(self.points)} points)'
+
+    def get_default_name(self):
+        return self.NAMES[self.kind]
+
+    @classmethod
+    def create_from_data(cls, **kwargs):
+        return cls(**kwargs.get('data', {}))
+
+    def set_points(self, points):
+        """Set the points the drawing runs through, in item coordinates."""
+
+        self.prepareGeometryChange()
+        self.points = [QtCore.QPointF(x, y) for x, y in points]
+        self.path = self.build_path()
+
+    def build_path(self):
+        """The line itself, which depends on the kind of drawing."""
+
+        path = QtGui.QPainterPath()
+        if not self.points:
+            return path
+
+        path.moveTo(self.points[0])
+        if self.kind == self.SKETCH:
+            for point in self.points[1:]:
+                path.lineTo(point)
+        elif self.kind in (self.LINE, self.ARROW):
+            path.lineTo(self.points[-1])
+        else:
+            # A curve bending towards the middle of the drawn path, so
+            # it follows the direction the hand moved in
+            start = self.points[0]
+            end = self.points[-1]
+            middle = self.points[len(self.points) // 2]
+            control = middle * 2 - (start + end) / 2
+            path.quadTo(control, end)
+        return path
+
+    def arrow_head(self):
+        """The arrow head at the end, as a triangle."""
+
+        if self.kind not in (self.ARROW, self.SPLINE_ARROW):
+            return None
+        if len(self.points) < 2:
+            return None
+
+        end = self.points[-1]
+        # Point the head along the last bit of the line
+        percent = self.path.percentAtLength(
+            max(self.path.length() - 1, 0))
+        angle = math.radians(self.path.angleAtPercent(percent))
+        size = self.line_width * self.ARROW_SIZE
+        direction = QtCore.QPointF(math.cos(angle), -math.sin(angle))
+        across = QtCore.QPointF(-direction.y(), direction.x())
+        base = end - direction * size
+        return QtGui.QPolygonF([
+            end,
+            base + across * size / 2.5,
+            base - across * size / 2.5])
+
+    def bounding_rect_unselected(self):
+        margin = self.line_width * self.ARROW_SIZE
+        return self.path.boundingRect().adjusted(
+            -margin, -margin, margin, margin)
+
+    def boundingRect(self):
+        if not self.has_selection_outline():
+            return self.bounding_rect_unselected()
+        margin = self.select_resize_size / 2 + self.select_rotate_size
+        return self.bounding_rect_unselected().marginsAdded(
+            QtCore.QMarginsF(margin, margin, margin, margin))
+
+    def shape(self):
+        if self.has_selection_handles():
+            return super().shape()
+        # Only the line itself is clickable, so items behind a long
+        # diagonal stroke stay reachable
+        stroker = QtGui.QPainterPathStroker()
+        stroker.setWidth(max(self.line_width * 3, 12))
+        return stroker.createStroke(self.path)
+
+    def paint(self, painter, option, widget):
+        pen = QtGui.QPen(self.color)
+        pen.setWidthF(self.line_width)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush())
+        painter.drawPath(self.path)
+
+        head = self.arrow_head()
+        if head is not None:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QtGui.QBrush(self.color))
+            painter.drawPolygon(head)
+
+        self.paint_selectable(painter, option, widget)
+
+    def get_extra_save_data(self):
+        return {'kind': self.kind,
+                'color': self.color.getRgb(),
+                'width': self.line_width,
+                'points': [[p.x(), p.y()] for p in self.points]}
+
+    def create_copy(self):
+        item = BeeDrawItem(
+            points=[[p.x(), p.y()] for p in self.points],
+            kind=self.kind,
+            color=self.color.getRgb(),
+            width=self.line_width)
+        item.setPos(self.pos())
+        item.setZValue(self.zValue())
+        item.setScale(self.scale())
+        item.setRotation(self.rotation())
+        item.set_stretch(*self.stretch)
+        if self.flip() == -1:
+            item.do_flip()
+        return item
+
+    def copy_to_clipboard(self, clipboard):
+        # Nothing sensible to hand to other applications
+        pass
 
 
 @register_item

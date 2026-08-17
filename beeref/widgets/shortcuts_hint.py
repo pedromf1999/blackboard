@@ -39,6 +39,7 @@ class ShortcutsHint(QtWidgets.QWidget):
         ('Ctrl + G', 'Group the selected items'),
         ('Ctrl + Shift + G', 'Ungroup'),
         ('Ctrl + F  /  F3', 'Find text, and jump to the next match'),
+        ('Shift + C', 'Crop the selected image'),
         ('Alt + drag', 'Take an item out of its group'),
         ('Ctrl + click', 'Open a link in a text note'),
     )

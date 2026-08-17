@@ -23,6 +23,7 @@ from beeref import constants, commands
 from beeref.config import logfile_name
 from beeref.widgets import (  # noqa: F401
     controls,
+    draw_toolbar,
     layers,
     settings,
     shortcuts_hint,

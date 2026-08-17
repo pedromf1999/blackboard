@@ -545,6 +545,26 @@ class MoveToGroup(QtGui.QUndoCommand):
         self.refit(set(self.old_parents) | {self.group})
 
 
+class ChangeDrawColor(QtGui.QUndoCommand):
+    """Change the colour of drawn lines and arrows."""
+
+    def __init__(self, items, color):
+        super().__init__('Change drawing colour')
+        self.items = list(items)
+        self.color = color
+        self.old_colors = [item.color for item in self.items]
+
+    def redo(self):
+        for item in self.items:
+            item.color = self.color
+            item.update()
+
+    def undo(self):
+        for item, color in zip(self.items, self.old_colors):
+            item.color = color
+            item.update()
+
+
 class ChangeGroupBoxColor(QtGui.QUndoCommand):
     """Change the colour of the box behind grouped items."""
 

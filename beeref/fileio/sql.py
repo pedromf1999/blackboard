@@ -199,7 +199,7 @@ class SQLiteIO:
             'SELECT items.id, type, x, y, z, scale, rotation, flip, '
             ' items.data, null as data '
             'FROM items '
-            'WHERE items.type IN ("text", "group")'))
+            'WHERE items.type IN ("text", "group", "draw")'))
         if self.worker:
             self.worker.begin_processing.emit(len(rows))
 

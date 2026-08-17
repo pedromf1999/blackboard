@@ -18,7 +18,7 @@
 from importlib.resources import files as rsc_files
 import logging
 
-from PyQt6 import QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui, QtSvg, QtWidgets
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ class BeeAssets:
     def on_new(self):
         logger.debug(f'Assets path: {self.PATH}')
 
+        self._tool_icons = {}
         self.font_family = self.load_fonts()
         self.logo = QtGui.QIcon(str(self.PATH.joinpath('logo.png')))
         assert self.logo.isNull() is False
@@ -72,6 +73,41 @@ class BeeAssets:
             return None
         logger.debug(f'Loaded font families: {sorted(families)}')
         return sorted(families)[0]
+
+    ICON_COLOR = (220, 220, 220)
+    ICON_SIZE = 64
+
+    def tool_icon(self, name):
+        """A toolbar icon, drawn in a colour that suits a dark interface.
+
+        The icons are black line art, so they are recoloured rather than
+        used as they are.
+        """
+
+        if name in self._tool_icons:
+            return self._tool_icons[name]
+
+        path = self.PATH.joinpath('icons', f'{name}.svg')
+        image = QtGui.QImage(
+            self.ICON_SIZE, self.ICON_SIZE,
+            QtGui.QImage.Format.Format_ARGB32)
+        image.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        renderer = QtSvg.QSvgRenderer(str(path))
+        if renderer.isValid():
+            renderer.render(painter)
+            # Keep the shape, replace the colour
+            painter.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+            painter.fillRect(image.rect(), QtGui.QColor(*self.ICON_COLOR))
+        else:
+            logger.warning(f'Could not load icon: {path}')
+        painter.end()
+
+        icon = QtGui.QIcon(QtGui.QPixmap.fromImage(image))
+        self._tool_icons[name] = icon
+        return icon
 
     def cursor_from_image(self, filename, hotspot):
         app = QtWidgets.QApplication.instance()

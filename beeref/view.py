@@ -31,7 +31,8 @@ from beeref import fileio
 from beeref.fileio.errors import IMG_LOADING_ERROR_MSG
 from beeref.fileio.export import exporter_registry, ImagesToDirectoryExporter
 from beeref import widgets
-from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
+from beeref.items import (
+    BeeDrawItem, BeeGroupItem, BeePixmapItem, BeeTextItem)
 from beeref.main_controls import MainControlsMixin
 from beeref.scene import BeeGraphicsScene
 from beeref.utils import get_file_extension_from_format, qcolor_to_hex
@@ -93,6 +94,13 @@ class BeeGraphicsView(MainControlsMixin,
         self.text_search_query = ''
         self.text_search_index = -1
 
+        # Drawing tools
+        self.draw_tool = None
+        self.drawing_item = None
+        self.drawing_points = []
+        self.draw_color = QtGui.QColor(*BeeDrawItem.DEFAULT_COLOR)
+        self.draw_width = BeeDrawItem.DEFAULT_WIDTH
+
         self.scene = BeeGraphicsScene(self.undo_stack)
         self.scene.changed.connect(self.on_scene_changed)
         self.scene.selectionChanged.connect(self.on_selection_changed)
@@ -118,6 +126,11 @@ class BeeGraphicsView(MainControlsMixin,
                 self.do_insert_images(commandline_args.filenames)
 
         self.update_window_title()
+
+        # The drawing tools, in the top left corner
+        self.draw_toolbar = widgets.draw_toolbar.DrawToolBar(self, self)
+        self.draw_toolbar.reposition()
+        self.draw_toolbar.show()
 
         # A reminder of the shortcuts, until the user dismisses it
         self.shortcuts_hint.show_if_wanted()
@@ -172,6 +185,75 @@ class BeeGraphicsView(MainControlsMixin,
         """Untick the menu entry when the panel is closed by its button."""
 
         actions.actions['show_layers'].qaction.setChecked(False)
+
+    def set_draw_tool(self, kind):
+        """Pick a drawing tool, or ``None`` to go back to selecting."""
+
+        logger.debug(f'Drawing tool: {kind}')
+        self.draw_tool = kind
+        if kind is None:
+            self.viewport().unsetCursor()
+        else:
+            self.cancel_active_modes()
+            self.scene.deselect_all_items()
+            self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+        if hasattr(self, 'draw_toolbar'):
+            self.draw_toolbar.update_checked(kind)
+
+    def start_drawing(self, pos):
+        """Begin a new drawing at the given scene position."""
+
+        self.drawing_points = [pos]
+        self.drawing_item = BeeDrawItem(
+            points=[[pos.x(), pos.y()]],
+            kind=self.draw_tool,
+            color=self.draw_color.getRgb(),
+            width=self.draw_width)
+        self.scene.addItem(self.drawing_item)
+        self.drawing_item.bring_to_front()
+
+    def continue_drawing(self, pos):
+        self.drawing_points.append(pos)
+        self.drawing_item.set_points(
+            [[p.x(), p.y()] for p in self.drawing_points])
+
+    def finish_drawing(self):
+        """Turn the drawing into a real item, or drop it if it's a dot."""
+
+        item = self.drawing_item
+        points = self.drawing_points
+        self.drawing_item = None
+        self.drawing_points = []
+        self.scene.removeItem(item)
+
+        if len(points) < 2:
+            logger.debug('Drawing too short, dropping it')
+            return
+
+        # Points are kept relative to the item, so it can be moved,
+        # scaled and rotated like anything else
+        origin = QtCore.QPointF(
+            min(p.x() for p in points), min(p.y() for p in points))
+        item.set_points([[p.x() - origin.x(), p.y() - origin.y()]
+                         for p in points])
+        item.setPos(origin)
+        self.undo_stack.push(commands.InsertItems(self.scene, [item]))
+
+    def on_action_draw_color(self):
+        """Set the colour for new drawings, and for any selected ones."""
+
+        color = QtWidgets.QColorDialog.getColor(
+            self.draw_color, self, 'Choose Drawing Colour')
+        if not color.isValid():
+            return
+        self.draw_color = color
+        if hasattr(self, 'draw_toolbar'):
+            self.draw_toolbar.update_color(color)
+
+        items = [item for item in self.scene.selectedItems(user_only=True)
+                 if item.TYPE == BeeDrawItem.TYPE]
+        if items:
+            self.undo_stack.push(commands.ChangeDrawColor(items, color))
 
     def on_action_show_grid(self, checked):
         self.show_grid = checked
@@ -1219,6 +1301,11 @@ class BeeGraphicsView(MainControlsMixin,
         if self.mousePressEventMainControls(event):
             return
 
+        if (self.draw_tool and event.button() == Qt.MouseButton.LeftButton):
+            self.start_drawing(self.mapToScene(event.pos()))
+            event.accept()
+            return
+
         if self.active_mode == self.SAMPLE_COLOR_MODE:
             if (event.button() == Qt.MouseButton.LeftButton):
                 color = self.scene.sample_color_at(
@@ -1261,6 +1348,11 @@ class BeeGraphicsView(MainControlsMixin,
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        if self.drawing_item is not None:
+            self.continue_drawing(self.mapToScene(event.pos()))
+            event.accept()
+            return
+
         if self.active_mode == self.PAN_MODE:
             self.reset_previous_transform()
             pos = event.position()
@@ -1292,6 +1384,11 @@ class BeeGraphicsView(MainControlsMixin,
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self.drawing_item is not None:
+            self.finish_drawing()
+            event.accept()
+            return
+
         if self.active_mode == self.PAN_MODE:
             logger.trace('End pan')
             self.viewport().unsetCursor()
