@@ -9,8 +9,8 @@ import pytest
 
 from beeref.fileio import schema, is_bee_file
 from beeref.fileio.errors import BeeFileIOError
-from beeref.fileio.sql import SQLiteIO
-from beeref import commands
+from beeref.fileio.sql import SQLiteIO, version_as_numbers
+from beeref import commands, constants
 from beeref.items import (
     BeeGroupItem, BeePixmapItem, BeeTextItem, BeeErrorItem)
 
@@ -790,3 +790,120 @@ def test_sqliteio_read_raises_error_when_file_empty(view, tmpfile):
 
     # should not create a file on reading!
     assert os.path.isfile(tmpfile) is False
+
+
+def insert_unknown_item(io, itype='sparkle'):
+    """Write an item row of a type this version knows nothing about."""
+
+    io.create_schema_on_new()
+    io.ex('INSERT INTO items (type, x, y, z, scale, rotation, flip, data) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          (itype, 22, 33, 0.6, 2.5, 0, 1, '{}'))
+    io.connection.commit()
+
+
+def test_sqliteio_reads_item_of_unknown_type(tmpfile, view):
+    """An item type this version does not know still has to be read.
+
+    It is shown as an error item, the same as an image that failed to
+    load, rather than quietly not being there.
+    """
+
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    insert_unknown_item(io)
+    del io
+
+    SQLiteIO(tmpfile, view.scene).read()
+    view.scene.add_queued_items()
+    errors = list(view.scene.items_by_type(BeeErrorItem.TYPE))
+    assert len(errors) == 1
+    assert 'sparkle' in errors[0].toPlainText()
+
+
+def test_sqliteio_write_keeps_item_of_unknown_type(tmpfile, view):
+    """Saving must not delete items this version could not display.
+
+    A board written by a newer version and opened here would otherwise
+    lose exactly the items that version added.
+    """
+
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    insert_unknown_item(io)
+    del io
+
+    SQLiteIO(tmpfile, view.scene).read()
+    view.scene.add_queued_items()
+    SQLiteIO(tmpfile, view.scene).write()
+
+    io = SQLiteIO(tmpfile, view.scene)
+    rows = io.fetchall('SELECT type, x, y FROM items')
+    assert rows == [('sparkle', 22, 33)]
+
+
+def test_sqliteio_reads_pixmap_item_without_image_data(tmpfile, view):
+    """An image item with nothing in the archive must not crash the load."""
+
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    insert_unknown_item(io, itype='pixmap')
+    del io
+
+    SQLiteIO(tmpfile, view.scene).read()
+    view.scene.add_queued_items()
+    errors = list(view.scene.items_by_type(BeeErrorItem.TYPE))
+    assert len(errors) == 1
+
+
+def test_sqliteio_write_records_version(tmpfile, view):
+    item = BeeTextItem(text='foo')
+    view.scene.addItem(item)
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    io = SQLiteIO(tmpfile, view.scene)
+    assert io.saved_by_version() == constants.VERSION
+
+
+def test_sqliteio_saved_by_version_when_never_recorded(tmpfile, view):
+    """Files from BeeRef have no such record, which is not an error."""
+
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    io.create_schema_on_new()
+    io.connection.commit()
+    assert io.saved_by_version() is None
+
+
+def test_sqliteio_warns_when_written_by_newer_version(tmpfile, view, caplog):
+    item = BeeTextItem(text='foo')
+    view.scene.addItem(item)
+    with patch('beeref.fileio.sql.constants.VERSION', '99.0'):
+        SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    SQLiteIO(tmpfile, view.scene).read()
+    assert 'newer than this version' in caplog.text
+
+
+def test_sqliteio_doesnt_warn_when_written_by_older_version(
+        tmpfile, view, caplog):
+    item = BeeTextItem(text='foo')
+    view.scene.addItem(item)
+    with patch('beeref.fileio.sql.constants.VERSION', '0.1'):
+        SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    SQLiteIO(tmpfile, view.scene).read()
+    assert 'newer than this version' not in caplog.text
+
+
+@pytest.mark.parametrize('version,expected',
+                         [('3.8', (3, 8)),
+                          ('3.10', (3, 10)),
+                          ('3', (3,)),
+                          ('0.3.4-dev', None),
+                          ('', None),
+                          (None, None)])
+def test_version_as_numbers(version, expected):
+    assert version_as_numbers(version) == expected
+
+
+def test_version_as_numbers_orders_double_digits():
+    """3.10 is newer than 3.9, which string comparison gets wrong."""
+
+    assert version_as_numbers('3.10') > version_as_numbers('3.9')

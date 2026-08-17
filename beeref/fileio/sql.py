@@ -36,7 +36,8 @@ from PyQt6 import QtGui
 from beeref import constants
 from beeref.items import BeePixmapItem, BeeErrorItem
 from .errors import BeeFileIOError, IMG_LOADING_ERROR_MSG
-from .schema import SCHEMA, USER_VERSION, MIGRATIONS, APPLICATION_ID
+from .schema import (SCHEMA, USER_VERSION, MIGRATIONS, APPLICATION_ID,
+                     META_TABLE, META_VERSION_KEY)
 
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,19 @@ def is_bee_file(path):
     """
 
     return os.path.splitext(path)[1].lower() in constants.FILE_EXTS
+
+
+def version_as_numbers(version):
+    """Turn a version like '3.10' into (3, 10) so it can be compared.
+
+    Returns None for anything not purely numeric, so an unexpected
+    version string is simply not compared rather than guessed at.
+    """
+
+    try:
+        return tuple(int(part) for part in version.split('.'))
+    except (AttributeError, ValueError):
+        return None
 
 
 def handle_sqlite_errors(func):
@@ -185,6 +199,51 @@ class SQLiteIO:
         self.ex('PRAGMA user_version=%s' % USER_VERSION)
         self.ex('PRAGMA foreign_keys=ON')
 
+    def write_blackboard_meta(self):
+        """Record which version of Blackboard is writing this file."""
+
+        self.ex(META_TABLE)
+        self.ex('INSERT OR REPLACE INTO blackboard_meta (key, value) '
+                'VALUES (?, ?)', (META_VERSION_KEY, constants.VERSION))
+
+    def saved_by_version(self):
+        """The version that last wrote this file, or None.
+
+        Files written by BeeRef, or by Blackboard before this was
+        recorded, simply have no such entry.
+        """
+
+        table = self.fetchone(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='blackboard_meta'")
+        if not table:
+            return None
+        row = self.fetchone(
+            'SELECT value FROM blackboard_meta WHERE key=?',
+            (META_VERSION_KEY,))
+        return row[0] if row else None
+
+    def warn_if_written_by_newer(self):
+        """Log a warning if a later version of Blackboard wrote this file.
+
+        Opening is still safe: item types this version does not know are
+        shown as error items and left untouched when saving. The board
+        will not look the way it did when it was saved, though, and that
+        is worth saying out loud.
+        """
+
+        written_by = self.saved_by_version()
+        if not written_by:
+            return
+        theirs = version_as_numbers(written_by)
+        ours = version_as_numbers(constants.VERSION)
+        if theirs and ours and theirs > ours:
+            logger.warning(
+                f'{self.filename} was saved by {constants.APPNAME} '
+                f'{written_by}, which is newer than this version '
+                f'({constants.VERSION}). Items this version does not know '
+                'are shown as errors, and kept as they are when saving.')
+
     def create_schema_on_new(self):
         if self.create_new:
             self.write_meta()
@@ -193,17 +252,26 @@ class SQLiteIO:
 
     @handle_sqlite_errors
     def read(self):
+        self.warn_if_written_by_newer()
         rows = self.fetchall(
             'SELECT items.id, type, x, y, z, scale, rotation, flip, '
             'items.data, sqlar.data '
             'FROM sqlar JOIN items on sqlar.item_id = items.id')
         # Avoid OUTER JOIN for performance reasons; fetch the items
-        # without image data separately instead
+        # without image data separately instead.
+        #
+        # Everything without image data is fetched, whatever its type. This
+        # used to list the known types instead, which lost items twice over
+        # when a file written by a newer version was opened: the unknown
+        # rows were never read, and the next save then deleted them as
+        # items that no longer existed. Reading them means the scene turns
+        # them into visible error items, and error items are preserved on
+        # save. Adding a new item type no longer needs a change here.
         rows.extend(self.fetchall(
             'SELECT items.id, type, x, y, z, scale, rotation, flip, '
             ' items.data, null as data '
             'FROM items '
-            'WHERE items.type IN ("text", "group", "draw")'))
+            'WHERE items.id NOT IN (SELECT item_id FROM sqlar)'))
         if self.worker:
             self.worker.begin_processing.emit(len(rows))
 
@@ -221,14 +289,24 @@ class SQLiteIO:
             }
 
             if data['type'] == 'pixmap':
-                item = BeePixmapItem(QtGui.QImage())
-                item.pixmap_from_bytes(row[9])
-                if item.pixmap().isNull():
-                    item = data['data']['text'] = (
-                        f'Image could not be loaded: {item.filename}\n'
+                if row[9] is None:
+                    # An image item with no matching row in the archive.
+                    # Only reachable now that items are fetched by absence
+                    # of image data rather than by type; show it as an
+                    # error instead of handing None to the image loader.
+                    data['data']['text'] = (
+                        'Image data is missing from this file.\n'
                         + IMG_LOADING_ERROR_MSG)
                     data['type'] = BeeErrorItem.TYPE
-                data['item'] = item
+                else:
+                    item = BeePixmapItem(QtGui.QImage())
+                    item.pixmap_from_bytes(row[9])
+                    if item.pixmap().isNull():
+                        item = data['data']['text'] = (
+                            f'Image could not be loaded: {item.filename}\n'
+                            + IMG_LOADING_ERROR_MSG)
+                        data['type'] = BeeErrorItem.TYPE
+                    data['item'] = item
 
             self.scene.add_item_later(data)
 
@@ -265,6 +343,7 @@ class SQLiteIO:
                 self.write()
 
     def write_data(self):
+        self.write_blackboard_meta()
         to_delete = {row[0] for row in self.fetchall('SELECT id from ITEMS')}
         # We don't want to touch existing items that are displayed as errors:
         keep = {item.original_save_id

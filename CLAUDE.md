@@ -76,11 +76,13 @@ and the association in pure `cmd`/`reg` — no admin rights, no Python, no
 PowerShell policy to fight. It deliberately leaves `.bee` alone so a stock
 BeeRef install keeps its own files.
 
-**Two-machine hazard.** `fileio/sql.py` selects non-image items with an explicit
-`WHERE items.type IN (…)` list, so item types it does not know are dropped
-**silently** on load. A board saved by a newer build can therefore lose content
-in an older one. Until the loader warns instead of discarding, keep the other
-PC updated before opening boards written elsewhere.
+**Opening a board written by a newer version is safe.** `fileio/sql.py` fetches
+items by absence of image data rather than by a list of known types, so an item
+this version does not understand still loads — as a red error item, which the
+save path then leaves untouched in the file. Every save also records the writing
+version in a `blackboard_meta` table, and opening a file written by a later
+version logs a warning. Do not reintroduce a type list in that query: listing
+known types is what silently deleted groups and drawings twice before.
 
 ## Codebase map
 
@@ -104,7 +106,7 @@ Scope both commands explicitly. `setup.cfg` excludes only `squashfs-root`,
 `build` and `dist`, so a bare `flake8 .` lints everything inside `.venv` and
 buries real errors under thousands from third-party source.
 
-Current baseline: **1331 passing, 9 failing**. The nine fail on unmodified
+Current baseline: **1345 passing, 9 failing**. The nine fail on unmodified
 upstream code too — two in `tests/fileio/test_export_images_to_directory.py`
 about a directory not being writeable, seven in `tests/test_view.py` about
 window flags, move-window mouse handling and `\` vs `/` path separators. Treat

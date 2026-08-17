@@ -33,6 +33,21 @@ SCHEMA = [
 ]
 
 
+# Records which version of Blackboard last wrote a file. Created on demand
+# by every save rather than through a migration, and deliberately not part
+# of SCHEMA: SQLite ignores tables it is not asked about, so a version that
+# knows nothing about this table still opens the file normally.
+META_TABLE = """
+    CREATE TABLE IF NOT EXISTS blackboard_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+"""
+
+# Key used in the table above
+META_VERSION_KEY = 'saved_by_version'
+
+
 MIGRATIONS = {
     2: [
         "ALTER TABLE items ADD COLUMN data JSON",
