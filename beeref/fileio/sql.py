@@ -287,8 +287,18 @@ class SQLiteIO:
                 if self.worker.canceled:
                     break
         self.delete_items(to_delete)
-        self.ex('VACUUM')
+        # Everything above is one transaction, committed here. Committing
+        # per item makes saving a large file needlessly slow.
         self.connection.commit()
+
+        if to_delete:
+            # Reclaim the space the removed items took up. This rewrites
+            # the whole file, so it is only worth doing when something
+            # was actually deleted.
+            logger.debug(f'Vacuuming after deleting {len(to_delete)} items')
+            self.ex('VACUUM')
+            self.connection.commit()
+
         if self.worker:
             self.worker.finished.emit(self.filename, [])
 
@@ -296,7 +306,6 @@ class SQLiteIO:
         to_delete = [(pk,) for pk in to_delete]
         self.exmany('DELETE FROM items WHERE id=?', to_delete)
         self.exmany('DELETE FROM sqlar WHERE item_id=?', to_delete)
-        self.connection.commit()
 
     def insert_item(self, item):
         self.ex(
@@ -315,7 +324,6 @@ class SQLiteIO:
                 'INSERT INTO sqlar (item_id, name, mode, sz, data) '
                 'VALUES (?, ?, ?, ?, ?)',
                 (item.save_id, name, 0o644, len(pixmap), pixmap))
-        self.connection.commit()
 
     def update_item(self, item):
         """Update item data.
@@ -331,4 +339,3 @@ class SQLiteIO:
              item.rotation(), item.flip(),
              json.dumps(item.get_save_data()),
              item.save_id))
-        self.connection.commit()
