@@ -15,13 +15,17 @@ launch and behave normally.
 ## Environment
 
 - Windows, PowerShell.
-- Python 3.11 in a virtualenv at `.venv` (the system Python is 3.14, which BeeRef
-  does **not** support — never install into it).
-- Already installed editable: `pip install -e .`
-- Activate with `.venv\Scripts\activate`, then run the app with `beeref`.
+- Python 3.11 in a virtualenv at `.venv`. `pyproject.toml` requires
+  `>=3.9,<3.13`, so the system Python (3.13 on this machine) will **not** work —
+  never install into it. Rebuild the venv with `py -3.11 -m venv .venv`.
+- Already installed editable: `pip install -e . -r requirements\dev.txt`
+- Activate with `.venv\Scripts\activate`, then run the app with `beeref`, or
+  `python -m beeref` if an Application Control policy blocks the venv's exe.
   The terminal stays busy while the app runs; errors and log output appear there.
-- Repo path contains spaces (`...\Desktop\BV Ref\beeref`). If PyInstaller ever
-  misbehaves, that is the first suspect.
+- Repo path contains spaces (`...\Desktop\Blackboard\BV Ref\beeref`). If
+  PyInstaller ever misbehaves, that is the first suspect.
+- A venv copied from another machine does not work — `pyvenv.cfg` holds absolute
+  paths to the interpreter it was built from. Rebuild it instead.
 
 ## Git
 
@@ -47,8 +51,18 @@ launch and behave normally.
 - `beeref/assets/` — icons and images.
 - `Blackboard.spec` — PyInstaller build spec (executable name and icon).
 
-Checks available: `pytest --cov .` for tests, `flake8 .` for style. Run them
-before committing; existing tests must keep passing.
+Checks available: `pytest tests` for tests, `flake8 beeref tests` for style. Run
+them before committing; existing tests must keep passing.
+
+Scope both commands explicitly. `setup.cfg` excludes only `squashfs-root`,
+`build` and `dist`, so a bare `flake8 .` lints everything inside `.venv` and
+buries real errors under thousands from third-party source.
+
+Current baseline: **1331 passing, 9 failing**. The nine fail on unmodified
+upstream code too — two in `tests/fileio/test_export_images_to_directory.py`
+about a directory not being writeable, seven in `tests/test_view.py` about
+window flags, move-window mouse handling and `\` vs `/` path separators. Treat
+that as the pass mark; anything beyond those nine is a real regression.
 
 ## Planned features, in intended order
 
@@ -89,11 +103,9 @@ click**. Plain URL detection is enough; opening should go through
 with text edit mode.
 
 ### 7. Text highlighting
-**Open question — ask before implementing.** If highlighting applies to a whole
-text item, it is the same mechanism as feature 5. If it must apply to selected
-words within a note, the text items have to move from plain text to rich text,
-which changes how text is stored in the `.bee` file and requires formatting UI.
-Clarify which is wanted, and state the cost of the rich-text version.
+**Done.** Resolved in favour of the rich-text version: text items store HTML
+(`items.py` keeps an `html` key, `commands.ChangeText` handles undo/redo), so
+highlighting applies to selected words within a note rather than the whole item.
 
 ### 8. Grouping with Ctrl+G
 BeeRef has no concept of groups. This touches selection, the custom transform
