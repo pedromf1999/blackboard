@@ -70,11 +70,22 @@ version identifies exactly the released code), then:
 
 It checks style, runs the tests against the baseline, builds, packages
 `dist\Blackboard-<version>.zip`, installs that same package locally, and tags
-the commit `v<version>`. The zip is the only file the other computer needs: it
-holds `Install.cmd` plus `app\Blackboard.exe`, and `Install.cmd` does the copy
-and the association in pure `cmd`/`reg` — no admin rights, no Python, no
-PowerShell policy to fight. It deliberately leaves `.bee` alone so a stock
-BeeRef install keeps its own files.
+the commit `v<version>`. It deliberately stops there: publishing is a separate,
+explicit step, so a build can never publish by accident.
+
+    git push origin bvref --tags
+    gh release create v<version> dist\Blackboard-<version>.zip --title "Blackboard <version>"
+
+`origin` is the private repo `pedromf1999/blackboard`; `upstream` is BeeRef,
+which cannot be pushed to. The release notes are the only place a change gets
+described in plain language for the other computer, so say what changed and how
+to install — not what the commits did.
+
+The zip is the only file the other computer needs: it holds `Install.cmd` plus
+`app\Blackboard.exe`, and `Install.cmd` does the copy and the association in
+pure `cmd`/`reg` — no admin rights, no Python, no PowerShell policy to fight.
+It deliberately leaves `.bee` alone so a stock BeeRef install keeps its own
+files.
 
 **Opening a board written by a newer version is safe.** `fileio/sql.py` fetches
 items by absence of image data rather than by a list of known types, so an item
