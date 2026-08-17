@@ -323,6 +323,11 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     PADDING = 20
     # Width of the border shown when the group is a drop target
     DROP_BORDER_SIZE = 4
+    # The box's rounded corners, as a fraction of its shorter side. A
+    # fixed radius does not read as the same shape at different sizes: on
+    # a large box it looks almost square, on a small one like a lozenge.
+    # A fraction makes every group look like the same box, scaled.
+    CORNER_RADIUS_FRACTION = 0.04
 
     def __init__(self, box_color=None, locked=False,
                  created=None, modified=None, **kwargs):
@@ -443,10 +448,23 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
 
         return self.rect().contains(self.mapFromScene(pos))
 
+    def corner_radius(self):
+        """The corner radius to draw the box with at its current size.
+
+        Proportional to the shorter side, so the corners keep their
+        weight relative to the box however big it grows, with
+        ``CORNER_RADIUS`` as a floor for very small groups.
+        """
+
+        rect = self.rect()
+        shorter = min(rect.width(), rect.height())
+        return max(CORNER_RADIUS, shorter * self.CORNER_RADIUS_FRACTION)
+
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
-        painter.drawRoundedRect(self.rect(), CORNER_RADIUS, CORNER_RADIUS)
+        radius = self.corner_radius()
+        painter.drawRoundedRect(self.rect(), radius, radius)
         if self.drop_target:
             self.paint_drop_target(painter)
         self.paint_selectable(painter, option, widget)
@@ -463,12 +481,14 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             int(self.fixed_length_for_viewport(self.DROP_BORDER_SIZE)))
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         painter.setPen(pen)
-        # Inset by half the pen width so the border stays inside the box
+        # Inset by half the pen width so the border stays inside the box.
+        # The radius shrinks by the same amount, so the border stays
+        # concentric with the corner it sits inside.
+        inset = pen.width() / 2
+        radius = max(0, self.corner_radius() - inset)
         painter.drawRoundedRect(
-            self.rect().adjusted(
-                pen.width() / 2, pen.width() / 2,
-                -pen.width() / 2, -pen.width() / 2),
-            CORNER_RADIUS, CORNER_RADIUS)
+            self.rect().adjusted(inset, inset, -inset, -inset),
+            radius, radius)
 
     def create_copy(self):
         item = BeeGroupItem(box_color=self.box_color.getRgb(),

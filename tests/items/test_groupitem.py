@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from beeref.constants import CORNER_RADIUS
 from beeref.items import BeeGroupItem, BeeTextItem, item_registry
 
 
@@ -249,3 +250,34 @@ def test_get_save_data_without_group(view):
     item = BeeTextItem('foo')
     view.scene.addItem(item)
     assert 'parent_group' not in item.get_save_data()
+
+
+def test_corner_radius_grows_with_the_box(view):
+    """A big group must not end up looking square-cornered."""
+
+    small, _ = make_group(view, (0, 0))
+    big, _ = make_group(view, (0, 0), (2000, 2000))
+    assert big.corner_radius() > small.corner_radius()
+
+
+def test_corner_radius_is_proportional_to_the_shorter_side(qapp):
+    group = BeeGroupItem()
+    group.setRect(0, 0, 4000, 1000)
+    assert group.corner_radius() == 1000 * group.CORNER_RADIUS_FRACTION
+
+
+def test_corner_radius_has_a_floor_for_tiny_groups(qapp):
+    group = BeeGroupItem()
+    group.setRect(0, 0, 10, 10)
+    assert group.corner_radius() == CORNER_RADIUS
+
+
+@patch('beeref.selection.SelectableMixin.paint_selectable')
+def test_paint_uses_the_proportional_radius(selectable_mock, qapp):
+    group = BeeGroupItem()
+    group.setRect(0, 0, 2000, 2000)
+    painter = MagicMock()
+    group.paint(painter, MagicMock(), 'widget')
+    args = painter.drawRoundedRect.call_args_list[0][0]
+    assert args[1] == group.corner_radius()
+    assert args[2] == group.corner_radius()
