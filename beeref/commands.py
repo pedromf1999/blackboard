@@ -112,6 +112,37 @@ class ScaleItemsBy(QtGui.QUndoCommand):
                           item.mapFromScene(self.anchor))
 
 
+class StretchItemsBy(QtGui.QUndoCommand):
+    """Stretch items in one direction only, from the edge handles."""
+
+    def __init__(self, items, factor, vertical, anchor,
+                 ignore_first_redo=False):
+        super().__init__('Stretch items')
+        self.items = list(items)
+        self.factor = factor
+        self.vertical = vertical
+        self.anchor = anchor
+        self.ignore_first_redo = ignore_first_redo
+
+    def apply(self, factor):
+        for item in self.items:
+            x, y = item.stretch
+            item_anchor = item.mapFromScene(self.anchor)
+            if self.vertical:
+                item.set_stretch(x, y * factor, item_anchor)
+            else:
+                item.set_stretch(x * factor, y, item_anchor)
+
+    def redo(self):
+        if self.ignore_first_redo:
+            self.ignore_first_redo = False
+            return
+        self.apply(self.factor)
+
+    def undo(self):
+        self.apply(1 / self.factor)
+
+
 class RotateItemsBy(QtGui.QUndoCommand):
     """Rotate items by a given delta around the given anchor."""
 

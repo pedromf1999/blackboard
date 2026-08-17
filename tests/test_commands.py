@@ -173,6 +173,64 @@ def test_scale_items_by_ignore_first_redo(qapp):
     assert item2.pos().y() == 100
 
 
+def test_stretch_items_by(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    command = commands.StretchItemsBy(
+        [item], 2, vertical=False, anchor=QtCore.QPointF(0, 0))
+
+    command.redo()
+    assert item.stretch == (2, 1)
+    command.undo()
+    assert item.stretch == (1, 1)
+
+
+def test_stretch_items_by_vertical(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    command = commands.StretchItemsBy(
+        [item], 3, vertical=True, anchor=QtCore.QPointF(0, 0))
+
+    command.redo()
+    assert item.stretch == (1, 3)
+    command.undo()
+    assert item.stretch == (1, 1)
+
+
+def test_stretch_items_by_ignore_first_redo(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    command = commands.StretchItemsBy(
+        [item], 2, vertical=False, anchor=QtCore.QPointF(0, 0),
+        ignore_first_redo=True)
+
+    command.redo()
+    assert item.stretch == (1, 1)
+    command.redo()
+    assert item.stretch == (2, 1)
+
+
+def test_stretch_keeps_the_flip(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    item.do_flip()
+
+    commands.StretchItemsBy(
+        [item], 2, vertical=False, anchor=QtCore.QPointF(0, 0)).redo()
+    assert item.stretch == (2, 1)
+    assert item.flip() == -1
+
+
+def test_flip_keeps_the_stretch(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    item.set_stretch(2, 3)
+
+    item.do_flip()
+    assert item.stretch == (2, 3)
+    assert item.flip() == -1
+
+
 def test_rotate_items_by(qapp):
     item1 = BeePixmapItem(QtGui.QImage())
     item1.setRotation(0)

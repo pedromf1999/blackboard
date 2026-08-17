@@ -116,6 +116,11 @@ class BeeItemMixin(SelectableMixin):
         data = self.get_extra_save_data()
         if self.name:
             data['name'] = self.name
+        stretch = self.stretch
+        if stretch != (1, 1):
+            # Only written when the item has been stretched, so files
+            # without it are unaffected
+            data['stretch'] = list(stretch)
         parent = self.parentItem()
         if getattr(parent, 'TYPE', None) == 'group':
             data['parent_group'] = parent.save_id
@@ -131,6 +136,9 @@ class BeeItemMixin(SelectableMixin):
         self.setRotation(kwargs.get('rotation', self.rotation()))
         if kwargs.get('flip', 1) != self.flip():
             self.do_flip()
+        stretch = kwargs.get('data', {}).get('stretch')
+        if stretch:
+            self.set_stretch(*stretch)
 
 
 @register_item

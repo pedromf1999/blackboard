@@ -87,14 +87,35 @@ class BaseItemMixin:
 
     def flip(self):
         """Returns the flip value (1 or -1)"""
-        # We use the transformation matrix only for flipping, so checking
-        # the x scale is enough
-        return self.transform().m11()
+        # The transformation matrix carries the flip and the stretch,
+        # so the flip is the direction of the x scale
+        return -1.0 if self.transform().m11() < 0 else 1.0
+
+    @property
+    def stretch(self):
+        """How far the item is stretched, as (horizontal, vertical).
+
+        Scaling keeps an item's proportions; stretching is what the
+        edge handles do, and is kept separately so the two don't
+        interfere with each other.
+        """
+
+        transform = self.transform()
+        return (abs(transform.m11()), abs(transform.m22()))
+
+    @with_anchor
+    def set_stretch(self, x, y):
+        """Stretch the item, keeping whichever way it is flipped."""
+
+        logger.debug(f'Setting stretch for {self} to {x}, {y}')
+        self.prepareGeometryChange()
+        self.setTransform(QtGui.QTransform.fromScale(self.flip() * x, y))
 
     @with_anchor
     def do_flip(self, vertical=False):
         """Flips the item."""
-        self.setTransform(QtGui.QTransform.fromScale(-self.flip(), 1))
+        x, y = self.stretch
+        self.setTransform(QtGui.QTransform.fromScale(-self.flip() * x, y))
         if vertical:
             self.setRotation(self.rotation() + 180)
 
@@ -195,7 +216,7 @@ class SelectableMixin(BaseItemMixin):
 
     SCALE_MODE = 1
     ROTATE_MODE = 2
-    FLIP_MODE = 3
+    STRETCH_MODE = 3
 
     def init_selectable(self):
         self.setAcceptHoverEvents(True)
@@ -259,7 +280,7 @@ class SelectableMixin(BaseItemMixin):
                     painter, self.get_scale_bounds(corner), 0, 0, 255)
                 self.draw_debug_shape(
                     painter, self.get_rotate_bounds(corner), 0, 255, 255)
-            for edge in self.get_flip_bounds():
+            for edge in self.get_edge_bounds():
                 self.draw_debug_shape(painter, edge['rect'], 255, 255, 0)
             self.draw_debug_shape(
                 painter, self.select_handle_free_center(), 255, 0, 255)
@@ -339,8 +360,8 @@ class SelectableMixin(BaseItemMixin):
         # https://bugreports.qt.io/browse/QTBUG-57567
         return path - self.get_scale_bounds(corner, margin=0.001)
 
-    def get_flip_bounds(self):
-        """The interactactable shape of the flip handles.
+    def get_edge_bounds(self):
+        """The interactable shape of the edge resize handles.
 
         These stretch around the edge of the item filling the areas
         between the scale handles, e.g. for the bottom right corner:
@@ -364,7 +385,7 @@ class SelectableMixin(BaseItemMixin):
                     origin.y() - outer_margin,
                     self.width - 2 * inner_margin,
                     outer_margin + inner_margin),
-                'flip_v': True,
+                'vertical': True,
             },
             # bottom:
             {
@@ -373,7 +394,7 @@ class SelectableMixin(BaseItemMixin):
                     origin.y() + self.height - inner_margin,
                     self.width - 2 * inner_margin,
                     outer_margin + inner_margin),
-                'flip_v': True,
+                'vertical': True,
             },
             # left:
             {
@@ -382,7 +403,7 @@ class SelectableMixin(BaseItemMixin):
                     origin.y() + inner_margin,
                     outer_margin + inner_margin,
                     self.height - 2 * inner_margin),
-                'flip_v': False,
+                'vertical': False,
             },
             # right:
             {
@@ -391,7 +412,7 @@ class SelectableMixin(BaseItemMixin):
                     origin.y() + inner_margin,
                     outer_margin + inner_margin,
                     self.height - 2 * inner_margin),
-                'flip_v': False,
+                'vertical': False,
             }
         ]
 
@@ -439,12 +460,9 @@ class SelectableMixin(BaseItemMixin):
             elif self.get_rotate_bounds(corner).contains(event.pos()):
                 self.set_cursor(BeeAssets().cursor_rotate)
                 return
-        for edge in self.get_flip_bounds():
+        for edge in self.get_edge_bounds():
             if edge['rect'].contains(event.pos()):
-                if self.get_edge_flips_v(edge):
-                    self.set_cursor(BeeAssets().cursor_flip_v)
-                else:
-                    self.set_cursor(BeeAssets().cursor_flip_h)
+                self.set_cursor(self.get_edge_stretch_cursor(edge))
                 return
 
         self.unset_cursor()
@@ -513,19 +531,69 @@ class SelectableMixin(BaseItemMixin):
                         item.rotate_orig_degrees = item.rotation()
                     event.accept()
                     return
-                # Check if we are in one of the flip edges:
-                for edge in self.get_flip_bounds():
-                    if edge['rect'].contains(event.pos()):
-                        self.active_mode = self.FLIP_MODE
-                        event.accept()
-                        self.scene().undo_stack.push(
-                            commands.FlipItems(
-                                self.selection_action_items(),
-                                self.center_scene_coords,
-                                vertical=self.get_edge_flips_v(edge)))
-                        return
+            # Check if we are on one of the edges, which stretch the
+            # item in one direction only
+            for edge in self.get_edge_bounds():
+                if edge['rect'].contains(event.pos()):
+                    self.start_stretch(edge)
+                    event.accept()
+                    return
 
         super().mousePressEvent(event)
+
+    def start_stretch(self, edge):
+        """Begin stretching the item by one of its edges.
+
+        The opposite edge stays put, so the item grows away from it.
+        """
+
+        self.active_mode = self.STRETCH_MODE
+        self.stretch_vertical = edge['vertical']
+        rect = self.bounding_rect_unselected()
+        if self.stretch_vertical:
+            # Dragging the top or bottom edge
+            near_bottom = edge['rect'].center().y() > self.center.y()
+            fixed = rect.top() if near_bottom else rect.bottom()
+            anchor = QtCore.QPointF(self.center.x(), fixed)
+            axis = QtCore.QPointF(0, 1 if near_bottom else -1)
+        else:
+            near_right = edge['rect'].center().x() > self.center.x()
+            fixed = rect.left() if near_right else rect.right()
+            anchor = QtCore.QPointF(fixed, self.center.y())
+            axis = QtCore.QPointF(1 if near_right else -1, 0)
+
+        self.event_anchor = self.mapToScene(anchor)
+        # The direction the item grows in, as seen on the canvas
+        origin = self.mapToScene(QtCore.QPointF(0, 0))
+        direction = self.mapToScene(axis) - origin
+        length = math.sqrt(QtCore.QPointF.dotProduct(direction, direction))
+        self.stretch_axis = direction / length
+        for item in self.selection_action_items():
+            item.stretch_orig = item.stretch
+
+    def get_stretch_factor(self, event):
+        """How much the item has been stretched by the current drag."""
+
+        moved = event.scenePos() - self.event_anchor
+        distance = QtCore.QPointF.dotProduct(self.stretch_axis, moved)
+        size = self.height if self.stretch_vertical else self.width
+        # The size the item would have without any stretch
+        unstretched = size * self.scale() * self.parent_scale()
+        if unstretched == 0:
+            return 1
+        index = 1 if self.stretch_vertical else 0
+        factor = distance / unstretched / self.stretch_orig[index]
+        # Items can't be turned inside out by dragging past the anchor
+        return max(factor, 0.05)
+
+    def apply_stretch(self, factor):
+        for item in self.selection_action_items():
+            x, y = item.stretch_orig
+            anchor = item.mapFromScene(self.event_anchor)
+            if self.stretch_vertical:
+                item.set_stretch(x, y * factor, anchor)
+            else:
+                item.set_stretch(x * factor, y, anchor)
 
     def get_scale_factor(self, event):
         """Get the scale factor for the current mouse movement."""
@@ -606,14 +674,15 @@ class SelectableMixin(BaseItemMixin):
                 return (Qt.CursorShape.SizeFDiagCursor if flipped
                         else Qt.CursorShape.SizeBDiagCursor)
 
-    def get_edge_flips_v(self, edge):
-        """Returns ``True`` if the given edge invokes a horizontal flip,
-        ``False`` if it invokes a vertical flip."""
+    def get_edge_stretch_cursor(self, edge):
+        """The cursor for an edge, following how the item is turned."""
 
+        vertical = edge['vertical']
         if 45 < self.rotation() < 135 or 225 < self.rotation() < 315:
-            return not edge['flip_v']
-        else:
-            return edge['flip_v']
+            vertical = not vertical
+        if vertical:
+            return QtGui.QCursor(Qt.CursorShape.SizeVerCursor)
+        return QtGui.QCursor(Qt.CursorShape.SizeHorCursor)
 
     def mouseMoveEvent(self, event):
         if (event.scenePos() - self.event_start).manhattanLength() > 5:
@@ -636,10 +705,8 @@ class SelectableMixin(BaseItemMixin):
                     item.mapFromScene(self.event_anchor))
             event.accept()
             return
-        if self.active_mode == self.FLIP_MODE:
-            # We have already flipped on MousePress, but we
-            # still need to accept the event here as to not
-            # initiate an item move
+        if self.active_mode == self.STRETCH_MODE:
+            self.apply_stretch(self.get_stretch_factor(event))
             event.accept()
             return
 
@@ -669,15 +736,19 @@ class SelectableMixin(BaseItemMixin):
             event.accept()
             self.active_mode = None
             return
-        elif self.active_mode == self.FLIP_MODE:
-            for edge in self.get_flip_bounds():
-                if edge['rect'].contains(event.pos()):
-                    # We have already flipped on MousePress, but we
-                    # still need to accept the event here as to not
-                    # initiate an item move
-                    event.accept()
-                    self.active_mode = None
-                    return
+        elif self.active_mode == self.STRETCH_MODE:
+            factor = self.get_stretch_factor(event)
+            if factor != 1:
+                self.scene().undo_stack.push(
+                    commands.StretchItemsBy(
+                        self.selection_action_items(),
+                        factor,
+                        self.stretch_vertical,
+                        self.event_anchor,
+                        ignore_first_redo=True))
+            event.accept()
+            self.active_mode = None
+            return
         self.active_mode = None
         super().mouseReleaseEvent(event)
 
