@@ -64,6 +64,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.settings = BeeSettings()
         self.keyboard_settings = KeyboardSettings()
         self.welcome_overlay = widgets.welcome_overlay.WelcomeOverlay(self)
+        # Built early: a resize can arrive before the end of setup
+        self.shortcuts_hint = widgets.shortcuts_hint.ShortcutsHint(self)
 
         # Set before the actions are built, since the grid toggle acts
         # on it as soon as it is restored from the settings
@@ -116,6 +118,9 @@ class BeeGraphicsView(MainControlsMixin,
                 self.do_insert_images(commandline_args.filenames)
 
         self.update_window_title()
+
+        # A reminder of the shortcuts, until the user dismisses it
+        self.shortcuts_hint.show_if_wanted()
 
     @property
     def filename(self):
@@ -1305,6 +1310,8 @@ class BeeGraphicsView(MainControlsMixin,
         super().resizeEvent(event)
         self.recalc_scene_rect()
         self.welcome_overlay.resize(self.size())
+        if self.shortcuts_hint.isVisible():
+            self.shortcuts_hint.reposition()
 
     def keyPressEvent(self, event):
         if self.keyPressEventMainControls(event):
