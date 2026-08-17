@@ -129,7 +129,9 @@ New-Item -ItemType Directory -Path "$staging\app" -Force | Out-Null
 # copies it to a fixed path, and a fixed path cannot carry a version.
 Copy-Item $builtExe "$staging\app\Blackboard.exe"
 Copy-Item 'tools\Install.cmd' "$staging\Install.cmd"
-Set-Content -Path "$staging\app\version.txt" -Value $version -Encoding utf8 -NoNewline
+# ASCII, not utf8: PowerShell 5.1 writes a byte-order mark with utf8, and
+# cmd would read those bytes as part of the version string.
+Set-Content -Path "$staging\app\version.txt" -Value $version -Encoding ascii -NoNewline
 
 $zip = "dist\Blackboard-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
