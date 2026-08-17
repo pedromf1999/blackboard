@@ -259,6 +259,20 @@ class BeeGraphicsView(MainControlsMixin,
             if getattr(item, 'TYPE', None) == 'text':
                 return item
 
+    def get_item_at(self, point):
+        """The topmost item at the given view position, if any.
+
+        Groups themselves are skipped, so this finds what is inside
+        them rather than the group.
+        """
+
+        for item in self.scene.items(self.mapToScene(point)):
+            if not hasattr(item, 'save_id'):
+                continue
+            if getattr(item, 'TYPE', None) == BeeGroupItem.TYPE:
+                continue
+            return item
+
     def get_group_at(self, point):
         """The group at the given view position, if any.
 
@@ -287,6 +301,16 @@ class BeeGraphicsView(MainControlsMixin,
                 self.scene.deselect_all_items()
                 item.setSelected(True)
             self.text_context_menu.exec(self.mapToGlobal(point))
+            return
+
+        # An item inside a group offers its own actions, such as crop
+        # and the transforms, with the group opened up so they apply.
+        # The full menu still holds the group's own actions.
+        item = self.get_item_at(point)
+        group = self.scene.get_group_ancestor(item) if item else None
+        if item is not None and group is not None and not group.locked:
+            self.scene.enter_group(group, item)
+            self.context_menu.exec(self.mapToGlobal(point))
             return
 
         group = self.get_group_at(point)

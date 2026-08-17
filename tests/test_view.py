@@ -1552,6 +1552,92 @@ def test_on_context_menu_over_text_inside_locked_group(view):
     assert view.scene.active_group is None
 
 
+def test_on_context_menu_over_image_inside_group(view):
+    """The image's own actions must be reachable inside a group."""
+
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    view.context_menu = MagicMock()
+    view.group_context_menu = MagicMock()
+
+    with patch.object(view, 'get_item_at', return_value=pixmapitem):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+
+    view.context_menu.exec.assert_called_once()
+    view.group_context_menu.exec.assert_not_called()
+    assert view.scene.active_group is group
+    assert pixmapitem.isSelected() is True
+    # The image's own actions now apply to it
+    assert view.scene.has_single_image_selection() is True
+
+
+def test_on_context_menu_over_image_inside_locked_group(view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    group.locked = True
+    view.context_menu = MagicMock()
+    view.group_context_menu = MagicMock()
+
+    with patch.object(view, 'get_item_at', return_value=pixmapitem), \
+            patch.object(view, 'get_group_at', return_value=group):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+
+    view.group_context_menu.exec.assert_called_once()
+    view.context_menu.exec.assert_not_called()
+    assert view.scene.active_group is None
+
+
+def test_on_context_menu_over_the_group_box(view):
+    """Clicking the box itself still offers the group's actions."""
+
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    view.context_menu = MagicMock()
+    view.group_context_menu = MagicMock()
+
+    with patch.object(view, 'get_item_at', return_value=None), \
+            patch.object(view, 'get_group_at', return_value=group):
+        view.on_context_menu(QtCore.QPoint(0, 0))
+
+    view.group_context_menu.exec.assert_called_once()
+
+
+def test_get_item_at_skips_groups(view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+
+    with patch.object(view.scene, 'items',
+                      return_value=[pixmapitem, group]):
+        assert view.get_item_at(QtCore.QPoint(0, 0)) is pixmapitem
+    with patch.object(view.scene, 'items', return_value=[group]):
+        assert view.get_item_at(QtCore.QPoint(0, 0)) is None
+
+
+def test_image_inside_group_can_be_cropped(view):
+    pixmapitem = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(pixmapitem)
+    pixmapitem.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+
+    view.scene.enter_group(group, pixmapitem)
+    view.on_action_crop()
+    assert view.scene.crop_item is pixmapitem
+    assert pixmapitem.parentItem() is group
+
+
 def test_get_text_item_at_ignores_non_text_items(view):
     pixmapitem = BeePixmapItem(QtGui.QImage())
     view.scene.addItem(pixmapitem)
