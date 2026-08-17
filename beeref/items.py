@@ -1217,6 +1217,56 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
         super().mousePressEvent(event)
 
+    def scale_font_size(self, factor, minimum, maximum):
+        """Multiply the size of the selected text, or of all of it.
+
+        Every run of text is scaled by its own size, so differences
+        within the selection survive: a heading stays bigger than the
+        body text around it. Setting one size for the whole selection,
+        as a plain point size does, would flatten them together.
+        """
+
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            start = cursor.selectionStart()
+            end = cursor.selectionEnd()
+        else:
+            start = 0
+            end = self.document().characterCount() - 1
+
+        # Collect first, edit afterwards: editing while walking the
+        # document invalidates the fragments being walked
+        edits = []
+        block = self.document().findBlock(start)
+        while block.isValid() and block.position() < end:
+            it = block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                it += 1
+                if not fragment.isValid():
+                    continue
+                frag_start = fragment.position()
+                frag_end = frag_start + fragment.length()
+                if frag_end <= start or frag_start >= end:
+                    continue
+                size = fragment.charFormat().fontPointSize()
+                if size <= 0:
+                    # Text that was never sized reports zero; QFontInfo
+                    # resolves what it is actually being drawn at
+                    size = QtGui.QFontInfo(self.font()).pointSize()
+                edits.append((max(frag_start, start), min(frag_end, end),
+                              min(maximum, max(minimum, size * factor))))
+            block = block.next()
+
+        edit_cursor = QtGui.QTextCursor(self.document())
+        for frag_start, frag_end, size in edits:
+            edit_cursor.setPosition(frag_start)
+            edit_cursor.setPosition(
+                frag_end, QtGui.QTextCursor.MoveMode.KeepAnchor)
+            charformat = QtGui.QTextCharFormat()
+            charformat.setFontPointSize(size)
+            edit_cursor.mergeCharFormat(charformat)
+
     def apply_char_format(self, charformat):
         """Apply the given char format to the current selection, or to the
         whole text if nothing is selected."""

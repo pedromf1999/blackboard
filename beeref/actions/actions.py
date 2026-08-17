@@ -329,9 +329,15 @@ actions = ActionList([
         group='active_when_text_selection',
     ),
     Action(
-        id='text_size',
-        text='Text &Size...',
-        callback='on_action_text_size',
+        id='text_size_increase',
+        text='&Bigger Text',
+        callback='on_action_text_size_increase',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_size_decrease',
+        text='S&maller Text',
+        callback='on_action_text_size_decrease',
         group='active_when_text_selection',
     ),
     Action(

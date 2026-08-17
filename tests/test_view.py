@@ -1138,39 +1138,116 @@ def test_on_action_text_bold_without_text_selected(view):
     assert len(view.undo_stack) == 0
 
 
-@patch('PyQt6.QtWidgets.QInputDialog.getInt', return_value=(28, True))
-def test_on_action_text_size(dialog_mock, view):
+def test_on_action_text_size_increase(view):
     textitem = BeeTextItem('bigger please')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
+    before = char_format_at(textitem, 3).fontPointSize() or float(
+        textitem.font().pointSize())
 
-    view.on_action_text_size()
-    assert char_format_at(textitem, 3).fontPointSize() == 28
+    view.on_action_text_size_increase()
+    after = char_format_at(textitem, 3).fontPointSize()
+    assert after > before
     assert len(view.undo_stack) == 1
 
     view.undo_stack.undo()
-    assert char_format_at(textitem, 3).fontPointSize() != 28
+    assert char_format_at(textitem, 3).fontPointSize() != after
 
 
-@patch('PyQt6.QtWidgets.QInputDialog.getInt', return_value=(28, False))
-def test_on_action_text_size_when_cancelled(dialog_mock, view):
-    textitem = BeeTextItem('bigger please')
+def test_on_action_text_size_decrease(view):
+    textitem = BeeTextItem('smaller please')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
-    view.on_action_text_size()
-    assert len(view.undo_stack) == 0
+    view.on_action_text_size_increase()
+    bigger = char_format_at(textitem, 3).fontPointSize()
+
+    view.on_action_text_size_decrease()
+    assert char_format_at(textitem, 3).fontPointSize() < bigger
 
 
-@patch('PyQt6.QtWidgets.QInputDialog.getInt')
-def test_on_action_text_size_offers_the_current_size(dialog_mock, view):
-    dialog_mock.return_value = (20, False)
+def test_text_size_steps_are_proportional(view):
+    """Each press multiplies, so the step grows with the text."""
+
+    textitem = BeeTextItem('scale me')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.on_action_text_size_increase()
+    first = char_format_at(textitem, 3).fontPointSize()
+    view.on_action_text_size_increase()
+    second = char_format_at(textitem, 3).fontPointSize()
+
+    # Every press multiplies by the same factor, so the second press adds
+    # more points than the first one did
+    assert second / first == pytest.approx(view.TEXT_SIZE_STEP)
+    assert second - first > first - (first / view.TEXT_SIZE_STEP)
+
+
+def test_text_size_keeps_relative_sizes_within_one_item(view):
+    """A heading must stay bigger than the body text next to it."""
+
+    textitem = BeeTextItem('heading body')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    cursor = textitem.textCursor()
+    cursor.setPosition(0)
+    cursor.setPosition(7, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    charformat = QtGui.QTextCharFormat()
+    charformat.setFontPointSize(40)
+    cursor.mergeCharFormat(charformat)
+    cursor.setPosition(8)
+    cursor.setPosition(12, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    charformat = QtGui.QTextCharFormat()
+    charformat.setFontPointSize(10)
+    cursor.mergeCharFormat(charformat)
+
+    view.on_action_text_size_increase()
+    assert char_format_at(textitem, 3).fontPointSize() == 44
+    assert char_format_at(textitem, 10).fontPointSize() == 11
+
+
+def test_text_size_does_not_grow_past_the_maximum(view):
+    textitem = BeeTextItem('big')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    for _ in range(200):
+        view.on_action_text_size_increase()
+    assert char_format_at(textitem, 1).fontPointSize() == view.TEXT_SIZE_MAX
+
+
+def test_text_size_does_not_shrink_past_the_minimum(view):
+    textitem = BeeTextItem('small')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    for _ in range(200):
+        view.on_action_text_size_decrease()
+    assert char_format_at(textitem, 1).fontPointSize() == view.TEXT_SIZE_MIN
+
+
+def test_text_toolbar_shows_only_with_text_selected(view):
     textitem = BeeTextItem('some text')
     view.scene.addItem(textitem)
-    textitem.setSelected(True)
+    assert view.text_toolbar.isVisible() is False
 
-    view.on_action_text_size()
-    # The dialog starts at the size the text already has
-    assert dialog_mock.call_args[0][3] == textitem.font().pointSize()
+    textitem.setSelected(True)
+    view.on_selection_changed()
+    assert view.text_toolbar.isVisible() is True
+
+    textitem.setSelected(False)
+    view.on_selection_changed()
+    assert view.text_toolbar.isVisible() is False
+
+
+def test_text_toolbar_buttons_scale_the_text(view):
+    textitem = BeeTextItem('click me')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    before = char_format_at(textitem, 3).fontPointSize() or float(
+        textitem.font().pointSize())
+
+    view.text_toolbar.bigger.click()
+    assert char_format_at(textitem, 3).fontPointSize() > before
 
 
 @patch('PyQt6.QtWidgets.QColorDialog.getColor',

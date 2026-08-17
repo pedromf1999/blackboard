@@ -76,6 +76,11 @@ class BeeGraphicsView(MainControlsMixin,
     # Range offered when changing the size of text
     TEXT_SIZE_MIN = 4
     TEXT_SIZE_MAX = 400
+    # How much one press of the bigger/smaller buttons changes the text.
+    # A factor, not a number of points, so the step stays proportional:
+    # 10% of a heading is a lot more than 10% of a caption, which is what
+    # keeps them looking related as they are scaled.
+    TEXT_SIZE_STEP = 1.1
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -150,6 +155,11 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_toolbar = widgets.draw_toolbar.DrawToolBar(self, self)
         self.draw_toolbar.reposition()
         self.draw_toolbar.show()
+
+        # Sits under the drawing tools, and only while text is selected
+        self.text_toolbar = widgets.text_toolbar.TextToolBar(self, self)
+        self.text_toolbar.reposition(below=self.draw_toolbar)
+        self.text_toolbar.hide()
 
         # A reminder of the shortcuts, until the user dismisses it
         self.shortcuts_hint.show_if_wanted()
@@ -730,28 +740,25 @@ class BeeGraphicsView(MainControlsMixin,
             cursor.select(QtGui.QTextCursor.SelectionType.Document)
         return cursor.charFormat().fontWeight() > QtGui.QFont.Weight.Normal
 
-    def on_action_text_size(self):
-        """Change the size of the selected words, or the whole text."""
+    def scale_selected_text(self, factor):
+        """Scale the selected words, or the whole text, by a factor."""
 
         items = self.scene.selected_text_items()
         if not items:
             return
-        size, ok = QtWidgets.QInputDialog.getInt(
-            self, 'Text Size', 'Size:', self.get_text_size(items[0]),
-            self.TEXT_SIZE_MIN, self.TEXT_SIZE_MAX)
-        if not ok:
-            return
-        charformat = QtGui.QTextCharFormat()
-        charformat.setFontPointSize(size)
-        self.apply_text_char_format(items, charformat)
+        old_htmls = [item.toHtml() for item in items]
+        for item in items:
+            item.scale_font_size(
+                factor, self.TEXT_SIZE_MIN, self.TEXT_SIZE_MAX)
+        new_htmls = [item.toHtml() for item in items]
+        self.undo_stack.push(
+            commands.ChangeTextFormat(items, new_htmls, old_htmls))
 
-    def get_text_size(self, item):
-        cursor = item.textCursor()
-        if not cursor.hasSelection():
-            cursor.select(QtGui.QTextCursor.SelectionType.Document)
-        size = cursor.charFormat().fontPointSize()
-        # Text that has never been sized reports zero
-        return int(size) or int(item.font().pointSize())
+    def on_action_text_size_increase(self):
+        self.scale_selected_text(self.TEXT_SIZE_STEP)
+
+    def on_action_text_size_decrease(self):
+        self.scale_selected_text(1 / self.TEXT_SIZE_STEP)
 
     def apply_text_char_format(self, items, charformat):
         """Apply the format to the given items, as one undo step."""
@@ -1184,6 +1191,8 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_single_image_selection())
         self.actiongroup_set_enabled('active_when_text_selection',
                                      self.scene.has_text_selection())
+        if hasattr(self, 'text_toolbar'):
+            self.text_toolbar.setVisible(self.scene.has_text_selection())
 
         if self.scene.has_selection():
             item = self.scene.selectedItems(user_only=True)[0]

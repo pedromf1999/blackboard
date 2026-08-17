@@ -140,7 +140,8 @@ menu_structure = [
         'menu': TEXT_MENU,
         'items': [
             'text_bold',
-            'text_size',
+            'text_size_increase',
+            'text_size_decrease',
             MENU_SEPARATOR,
             'text_highlight_color',
             'text_box_color',

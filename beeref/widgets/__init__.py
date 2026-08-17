@@ -27,6 +27,7 @@ from beeref.widgets import (  # noqa: F401
     layers,
     settings,
     shortcuts_hint,
+    text_toolbar,
     welcome_overlay,
     color_gamut,
 )
