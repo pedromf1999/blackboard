@@ -786,11 +786,61 @@ def test_hover_leave_event(view, item):
     item.unset_cursor.assert_called_once_with()
 
 
+def press_with(item, modifier):
+    event = MagicMock()
+    event.pos.return_value = QtCore.QPointF(0, 0)
+    event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
+    event.modifiers.return_value = modifier
+    with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent'):
+        item.mousePressEvent(event)
+    return event
+
+
+def test_shift_click_adds_to_the_selection(view, item):
+    view.scene.addItem(item)
+    other = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(other)
+    other.setSelected(True)
+
+    event = press_with(item, Qt.KeyboardModifier.ShiftModifier)
+    assert item.isSelected() is True
+    # The item that was already selected stays selected
+    assert other.isSelected() is True
+    event.accept.assert_called_once()
+
+
+def test_ctrl_click_removes_from_the_selection(view, item):
+    view.scene.addItem(item)
+    item.setSelected(True)
+    other = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(other)
+    other.setSelected(True)
+
+    event = press_with(item, Qt.KeyboardModifier.ControlModifier)
+    assert item.isSelected() is False
+    assert other.isSelected() is True
+    event.accept.assert_called_once()
+
+
+def test_plain_click_is_left_to_qt(view, item):
+    view.scene.addItem(item)
+    event = MagicMock()
+    event.pos.return_value = QtCore.QPointF(0, 0)
+    event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
+    with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent') as m:
+        item.mousePressEvent(event)
+    m.assert_called_once_with(event)
+
+
 def test_mouse_press_event_just_selected(view, item):
     view.scene.addItem(item)
     event = MagicMock()
     event.pos.return_value = QtCore.QPointF(0, 0)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent') as m:
         with patch.object(item, 'bounding_rect_unselected',
                           return_value=QtCore.QRectF(0, 0, 100, 80)):
@@ -805,6 +855,7 @@ def test_mouse_press_event_small_item_inside_handle_free_center(view, item):
     event = MagicMock()
     event.pos.return_value = QtCore.QPointF(10, 10)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent') as m:
         with patch.object(item, 'bounding_rect_unselected',
                           return_value=QtCore.QRectF(0, 0, 20, 20)):
@@ -821,6 +872,7 @@ def test_mouse_press_event_topleft_scale(view, item):
     event.pos.return_value = QtCore.QPointF(2, 2)
     event.scenePos.return_value = QtCore.QPointF(-1, -1)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch.object(item, 'bounding_rect_unselected',
                       return_value=QtCore.QRectF(0, 0, 100, 80)):
         item.mousePressEvent(event)
@@ -839,6 +891,7 @@ def test_mouse_press_event_bottomright_scale(view, item):
     event.pos.return_value = QtCore.QPointF(99, 79)
     event.scenePos.return_value = QtCore.QPointF(101, 81)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch.object(item, 'bounding_rect_unselected',
                       return_value=QtCore.QRectF(0, 0, 100, 80)):
         item.mousePressEvent(event)
@@ -857,6 +910,7 @@ def test_mouse_press_event_rotate(view, item):
     event.pos.return_value = QtCore.QPointF(111, 91)
     event.scenePos.return_value = QtCore.QPointF(66, 99)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch.object(item, 'bounding_rect_unselected',
                       return_value=QtCore.QRectF(0, 0, 100, 80)):
         with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent'):
@@ -873,6 +927,7 @@ def test_mouse_press_event_flip(view, item):
     event = MagicMock()
     event.pos.return_value = QtCore.QPointF(0, 40)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     view.scene.undo_stack = MagicMock(push=MagicMock())
     with patch.object(item, 'bounding_rect_unselected',
                       return_value=QtCore.QRectF(0, 0, 100, 80)):
@@ -895,6 +950,7 @@ def test_mouse_press_event_not_in_handles(view, item):
     event = MagicMock()
     event.pos.return_value = QtCore.QPointF(50, 40)
     event.button.return_value = Qt.MouseButton.LeftButton
+    event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     with patch('PyQt6.QtWidgets.QGraphicsPixmapItem.mousePressEvent') as m:
         item.mousePressEvent(event)
         m.assert_called_once_with(event)

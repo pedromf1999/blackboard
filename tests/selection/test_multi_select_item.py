@@ -121,7 +121,9 @@ def test_mouse_press_event_when_leftclick(mouse_mock):
     item = MultiSelectItem()
     item.fit_selection_area(QtCore.QRectF(0, 0, 100, 80))
     event = MagicMock(
-        button=MagicMock(return_value=Qt.MouseButton.LeftButton))
+        button=MagicMock(return_value=Qt.MouseButton.LeftButton),
+        modifiers=MagicMock(
+            return_value=Qt.KeyboardModifier.NoModifier))
     item.mousePressEvent(event)
     event.ignore.assert_not_called()
     mouse_mock.assert_called_once_with(event)

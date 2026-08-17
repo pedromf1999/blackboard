@@ -40,6 +40,7 @@ class ShortcutsHint(QtWidgets.QWidget):
         ('Ctrl + Shift + G', 'Ungroup'),
         ('Ctrl + F  /  F3', 'Find text, and jump to the next match'),
         ('Alt + drag', 'Take an item out of its group'),
+        ('Ctrl + click', 'Open a link in a text note'),
     )
 
     def __init__(self, parent):

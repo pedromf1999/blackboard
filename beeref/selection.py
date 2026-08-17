@@ -455,6 +455,20 @@ class SelectableMixin(BaseItemMixin):
     def mousePressEvent(self, event):
         self.event_start = event.scenePos()
         self.scene().views()[0].reset_previous_transform(toggle_item=self)
+
+        if event.button() == Qt.MouseButton.LeftButton:
+            modifiers = event.modifiers()
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:
+                # Add to the selection
+                self.setSelected(True)
+                event.accept()
+                return
+            if modifiers & Qt.KeyboardModifier.ControlModifier:
+                # Take out of the selection
+                self.setSelected(False)
+                event.accept()
+                return
+
         if not self.isSelected():
             # User has just selected this item with this click; don't
             # activate any transformations yet
@@ -728,11 +742,13 @@ class MultiSelectItem(SelectableMixin,
             self.setTransform(QtGui.QTransform.fromScale(1, 1))
 
     def mousePressEvent(self, event):
+        modifiers = (Qt.KeyboardModifier.ShiftModifier
+                     | Qt.KeyboardModifier.ControlModifier)
         if (event.button() == Qt.MouseButton.LeftButton
-                and event.modifiers() == Qt.KeyboardModifier.ControlModifier):
-            # We still need to be able to select additional images
-            # within/"under" the multi select rectangle, so let ctrl+click
-            # events pass through
+                and event.modifiers() & modifiers):
+            # We still need to be able to add items to, or take them out
+            # of, the selection while the multi select rectangle covers
+            # them, so let those clicks pass through
             event.ignore()
             return
 
