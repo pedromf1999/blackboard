@@ -147,15 +147,13 @@ if ($running) {
     Write-Host "   Blackboard is running, so the local install was skipped." -ForegroundColor Yellow
     Write-Host "   Close it and run $staging\Install.cmd yourself."
 } else {
-    # Run it from inside the staging folder: the path then has no spaces to
-    # quote, which keeps cmd.exe happy. /nopause skips its "press any key".
-    Push-Location $staging
-    try {
-        $installOutput = & cmd.exe /c 'Install.cmd /nopause'
-        $installExit = $LASTEXITCODE
-    } finally {
-        Pop-Location
-    }
+    # Call it by absolute path. Set-Location and Push-Location move
+    # PowerShell's own location but not the working directory that a child
+    # process inherits, so a bare 'Install.cmd' would not be found.
+    # /nopause skips its "press any key" prompt.
+    $installPath = (Resolve-Path "$staging\Install.cmd").Path
+    $installOutput = & cmd.exe /c call "$installPath" /nopause
+    $installExit = $LASTEXITCODE
     $installOutput | ForEach-Object { Write-Host "   $_" }
     if ($installExit -ne 0) { Fail "the local install failed" }
 }
