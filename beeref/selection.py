@@ -456,7 +456,12 @@ class SelectableMixin(BaseItemMixin):
         self.event_start = event.scenePos()
         self.scene().views()[0].reset_previous_transform(toggle_item=self)
 
-        if event.button() == Qt.MouseButton.LeftButton:
+        selectable = bool(
+            self.flags()
+            & QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        if selectable and event.button() == Qt.MouseButton.LeftButton:
+            # Items inside a group aren't selectable, and must be left
+            # alone here so that the click reaches the group itself
             modifiers = event.modifiers()
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
                 # Add to the selection

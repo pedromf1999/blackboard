@@ -2,7 +2,7 @@ import math
 from pytest import approx, mark
 from unittest.mock import patch, MagicMock
 
-from PyQt6 import QtCore, QtGui
+from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref.assets import BeeAssets
@@ -821,6 +821,27 @@ def test_ctrl_click_removes_from_the_selection(view, item):
     assert item.isSelected() is False
     assert other.isSelected() is True
     event.accept.assert_called_once()
+
+
+def test_shift_click_on_a_grouped_item_falls_through(view, item):
+    """The click has to reach the group, which is what is selectable."""
+
+    view.scene.addItem(item)
+    item.setFlag(
+        QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+
+    event = press_with(item, Qt.KeyboardModifier.ShiftModifier)
+    # Not swallowed, so the group underneath gets its turn
+    event.accept.assert_not_called()
+
+
+def test_ctrl_click_on_a_grouped_item_falls_through(view, item):
+    view.scene.addItem(item)
+    item.setFlag(
+        QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+
+    event = press_with(item, Qt.KeyboardModifier.ControlModifier)
+    event.accept.assert_not_called()
 
 
 def test_plain_click_is_left_to_qt(view, item):
