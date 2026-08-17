@@ -319,8 +319,12 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     TYPE = 'group'
 
     DEFAULT_BOX_COLOR = (52, 52, 52, 255)
-    # Space between the box edge and the items inside it
+    # Smallest space between the box edge and the items inside it
     PADDING = 20
+    # ...and the same space as a fraction of the contents' shorter side,
+    # so the margin stays visible around large contents instead of
+    # thinning to a hairline that looks like the box is touching them
+    PADDING_FRACTION = 0.05
     # Width of the border shown when the group is a drop target
     DROP_BORDER_SIZE = 4
     # The box's rounded corners, as a fraction of its shorter side. A
@@ -414,6 +418,17 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         return [item for item in self.childItems()
                 if hasattr(item, 'save_id')]
 
+    def padding_for(self, rect):
+        """The margin to leave around contents of the given size.
+
+        Proportional to the shorter side, with ``PADDING`` as a floor, so
+        a group of small items keeps a sensible margin and a group of
+        large ones gets a margin in proportion rather than a hairline.
+        """
+
+        shorter = min(rect.width(), rect.height())
+        return max(self.PADDING, shorter * self.PADDING_FRACTION)
+
     def fit_to_children(self):
         """Grow the box so that it contains all its items, with padding."""
 
@@ -421,9 +436,9 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         if not children:
             return
         rect = self.childrenBoundingRect()
+        padding = self.padding_for(rect)
         self.prepareGeometryChange()
-        self.setRect(rect.adjusted(
-            -self.PADDING, -self.PADDING, self.PADDING, self.PADDING))
+        self.setRect(rect.adjusted(-padding, -padding, padding, padding))
 
     def set_children_interactive(self, value):
         """Whether the items inside the group can be clicked individually.

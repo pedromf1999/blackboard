@@ -281,3 +281,31 @@ def test_paint_uses_the_proportional_radius(selectable_mock, qapp):
     args = painter.drawRoundedRect.call_args_list[0][0]
     assert args[1] == group.corner_radius()
     assert args[2] == group.corner_radius()
+
+
+def test_padding_grows_with_the_contents(qapp):
+    group = BeeGroupItem()
+    small = group.padding_for(QtCore.QRectF(0, 0, 100, 100))
+    big = group.padding_for(QtCore.QRectF(0, 0, 4000, 4000))
+    assert big > small
+
+
+def test_padding_has_a_floor_for_small_contents(qapp):
+    group = BeeGroupItem()
+    assert group.padding_for(QtCore.QRectF(0, 0, 10, 10)) == group.PADDING
+
+
+def test_padding_is_proportional_to_the_shorter_side(qapp):
+    group = BeeGroupItem()
+    padding = group.padding_for(QtCore.QRectF(0, 0, 8000, 2000))
+    assert padding == 2000 * group.PADDING_FRACTION
+
+
+def test_fit_to_children_never_touches_the_items(view):
+    """There must always be a visible gap, at any content size."""
+
+    group, items = make_group(view, (0, 0), (3000, 3000))
+    contents = group.childrenBoundingRect()
+    gap = contents.left() - group.rect().left()
+    assert gap >= group.PADDING
+    assert group.rect().contains(contents)
