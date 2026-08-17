@@ -113,6 +113,10 @@ def main():
 
     os.environ["QT_DEBUG_PLUGINS"] = "1"
     app = BeeRefApplication(sys.argv)
+    # The platform's own style paints parts of the interface with the
+    # system's colours, so a light Windows theme would show through.
+    # Fusion follows the palette everywhere, keeping the interface dark.
+    app.setStyle('Fusion')
     palette = create_palette_from_dict(constants.COLORS)
     app.setPalette(palette)
 

@@ -472,13 +472,20 @@ class MoveToGroup(QtGui.QUndoCommand):
         self.old_positions = [item.pos() for item in self.items]
 
     def reparent(self, item, group):
-        """Re-parent the item, keeping it where it appears on screen."""
+        """Re-parent the item, keeping how it looks on screen.
+
+        A group scales and rotates what is inside it, so an item moving
+        in or out has to take up the difference itself, or it would
+        jump in size.
+        """
 
         scene_pos = item.scenePos()
+        appearance = item.get_appearance()
         item.setParentItem(group)
+        if group is None and item.scene() is None:
+            self.scene.addItem(item)
+        item.set_appearance(appearance)
         if group is None:
-            if item.scene() is None:
-                self.scene.addItem(item)
             item.setPos(scene_pos)
         else:
             item.setPos(group.mapFromScene(scene_pos))

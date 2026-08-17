@@ -615,6 +615,67 @@ def test_move_to_group(view):
     assert item.scene() is view.scene
 
 
+def effective_scale(item):
+    return round(item.sceneTransform().m11(), 4)
+
+
+def test_move_to_group_keeps_size_when_leaving_a_scaled_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+    group.setScale(2)
+    before = effective_scale(item)
+
+    commands.MoveToGroup(view.scene, [item], None).redo()
+    assert item.parentItem() is None
+    assert effective_scale(item) == before
+    assert item.scale() == 2
+
+
+def test_move_to_group_keeps_size_when_joining_a_scaled_group(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    other = BeeTextItem('two')
+    view.scene.addItem(other)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [other], group).redo()
+    group.setScale(2)
+    before = effective_scale(item)
+
+    commands.MoveToGroup(view.scene, [item], group).redo()
+    assert item.parentItem() is group
+    assert effective_scale(item) == before
+    assert item.scale() == 0.5
+
+
+def test_move_to_group_keeps_rotation(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+    group.setRotation(30)
+    item.setRotation(15)
+
+    commands.MoveToGroup(view.scene, [item], None).redo()
+    # The group's rotation is taken over by the item itself
+    assert item.rotation() == 45
+
+
+def test_move_to_group_size_is_restored_on_undo(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    commands.GroupItems(view.scene, [item], group).redo()
+    group.setScale(2)
+
+    command = commands.MoveToGroup(view.scene, [item], None)
+    command.redo()
+    command.undo()
+    assert item.parentItem() is group
+    assert item.scale() == 1
+
+
 def test_move_to_group_out_of_group(view):
     item = BeeTextItem('one')
     view.scene.addItem(item)

@@ -98,6 +98,56 @@ class BaseItemMixin:
         if vertical:
             self.setRotation(self.rotation() + 180)
 
+    def parent_scale(self):
+        """The scale applied by the groups this item sits in."""
+
+        scale = 1
+        parent = self.parentItem()
+        while parent is not None:
+            scale *= parent.scale()
+            parent = parent.parentItem()
+        return scale
+
+    def parent_rotation(self):
+        """The rotation applied by the groups this item sits in."""
+
+        rotation = 0
+        parent = self.parentItem()
+        while parent is not None:
+            rotation += parent.rotation()
+            parent = parent.parentItem()
+        return rotation
+
+    def parent_flip(self):
+        """The flip applied by the groups this item sits in."""
+
+        flip = 1
+        parent = self.parentItem()
+        while parent is not None:
+            flip *= parent.flip()
+            parent = parent.parentItem()
+        return flip
+
+    def get_appearance(self):
+        """How the item appears in the scene, whatever it sits in."""
+
+        return (self.scale() * self.parent_scale(),
+                self.rotation() + self.parent_rotation(),
+                self.flip() * self.parent_flip())
+
+    def set_appearance(self, appearance):
+        """Adjust the item so that it appears as it did before.
+
+        Used when an item changes group: the groups it is in scale and
+        rotate it, so its own values have to take up the difference.
+        """
+
+        scale, rotation, flip = appearance
+        self.setScale(scale / self.parent_scale())
+        self.setRotation(rotation - self.parent_rotation())
+        if flip != self.flip() * self.parent_flip():
+            self.do_flip()
+
     def bounding_rect_unselected(self):
         return super().boundingRect()
 

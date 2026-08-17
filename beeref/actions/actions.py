@@ -470,6 +470,7 @@ actions = ActionList([
         id='show_grid',
         text='Show &Grid',
         checkable=True,
+        checked=True,
         settings='View/show_grid',
         callback='on_action_show_grid',
     ),
