@@ -1071,6 +1071,12 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
     TYPE = 'text'
 
+    # The box's rounded corners, as a fraction of its shorter side. One
+    # third is what the radius already came to at the default text size,
+    # so boxes look exactly as they did while the rounding now grows and
+    # shrinks with the text.
+    CORNER_RADIUS_FRACTION = 1 / 3
+
     # The box drawn behind text by default: fully opaque, so text stays
     # readable whatever is behind it
     DEFAULT_BOX_COLOR = (0, 0, 0, 255)
@@ -1178,23 +1184,35 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def contains(self, point):
         return self.boundingRect().contains(point)
 
+    def corner_radius(self):
+        """The corner radius for the box at its current size.
+
+        Proportional to the box's shorter side, so the rounding keeps
+        its weight as the text is scaled. A radius fixed in item
+        coordinates only scales when the item itself is scaled -- making
+        the text bigger grows the box while leaving the corners where
+        they were, so large text ended up looking almost square.
+        """
+
+        rect = QtWidgets.QGraphicsTextItem.boundingRect(self)
+        shorter = min(rect.width(), rect.height())
+        return shorter * self.CORNER_RADIUS_FRACTION
+
     def selection_corner_radius(self):
         """Match the box drawn behind the text.
 
-        That box uses a radius in item coordinates, so it grows as the
-        item is scaled. The default outline radius is fixed to the
-        screen instead, which left the blue line square against rounded
-        corners on anything not at 100%.
+        The default outline radius is fixed to the screen instead, which
+        left the blue line square against rounded corners.
         """
 
-        return CORNER_RADIUS
+        return self.corner_radius()
 
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
+        radius = self.corner_radius()
         painter.drawRoundedRect(
-            QtWidgets.QGraphicsTextItem.boundingRect(self),
-            CORNER_RADIUS, CORNER_RADIUS)
+            QtWidgets.QGraphicsTextItem.boundingRect(self), radius, radius)
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)

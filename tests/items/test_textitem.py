@@ -533,3 +533,55 @@ def test_item_to_clipboard(qapp):
     item = BeeTextItem('foo bar')
     item.copy_to_clipboard(clipboard)
     assert clipboard.text() == 'foo bar'
+
+
+def test_corner_radius_grows_with_the_text(view):
+    """Scaling the text has to scale the rounding with it."""
+
+    item = BeeTextItem('scale me')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    before = item.corner_radius()
+
+    for _ in range(5):
+        view.on_action_text_size_increase()
+
+    assert item.corner_radius() > before
+
+
+def test_corner_radius_shrinks_with_the_text(view):
+    item = BeeTextItem('scale me')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    before = item.corner_radius()
+
+    for _ in range(5):
+        view.on_action_text_size_decrease()
+
+    assert item.corner_radius() < before
+
+
+def test_corner_radius_is_proportional_to_the_shorter_side(view):
+    item = BeeTextItem('proportions')
+    view.scene.addItem(item)
+    rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
+    shorter = min(rect.width(), rect.height())
+    assert item.corner_radius() == shorter * item.CORNER_RADIUS_FRACTION
+
+
+def test_corner_radius_keeps_its_proportion_across_sizes(view):
+    """Big text and small text must look like the same shape."""
+
+    small = BeeTextItem('same words')
+    view.scene.addItem(small)
+    big = BeeTextItem('same words')
+    view.scene.addItem(big)
+    big.setSelected(True)
+    for _ in range(8):
+        view.on_action_text_size_increase()
+
+    def proportion(item):
+        rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
+        return item.corner_radius() / min(rect.width(), rect.height())
+
+    assert proportion(big) == pytest.approx(proportion(small))

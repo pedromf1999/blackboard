@@ -1272,7 +1272,7 @@ def test_selection_outline_matches_the_text_box(view):
     item = BeeTextItem('foo')
     view.scene.addItem(item)
     item.setScale(5)
-    assert item.selection_corner_radius() == CORNER_RADIUS
+    assert item.selection_corner_radius() == item.corner_radius()
 
 
 def test_selection_outline_matches_the_group_box(view):
