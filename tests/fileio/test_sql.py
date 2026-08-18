@@ -1,3 +1,4 @@
+import inspect
 import json
 import os
 import os.path
@@ -738,6 +739,63 @@ def test_sqliteio_read_updates_progress(tmpfile, view):
     worker.begin_processing.emit.assert_called_once_with(1)
     worker.progress.emit.assert_called_once_with(0)
     worker.finished.emit.assert_called_once_with(tmpfile, [])
+
+
+def test_sqliteio_read_streams_rows(tmpfile, view):
+    """Rows arrive one at a time, not all of them at once.
+
+    Reading them all up front held every image in the file in memory
+    together, which a multi-gigabyte board cannot afford.
+    """
+
+    for i in range(3):
+        item = BeePixmapItem(QtGui.QImage(), filename=f'bee{i}.png')
+        view.scene.addItem(item)
+    view.scene.addItem(BeeTextItem('a note'))
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    io.write()
+
+    io = SQLiteIO(tmpfile, view.scene, readonly=True)
+    rows = io.iter_rows()
+    assert inspect.isgenerator(rows)
+    # Images come first, then everything without image data
+    types = [row[1] for row in rows]
+    assert types == ['pixmap', 'pixmap', 'pixmap', 'text']
+
+
+def test_sqliteio_count_rows_counts_every_item(tmpfile, view):
+    for i in range(3):
+        item = BeePixmapItem(QtGui.QImage(), filename=f'bee{i}.png')
+        view.scene.addItem(item)
+    view.scene.addItem(BeeTextItem('a note'))
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    io.write()
+
+    io = SQLiteIO(tmpfile, view.scene, readonly=True)
+    assert io.count_rows() == 4
+    assert io.count_rows() == len(list(io.iter_rows()))
+
+
+def test_sqliteio_read_pauses_for_the_main_thread_in_batches(tmpfile, view):
+    """A pause per item was most of the time spent loading.
+
+    Windows rounds any sleep up to the timer granularity, so a pause
+    costs about fifteen milliseconds however short it asks to be. The
+    only thing that helps is pausing less often.
+    """
+
+    count = SQLiteIO.ITEMS_PER_PAUSE * 3
+    for i in range(count):
+        view.scene.addItem(BeeTextItem(f'note {i}'))
+    io = SQLiteIO(tmpfile, view.scene, create_new=True)
+    io.write()
+
+    worker = MagicMock(canceled=False)
+    io = SQLiteIO(tmpfile, view.scene, readonly=True, worker=worker)
+    io.read()
+
+    assert worker.progress.emit.call_count == count
+    assert worker.msleep.call_count == 3
 
 
 def test_sqliteio_read_canceled(tmpfile, view):

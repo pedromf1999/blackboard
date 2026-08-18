@@ -250,32 +250,67 @@ class SQLiteIO:
             for schema in SCHEMA:
                 self.ex(schema)
 
+    IMAGE_ROWS = ('SELECT items.id, type, x, y, z, scale, rotation, flip, '
+                  'items.data, sqlar.data '
+                  'FROM sqlar JOIN items on sqlar.item_id = items.id')
+
+    # Avoid OUTER JOIN for performance reasons; fetch the items
+    # without image data separately instead.
+    #
+    # Everything without image data is fetched, whatever its type. This
+    # used to list the known types instead, which lost items twice over
+    # when a file written by a newer version was opened: the unknown
+    # rows were never read, and the next save then deleted them as
+    # items that no longer existed. Reading them means the scene turns
+    # them into visible error items, and error items are preserved on
+    # save. Adding a new item type no longer needs a change here.
+    OTHER_ROWS = ('SELECT items.id, type, x, y, z, scale, rotation, flip, '
+                  ' items.data, null as data '
+                  'FROM items '
+                  'WHERE items.id NOT IN (SELECT item_id FROM sqlar)')
+
+    # How many items to hand over before pausing for the main thread.
+    # The pause used to come after every single item, and a pause is far
+    # more expensive than it looks: Windows rounds any sleep up to the
+    # system timer granularity, so asking for ten milliseconds actually
+    # costs about fifteen. On a five hundred image board that was the
+    # best part of eight seconds spent doing nothing. Sleeping less
+    # often is the only lever that works -- sleeping for less time does
+    # nothing at all, since the granularity is the same either way.
+    ITEMS_PER_PAUSE = 10
+
+    def count_rows(self):
+        """How many items the file holds, without reading any of them."""
+
+        return self.fetchone(
+            f'SELECT (SELECT COUNT(*) FROM ({self.IMAGE_ROWS})) '
+            f'+ (SELECT COUNT(*) FROM ({self.OTHER_ROWS}))')[0]
+
+    def iter_rows(self):
+        """Yield the item rows one at a time.
+
+        Reading them all up front meant every image in the file sat in
+        memory at once, which on a multi-gigabyte board is enough to
+        push the machine into swapping. Streaming costs no more time --
+        the database reads the same bytes either way -- and never holds
+        more than one image.
+
+        Each query gets its own cursor, since the shared one would be
+        rebound by the second query while the first is still being read.
+        """
+
+        for query in (self.IMAGE_ROWS, self.OTHER_ROWS):
+            cursor = self.connection.cursor()
+            cursor.execute(query)
+            yield from cursor
+
     @handle_sqlite_errors
     def read(self):
         self.warn_if_written_by_newer()
-        rows = self.fetchall(
-            'SELECT items.id, type, x, y, z, scale, rotation, flip, '
-            'items.data, sqlar.data '
-            'FROM sqlar JOIN items on sqlar.item_id = items.id')
-        # Avoid OUTER JOIN for performance reasons; fetch the items
-        # without image data separately instead.
-        #
-        # Everything without image data is fetched, whatever its type. This
-        # used to list the known types instead, which lost items twice over
-        # when a file written by a newer version was opened: the unknown
-        # rows were never read, and the next save then deleted them as
-        # items that no longer existed. Reading them means the scene turns
-        # them into visible error items, and error items are preserved on
-        # save. Adding a new item type no longer needs a change here.
-        rows.extend(self.fetchall(
-            'SELECT items.id, type, x, y, z, scale, rotation, flip, '
-            ' items.data, null as data '
-            'FROM items '
-            'WHERE items.id NOT IN (SELECT item_id FROM sqlar)'))
         if self.worker:
-            self.worker.begin_processing.emit(len(rows))
+            self.worker.begin_processing.emit(self.count_rows())
 
-        for i, row in enumerate(rows):
+        for i, row in enumerate(self.iter_rows()):
             data = {
                 'save_id': row[0],
                 'type': row[1],
@@ -317,7 +352,8 @@ class SQLiteIO:
                     self.worker.finished.emit('', [])
                     return
                 # Give main thread time to process items:
-                self.worker.msleep(10)
+                if (i + 1) % self.ITEMS_PER_PAUSE == 0:
+                    self.worker.msleep(10)
         if self.worker:
             self.worker.finished.emit(self.filename, [])
 
