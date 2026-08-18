@@ -2423,3 +2423,33 @@ def test_drop_when_img(view, imgfilename3x3):
     view.dropEvent(event)
     assert len(view.scene.items()) == 1
     assert view.scene.items()[0].isSelected() is True
+
+
+def test_text_toolbar_never_takes_focus(view):
+    """Taking focus would end the edit and hide the bar after one click."""
+
+    assert view.text_toolbar.focusPolicy() == Qt.FocusPolicy.NoFocus
+    for button in (view.text_toolbar.bigger, view.text_toolbar.smaller):
+        assert button.focusPolicy() == Qt.FocusPolicy.NoFocus
+
+
+def test_text_toolbar_stays_up_when_clicked_repeatedly(view):
+    textitem = BeeTextItem('click me twice')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    view.on_selection_changed()
+
+    sizes = []
+    for _ in range(3):
+        view.text_toolbar.bigger.click()
+        view.on_selection_changed()
+        assert view.text_toolbar.isVisible() is True
+        sizes.append(char_format_at(textitem, 3).fontPointSize())
+
+    assert sizes == sorted(sizes)
+    assert sizes[0] < sizes[-1]
+
+
+def test_text_size_actions_have_shortcuts():
+    assert actions.actions['text_size_increase'].shortcuts
+    assert actions.actions['text_size_decrease'].shortcuts

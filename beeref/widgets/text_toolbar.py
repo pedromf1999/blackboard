@@ -18,6 +18,7 @@
 import logging
 
 from PyQt6 import QtWidgets
+from PyQt6.QtCore import Qt
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,11 @@ class TextToolBar(QtWidgets.QWidget):
         super().__init__(parent)
         self.view = view
         self.setObjectName('TextToolBar')
+        # Never take focus. A text item that is being edited holds the
+        # keyboard focus, and taking it away ends the edit and clears the
+        # selection -- which hides this bar after a single click, so the
+        # buttons cannot be clicked repeatedly.
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         layout = QtWidgets.QHBoxLayout()
         layout.setContentsMargins(6, 6, 6, 6)
@@ -60,6 +66,7 @@ class TextToolBar(QtWidgets.QWidget):
         button = QtWidgets.QToolButton(self)
         button.setText(label)
         button.setToolTip(tooltip)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
         button.clicked.connect(callback)
         # Holding the button keeps scaling, so going a long way is one
