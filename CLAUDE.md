@@ -63,6 +63,18 @@ and updating means replacing the file there. **Never point the association at
 `dist\`** — `Blackboard.spec` puts the version in the built filename, so that
 path changes with every release and would go stale immediately.
 
+**Always show the build before publishing.** Once a change is committed, start
+the application so the owner can look at it:
+
+    .venv\Scripts\python.exe -m beeref
+
+Running from source is instant and needs no build, so use it for this. Say which
+version is running and what to look at, then wait. Publish only once the owner
+has said so -- a published release is what the other computer installs, and
+pulling one back is far more disruptive than checking first. Restart the
+previewer after every new commit: an already-open window is running the older
+code, which is a good way to have a fix judged as broken.
+
 **Cutting a release.** Commit first (the script refuses a dirty tree, so the
 version identifies exactly the released code), then:
 
