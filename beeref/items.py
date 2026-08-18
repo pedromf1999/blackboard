@@ -1071,17 +1071,10 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
     TYPE = 'text'
 
-    # The box's rounded corners, as a fraction of the height of a line
-    # of its largest text. At the default text size this comes to the
-    # same 8 pixels the corners have always had, so ordinary notes look
-    # unchanged.
-    CORNER_RADIUS_FRACTION = 8 / 15
-
-    # A ceiling, as a fraction of the box's shorter side, for boxes that
-    # are small next to their own text -- a single large character, say.
-    # Half is the most Qt will round a corner by anyway, so this only
-    # ever stops the radius being asked for more than the box can give.
-    CORNER_RADIUS_MAX_FRACTION = 1 / 2
+    # The box's rounded corners, as a fraction of the height one line of
+    # its largest text would give the box. A third is what the corners
+    # have always been, so notes look unchanged.
+    CORNER_RADIUS_FRACTION = 1 / 3
 
     # The box drawn behind text by default: fully opaque, so text stays
     # readable whatever is behind it
@@ -1219,19 +1212,32 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             font.setPointSizeF(largest)
         return QtGui.QFontMetricsF(font).height()
 
+    def one_line_height(self):
+        """The height this box would have if it held a single line."""
+
+        return self.text_line_height() + 2 * self.document().documentMargin()
+
     def corner_radius(self):
         """The corner radius for the box at its current size.
 
-        Proportional to the text rather than to the box around it. Going
-        by the box meant that a note with many lines got corners far
-        larger than its own line height, and the rounding then cut into
-        the text sitting in those corners.
+        A third of the height of one line of text, rather than a third
+        of the whole box. Measuring the whole box meant a note with many
+        lines got corners far larger than its own line height, and the
+        curve then cut into the text sitting in those corners.
+
+        Using the height one line would give -- margins included --
+        rather than the bare text keeps the corners at the same third of
+        the box they have always been at every text size. Going by the
+        bare text made them creep towards half the box as the text grew,
+        until the box looked like a capsule.
+
+        The width still counts, so a box only a character or two wide
+        does not get rounded away.
         """
 
-        radius = self.text_line_height() * self.CORNER_RADIUS_FRACTION
         rect = QtWidgets.QGraphicsTextItem.boundingRect(self)
-        shorter = min(rect.width(), rect.height())
-        return min(radius, shorter * self.CORNER_RADIUS_MAX_FRACTION)
+        shorter = min(rect.width(), self.one_line_height())
+        return shorter * self.CORNER_RADIUS_FRACTION
 
     def selection_corner_radius(self):
         """Match the box drawn behind the text.

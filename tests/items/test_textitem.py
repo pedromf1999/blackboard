@@ -565,7 +565,7 @@ def test_corner_radius_is_proportional_to_the_text(view):
     item = BeeTextItem('proportions')
     view.scene.addItem(item)
     assert item.corner_radius() == pytest.approx(
-        item.text_line_height() * item.CORNER_RADIUS_FRACTION)
+        item.one_line_height() * item.CORNER_RADIUS_FRACTION)
 
 
 def test_corner_radius_ignores_how_big_the_box_is(view):
@@ -598,7 +598,7 @@ def test_corner_radius_keeps_its_proportion_across_sizes(view):
         view.on_action_text_size_increase()
 
     def proportion(item):
-        return item.corner_radius() / item.text_line_height()
+        return item.corner_radius() / item.one_line_height()
 
     assert big.text_line_height() > small.text_line_height()
     assert proportion(big) == pytest.approx(proportion(small))
@@ -615,4 +615,26 @@ def test_corner_radius_never_swallows_a_small_box(view):
 
     rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
     shorter = min(rect.width(), rect.height())
-    assert item.corner_radius() <= shorter * item.CORNER_RADIUS_MAX_FRACTION
+    assert item.corner_radius() < shorter / 2
+
+
+def test_corner_radius_keeps_its_weight_as_text_grows(view):
+    """Big text must not round the box towards a capsule.
+
+    Going by the bare line height, the corners crept from a third of the
+    box towards half of it as the text was scaled up with the toolbar.
+    """
+
+    item = BeeTextItem('Title')
+    view.scene.addItem(item)
+    item.setSelected(True)
+
+    def weight():
+        rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
+        return item.corner_radius() / rect.height()
+
+    before = weight()
+    for _ in range(8):
+        view.on_action_text_size_increase()
+
+    assert weight() == pytest.approx(before, abs=0.02)
