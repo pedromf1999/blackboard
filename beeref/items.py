@@ -1076,6 +1076,14 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     # have always been, so notes look unchanged.
     CORNER_RADIUS_FRACTION = 1 / 3
 
+    # The gap between the text and the edge of its box, as a fraction of
+    # the height of a line. Qt's own margin is a fixed four pixels,
+    # which is this fraction of a line at the default text size: making
+    # the text bigger then left the gap where it was, so the text crept
+    # towards the edge. Scaling the item scales the gap by itself, and
+    # this makes the toolbar behave the same way.
+    TEXT_MARGIN_FRACTION = 4 / 15
+
     # The box drawn behind text by default: fully opaque, so text stays
     # readable whatever is behind it
     DEFAULT_BOX_COLOR = (0, 0, 0, 255)
@@ -1098,6 +1106,10 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         # Setting the box colour also picks the text colour to go with it
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         self.setFont(self.get_text_font())
+        # Whatever changes the text can change how big it is, so the
+        # margin is kept up to date from one place rather than from
+        # every caller that might resize a word
+        self.document().contentsChanged.connect(self.update_document_margin)
         if html:
             # Rich text takes precedence over the plain text version,
             # which is only kept for compatibility with BeeRef
@@ -1105,6 +1117,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             # Stored text brings its own font family along, which has to
             # be overridden; new text already uses the font set above
             self.apply_text_font()
+        self.update_document_margin()
 
     def get_text_font(self):
         """The font for text on the canvas.
@@ -1211,6 +1224,12 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             # font is what it is being drawn at
             font.setPointSizeF(largest)
         return QtGui.QFontMetricsF(font).height()
+
+    def update_document_margin(self):
+        """Keep the gap around the text in proportion to the text."""
+
+        self.document().setDocumentMargin(
+            self.text_line_height() * self.TEXT_MARGIN_FRACTION)
 
     def one_line_height(self):
         """The height this box would have if it held a single line."""

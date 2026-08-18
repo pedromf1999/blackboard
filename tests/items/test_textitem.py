@@ -561,6 +561,30 @@ def test_corner_radius_shrinks_with_the_text(view):
     assert item.corner_radius() < before
 
 
+def test_text_margin_grows_with_the_text(view):
+    """The gap around the text has to keep its weight.
+
+    Qt's margin is a fixed four pixels, so making the text bigger with
+    the toolbar used to leave the gap behind and the text crept towards
+    the edge of its box. Scaling the item already scaled the gap, so the
+    two ways of making text bigger disagreed.
+    """
+
+    item = BeeTextItem('Title')
+    view.scene.addItem(item)
+    item.setSelected(True)
+
+    def weight():
+        return item.document().documentMargin() / item.text_line_height()
+
+    before = weight()
+    for _ in range(8):
+        view.on_action_text_size_increase()
+
+    assert item.document().documentMargin() > 4
+    assert weight() == pytest.approx(before)
+
+
 def test_corner_radius_is_proportional_to_the_text(view):
     item = BeeTextItem('proportions')
     view.scene.addItem(item)
