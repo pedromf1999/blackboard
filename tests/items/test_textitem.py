@@ -561,12 +561,29 @@ def test_corner_radius_shrinks_with_the_text(view):
     assert item.corner_radius() < before
 
 
-def test_corner_radius_is_proportional_to_the_shorter_side(view):
+def test_corner_radius_is_proportional_to_the_text(view):
     item = BeeTextItem('proportions')
     view.scene.addItem(item)
-    rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
-    shorter = min(rect.width(), rect.height())
-    assert item.corner_radius() == shorter * item.CORNER_RADIUS_FRACTION
+    assert item.corner_radius() == pytest.approx(
+        item.text_line_height() * item.CORNER_RADIUS_FRACTION)
+
+
+def test_corner_radius_ignores_how_big_the_box_is(view):
+    """A note with many lines must not get bigger corners.
+
+    The rounding used to follow the box, so adding lines grew the
+    corners until they cut into the text written in them.
+    """
+
+    one_line = BeeTextItem('A short note')
+    view.scene.addItem(one_line)
+    many_lines = BeeTextItem('\n'.join(['A short note'] * 20))
+    view.scene.addItem(many_lines)
+
+    tall = QtWidgets.QGraphicsTextItem.boundingRect(many_lines).height()
+    short = QtWidgets.QGraphicsTextItem.boundingRect(one_line).height()
+    assert tall > short * 5, 'the taller box needs to be clearly taller'
+    assert many_lines.corner_radius() == one_line.corner_radius()
 
 
 def test_corner_radius_keeps_its_proportion_across_sizes(view):
@@ -581,7 +598,21 @@ def test_corner_radius_keeps_its_proportion_across_sizes(view):
         view.on_action_text_size_increase()
 
     def proportion(item):
-        rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
-        return item.corner_radius() / min(rect.width(), rect.height())
+        return item.corner_radius() / item.text_line_height()
 
+    assert big.text_line_height() > small.text_line_height()
     assert proportion(big) == pytest.approx(proportion(small))
+
+
+def test_corner_radius_never_swallows_a_small_box(view):
+    """One big character gives a box barely larger than its own text."""
+
+    item = BeeTextItem('W')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    for _ in range(8):
+        view.on_action_text_size_increase()
+
+    rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
+    shorter = min(rect.width(), rect.height())
+    assert item.corner_radius() <= shorter * item.CORNER_RADIUS_MAX_FRACTION
