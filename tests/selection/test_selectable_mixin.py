@@ -7,7 +7,9 @@ from PyQt6.QtCore import Qt
 
 from beeref.assets import BeeAssets
 from beeref import commands
-from beeref.items import BeePixmapItem
+from beeref.constants import CORNER_RADIUS
+from beeref.items import (
+    BeePixmapItem, BeeTextItem, BeeGroupItem)
 
 
 def test_init_selectable(view):
@@ -1195,3 +1197,95 @@ def test_mouse_release_event_when_stretch_unchanged(view, item):
             QtCore.QPointF(0, 40))
         item.mouseReleaseEvent(event)
     view.scene.undo_stack.push.assert_not_called()
+
+
+def test_scale_factor_ignores_the_group_scale(view):
+    """Dragging a corner has to track the cursor inside a group too.
+
+    setScale is relative to the parent, so the same movement across the
+    canvas means a smaller change of scale for an item inside a group
+    that is itself scaled up -- by exactly the group's factor.
+    """
+
+    # Same text, so the two items are the same size
+    item = BeeTextItem('same size')
+    view.scene.addItem(item)
+    loose = BeeTextItem('same size')
+    view.scene.addItem(loose)
+
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    item.setParentItem(group)
+    group.fit_to_children()
+    group.setScale(4)
+
+    event = MagicMock()
+    for target in (item, loose):
+        target.scale_orig_factor = 1
+        target.event_start = QtCore.QPointF(0, 0)
+        target.event_direction = QtCore.QPointF(1, 0)
+    event.scenePos.return_value = QtCore.QPointF(100, 0)
+
+    grouped_delta = item.get_scale_factor(event) - 1
+    loose_delta = loose.get_scale_factor(event) - 1
+    assert grouped_delta == approx(loose_delta / group.scale(), rel=0.001)
+
+
+def test_scale_factor_tracked_the_group_scale_before(view):
+    """Without the correction the grouped item would scale 4x too fast."""
+
+    item = BeeTextItem('same size')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    item.setParentItem(group)
+    group.fit_to_children()
+    group.setScale(4)
+
+    event = MagicMock()
+    item.scale_orig_factor = 1
+    item.event_start = QtCore.QPointF(0, 0)
+    item.event_direction = QtCore.QPointF(1, 0)
+    event.scenePos.return_value = QtCore.QPointF(100, 0)
+
+    imgsize = math.sqrt(item.width**2 + item.height**2)
+    assert item.get_scale_factor(event) == approx(
+        1 + 100 / (imgsize * group.scale()))
+
+
+def test_scale_factor_unchanged_without_a_group(view):
+    item = BeeTextItem('loose')
+    view.scene.addItem(item)
+    item.scale_orig_factor = 1
+    item.event_start = QtCore.QPointF(0, 0)
+    item.event_direction = QtCore.QPointF(1, 0)
+    event = MagicMock()
+    event.scenePos.return_value = QtCore.QPointF(50, 0)
+
+    imgsize = math.sqrt(item.width**2 + item.height**2)
+    assert item.get_scale_factor(event) == approx(1 + 50 / imgsize)
+
+
+def test_selection_outline_matches_the_text_box(view):
+    """The blue line has to sit on the box, not cut across its corners."""
+
+    item = BeeTextItem('foo')
+    view.scene.addItem(item)
+    item.setScale(5)
+    assert item.selection_corner_radius() == CORNER_RADIUS
+
+
+def test_selection_outline_matches_the_group_box(view):
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    group.setRect(0, 0, 3000, 3000)
+    assert group.selection_corner_radius() == group.corner_radius()
+
+
+def test_selection_outline_stays_screen_sized_for_images(view):
+    """Images draw no box, so their outline keeps the old behaviour."""
+
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    assert item.selection_corner_radius() == item.fixed_length_for_viewport(
+        CORNER_RADIUS)

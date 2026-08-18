@@ -475,6 +475,11 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         shorter = min(rect.width(), rect.height())
         return max(CORNER_RADIUS, shorter * self.CORNER_RADIUS_FRACTION)
 
+    def selection_corner_radius(self):
+        """Match the box the group draws."""
+
+        return self.corner_radius()
+
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
@@ -1172,6 +1177,17 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
     def contains(self, point):
         return self.boundingRect().contains(point)
+
+    def selection_corner_radius(self):
+        """Match the box drawn behind the text.
+
+        That box uses a radius in item coordinates, so it grows as the
+        item is scaled. The default outline radius is fixed to the
+        screen instead, which left the blue line square against rounded
+        corners on anything not at 100%.
+        """
+
+        return CORNER_RADIUS
 
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)

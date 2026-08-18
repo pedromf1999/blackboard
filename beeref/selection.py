@@ -285,6 +285,17 @@ class SelectableMixin(BaseItemMixin):
             self.draw_debug_shape(
                 painter, self.select_handle_free_center(), 255, 0, 255)
 
+    def selection_corner_radius(self):
+        """How much to round the corners of the selection outline.
+
+        Items that draw no box of their own get a radius that stays the
+        same size on screen at any zoom. Items that do draw a box --
+        text items, groups -- override this to return their own radius,
+        so the outline sits on the shape rather than cutting across it.
+        """
+
+        return self.fixed_length_for_viewport(CORNER_RADIUS)
+
     def paint_selectable(self, painter, option, widget):
         self.paint_debug(painter, option, widget)
 
@@ -297,9 +308,9 @@ class SelectableMixin(BaseItemMixin):
         painter.setPen(pen)
         painter.setBrush(QtGui.QBrush())
 
-        # Draw the main selection rectangle. The radius is adjusted for
-        # the viewport so the rounding looks the same at any zoom level.
-        radius = self.fixed_length_for_viewport(CORNER_RADIUS)
+        # Draw the main selection rectangle, rounded to match whatever
+        # the item itself draws.
+        radius = self.selection_corner_radius()
         painter.drawRoundedRect(
             self.bounding_rect_unselected(), radius, radius)
 
@@ -597,7 +608,15 @@ class SelectableMixin(BaseItemMixin):
 
     def get_scale_factor(self, event):
         """Get the scale factor for the current mouse movement."""
-        imgsize = math.sqrt(self.width**2 + self.height**2)
+
+        # setScale is relative to the item's parent, while the mouse is
+        # measured on the canvas. For an item sitting loose in the scene
+        # those are the same thing, but inside a group they differ by the
+        # group's scale -- so without this the item raced away from the
+        # cursor, or crawled behind it, by exactly that factor.
+        # get_stretch_factor allows for the same thing.
+        imgsize = (math.sqrt(self.width**2 + self.height**2)
+                   * self.parent_scale())
         p = event.scenePos() - self.event_start
         direction = self.event_direction
         delta = QtCore.QPointF.dotProduct(direction, p) / imgsize
