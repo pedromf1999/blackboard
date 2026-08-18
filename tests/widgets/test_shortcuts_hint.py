@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt
 
@@ -62,3 +64,36 @@ def test_shows_the_version(view):
 
     labels = view.shortcuts_hint.findChildren(QtWidgets.QLabel)
     assert any(constants.VERSION in label.text() for label in labels)
+
+
+def test_help_brings_it_back_after_closing(view):
+    """Closing the card must not put the shortcuts out of reach."""
+
+    hint = view.shortcuts_hint
+    hint.on_close_clicked()
+    assert hint.isVisible() is False
+
+    with patch('beeref.widgets.HelpDialog'):
+        view.on_action_help()
+    assert hint.isVisible() is True
+
+
+def test_help_brings_it_back_even_when_switched_off(view):
+    """The checkbox governs the startup greeting, not asking for help."""
+
+    hint = view.shortcuts_hint
+    hint.hide_box.setChecked(True)
+    hint.on_close_clicked()
+    assert hint.wanted_on_startup() is False
+
+    with patch('beeref.widgets.HelpDialog'):
+        view.on_action_help()
+    assert hint.isVisible() is True
+
+
+def test_checkbox_remembers_what_was_chosen(view):
+    """Reopening the card must not show the box unticked when it is on."""
+
+    view.shortcuts_hint.hide_box.setChecked(True)
+    fresh = ShortcutsHint(view)
+    assert fresh.hide_box.isChecked() is True

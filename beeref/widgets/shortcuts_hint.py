@@ -73,9 +73,12 @@ class ShortcutsHint(QtWidgets.QWidget):
             layout.addWidget(QtWidgets.QLabel(f'<b>{keys}</b>'), row, 0)
             layout.addWidget(QtWidgets.QLabel(what), row, 1, 1, 2)
 
-        hide = QtWidgets.QCheckBox("Don't show this again", self)
-        hide.stateChanged.connect(self.on_hide_changed)
-        layout.addWidget(hide, len(self.SHORTCUTS) + 1, 0, 1, 3)
+        self.hide_box = QtWidgets.QCheckBox("Don't show this again", self)
+        # Set the state before connecting, so restoring what was chosen
+        # last time does not count as choosing it again
+        self.hide_box.setChecked(not self.wanted_on_startup())
+        self.hide_box.stateChanged.connect(self.on_hide_changed)
+        layout.addWidget(self.hide_box, len(self.SHORTCUTS) + 1, 0, 1, 3)
 
         self.setLayout(layout)
         self.adjustSize()
@@ -104,6 +107,15 @@ class ShortcutsHint(QtWidgets.QWidget):
         if not self.wanted_on_startup():
             logger.debug('Shortcuts hint switched off')
             return
+        self.show_again()
+
+    def show_again(self):
+        """Bring the card back, whatever was chosen for startup.
+
+        Asking for help is asking for this, so it overrides the
+        checkbox: that only governs whether the card greets you.
+        """
+
         self.reposition()
         self.show()
         self.raise_()

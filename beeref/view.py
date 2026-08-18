@@ -1090,6 +1090,10 @@ class BeeGraphicsView(MainControlsMixin,
         widgets.controls.ControlsDialog(self)
 
     def on_action_help(self):
+        # Bring back the shortcuts card too. It is the quickest answer
+        # to "what were the shortcuts again", and closing it once should
+        # not put it out of reach.
+        self.shortcuts_hint.show_again()
         widgets.HelpDialog(self)
 
     def on_action_about(self):
