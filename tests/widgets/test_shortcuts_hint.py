@@ -1,5 +1,7 @@
+from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt
 
+from beeref import constants
 from beeref.widgets.shortcuts_hint import ShortcutsHint
 
 
@@ -53,3 +55,10 @@ def test_sits_in_the_bottom_left(view):
     hint.reposition()
     assert hint.x() == hint.MARGIN
     assert hint.y() + hint.height() + hint.MARGIN == view.height()
+
+
+def test_shows_the_version(view):
+    """Which build this is has to be readable without opening a dialog."""
+
+    labels = view.shortcuts_hint.findChildren(QtWidgets.QLabel)
+    assert any(constants.VERSION in label.text() for label in labels)

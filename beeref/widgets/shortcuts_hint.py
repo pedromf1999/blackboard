@@ -58,7 +58,8 @@ class ShortcutsHint(QtWidgets.QWidget):
         layout.setContentsMargins(14, 10, 14, 12)
         layout.setHorizontalSpacing(14)
 
-        title = QtWidgets.QLabel(f'<b>{constants.APPNAME} shortcuts</b>')
+        title = QtWidgets.QLabel(
+            f'<b>{constants.APPNAME} {constants.VERSION}</b> shortcuts')
         layout.addWidget(title, 0, 0, 1, 2)
 
         close = QtWidgets.QToolButton(self)

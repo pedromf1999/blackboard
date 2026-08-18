@@ -790,6 +790,23 @@ def test_change_text_format():
     assert item2.toPlainText() == 'bar'
 
 
+def test_change_text_format_keeps_the_selection():
+    """Formatting the same words twice must not need reselecting them."""
+
+    item = BeeTextItem('one two three')
+    cursor = item.textCursor()
+    cursor.setPosition(4)
+    cursor.setPosition(7, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    item.setTextCursor(cursor)
+
+    command = commands.ChangeTextFormat(
+        [item], ['<p>one two three</p>'], [item.toHtml()])
+    command.redo()
+    assert item.textCursor().selectedText() == 'two'
+    command.undo()
+    assert item.textCursor().selectedText() == 'two'
+
+
 def test_change_text_box_color():
     item1 = BeeTextItem('foo')
     item2 = BeeTextItem('bar')

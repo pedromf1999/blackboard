@@ -3,14 +3,17 @@
 from PyQt6 import QtCore
 
 from beeref.__main__ import BeeRefMainWindow, main
+from beeref import constants
 from beeref.assets import BeeAssets
 from beeref.view import BeeGraphicsView
+
+APP_TITLE = f'{constants.APPNAME} {constants.VERSION}'
 
 
 @patch('PyQt6.QtWidgets.QWidget.show')
 def test_beeref_mainwindow_init(show_mock, qapp):
     window = BeeRefMainWindow(qapp)
-    assert window.windowTitle() == 'Blackboard'
+    assert window.windowTitle() == APP_TITLE
     assert BeeAssets().logo == BeeAssets().logo
     assert window.windowIcon()
     assert window.contentsMargins() == QtCore.QMargins(0, 0, 0, 0)

@@ -192,13 +192,17 @@ class BeeGraphicsView(MainControlsMixin,
             self.scene.multi_select_item.bring_to_front()
 
     def update_window_title(self):
+        # The version goes in the title because two computers run this,
+        # and the only way to tell which build a window belongs to used
+        # to be opening Help - About
+        app = f'{constants.APPNAME} {constants.VERSION}'
         clean = self.undo_stack.isClean()
         if clean and not self.filename:
-            title = constants.APPNAME
+            title = app
         else:
             name = os.path.basename(self.filename or '[Untitled]')
             clean = '' if clean else '*'
-            title = f'{name}{clean} - {constants.APPNAME}'
+            title = f'{name}{clean} - {app}'
         self.parent.setWindowTitle(title)
 
     def on_canvas_color_changed(self, color):

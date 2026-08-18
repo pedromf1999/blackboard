@@ -616,14 +616,29 @@ class ChangeTextFormat(QtGui.QUndoCommand):
         self.items = list(items)
         self.new_htmls = new_htmls
         self.old_htmls = old_htmls
+        # Which words were selected when the change was made. Replacing
+        # the html throws the cursor away, which would drop the
+        # selection after every step -- so the words being formatted
+        # would have to be picked again to format them twice.
+        self.selections = [(item.textCursor().anchor(),
+                            item.textCursor().position())
+                           for item in self.items]
+
+    def apply(self, htmls):
+        for item, html, selection in zip(self.items, htmls, self.selections):
+            item.setHtml(html)
+            anchor, position = selection
+            cursor = item.textCursor()
+            cursor.setPosition(anchor)
+            cursor.setPosition(
+                position, QtGui.QTextCursor.MoveMode.KeepAnchor)
+            item.setTextCursor(cursor)
 
     def redo(self):
-        for item, html in zip(self.items, self.new_htmls):
-            item.setHtml(html)
+        self.apply(self.new_htmls)
 
     def undo(self):
-        for item, html in zip(self.items, self.old_htmls):
-            item.setHtml(html)
+        self.apply(self.old_htmls)
 
 
 class ChangeTextBoxColor(QtGui.QUndoCommand):

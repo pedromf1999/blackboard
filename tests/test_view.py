@@ -14,6 +14,8 @@ from beeref.config import logfile_name, settings_events
 from beeref.items import BeePixmapItem, BeeTextItem
 from beeref.view import BeeGraphicsView
 
+APP_TITLE = f'{constants.APPNAME} {constants.VERSION}'
+
 
 def test_inits_menu(qapp):
     parent = QtWidgets.QMainWindow()
@@ -30,7 +32,7 @@ def test_init_without_filenames(open_file_mock, qapp, commandline_args):
     parent = QtWidgets.QMainWindow()
     view = BeeGraphicsView(qapp, parent)
     open_file_mock.assert_not_called()
-    assert view.parent.windowTitle() == 'Blackboard'
+    assert view.parent.windowTitle() == APP_TITLE
     del view
 
 
@@ -107,7 +109,7 @@ def test_clear_scene(view, item):
     assert view.transform().isIdentity()
     assert view.filename is None
     view.undo_stack.clear.assert_called_once_with()
-    assert view.parent.windowTitle() == 'Blackboard'
+    assert view.parent.windowTitle() == APP_TITLE
 
 
 def test_reset_previous_transform_when_other_item(view):
@@ -1844,32 +1846,39 @@ def test_cancel_sample_color_mode_when_multi_selection(view, item):
     view.scene.multi_select_item.bring_to_front.assert_called_once()
 
 
+def test_window_title_shows_the_version(view):
+    """Two computers run this, so a window has to name its own build."""
+
+    view.update_window_title()
+    assert constants.VERSION in view.parent.windowTitle()
+
+
 @patch('PyQt6.QtGui.QUndoStack.isClean', return_value=True)
 def test_update_window_title_no_changes_no_filename(clear_mock, view):
     view.filename = None
     view.update_window_title()
-    assert view.parent.windowTitle() == 'Blackboard'
+    assert view.parent.windowTitle() == APP_TITLE
 
 
 @patch('PyQt6.QtGui.QUndoStack.isClean', return_value=False)
 def test_update_window_title_changes_no_filename(clear_mock, view):
     view.filename = None
     view.update_window_title()
-    assert view.parent.windowTitle() == '[Untitled]* - Blackboard'
+    assert view.parent.windowTitle() == f'[Untitled]* - {APP_TITLE}'
 
 
 @patch('PyQt6.QtGui.QUndoStack.isClean', return_value=True)
 def test_update_window_title_no_changes_filename(clear_mock, view):
     view.filename = 'test.bee'
     view.update_window_title()
-    assert view.parent.windowTitle() == 'test.bee - Blackboard'
+    assert view.parent.windowTitle() == f'test.bee - {APP_TITLE}'
 
 
 @patch('PyQt6.QtGui.QUndoStack.isClean', return_value=False)
 def test_update_window_title_changes_filename(clear_mock, view):
     view.filename = 'test.bee'
     view.update_window_title()
-    assert view.parent.windowTitle() == 'test.bee* - Blackboard'
+    assert view.parent.windowTitle() == f'test.bee* - {APP_TITLE}'
 
 
 @patch('beeref.view.BeeGraphicsView.recalc_scene_rect')
