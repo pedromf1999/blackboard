@@ -657,18 +657,56 @@ class BeeGraphicsView(MainControlsMixin,
             if checked and self.scene.active_group is group:
                 self.scene.exit_group()
 
+    def pick_color_live(self, title, initial, preview, alpha=True):
+        """Ask for a colour, showing each choice on the board as it is made.
+
+        ``QColorDialog.getColor()`` reports nothing until OK is pressed,
+        so a colour can only be judged against the dialog's own swatch
+        rather than against the board it will sit on. Driving the dialog
+        directly gives ``currentColorChanged``, which fires on every
+        change.
+
+        Returns the chosen colour, or None if the dialog was cancelled.
+        The preview writes straight to the items and deliberately does
+        not touch the undo stack, so the caller has to put the original
+        colours back afterwards -- see the callers below for why that
+        matters even when the dialog was accepted.
+        """
+
+        dialog = QtWidgets.QColorDialog(initial, self)
+        dialog.setWindowTitle(title)
+        if alpha:
+            dialog.setOption(
+                QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        dialog.currentColorChanged.connect(preview)
+        accepted = dialog.exec()
+        color = dialog.currentColor()
+        if accepted and color.isValid():
+            return color
+        return None
+
     def on_action_group_box_color(self):
         groups = [item for item in self.scene.selectedItems(user_only=True)
                   if item.TYPE == BeeGroupItem.TYPE]
         if not groups:
             widgets.BeeNotification(self, 'No group selected')
             return
-        color = QtWidgets.QColorDialog.getColor(
-            groups[0].box_color,
-            self,
-            'Choose Group Colour',
-            QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
-        if color.isValid():
+        originals = [group.box_color for group in groups]
+
+        def preview(color):
+            for group in groups:
+                group.box_color = color
+
+        color = self.pick_color_live(
+            'Choose Group Colour', groups[0].box_color, preview)
+
+        # Put the originals back whichever way the dialog went. Cancelling
+        # has to undo the preview; accepting has to as well, because the
+        # undo command records the colours it finds at the moment it is
+        # built, and those must be the ones from before the preview.
+        for group, original in zip(groups, originals):
+            group.box_color = original
+        if color is not None:
             self.undo_stack.push(
                 commands.ChangeGroupBoxColor(groups, color))
 
@@ -795,12 +833,20 @@ class BeeGraphicsView(MainControlsMixin,
         items = self.scene.selected_text_items()
         if not items:
             return
-        color = QtWidgets.QColorDialog.getColor(
-            items[0].box_color,
-            self,
-            'Choose Box Colour',
-            QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
-        if color.isValid():
+        originals = [item.box_color for item in items]
+
+        def preview(color):
+            for item in items:
+                commands.ChangeTextBoxColor.set_color(item, color)
+
+        color = self.pick_color_live(
+            'Choose Box Colour', items[0].box_color, preview)
+
+        # See on_action_group_box_color for why the originals go back even
+        # when the dialog was accepted
+        for item, original in zip(items, originals):
+            commands.ChangeTextBoxColor.set_color(item, original)
+        if color is not None:
             self.undo_stack.push(
                 commands.ChangeTextBoxColor(items, color))
 

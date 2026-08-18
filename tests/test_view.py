@@ -1265,16 +1265,80 @@ def test_on_action_text_highlight_color(color_mock, view):
         255, 255, 0)
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
-       return_value=QtGui.QColor(0, 0, 255, 100))
-def test_on_action_text_box_color(color_mock, view):
+def color_dialog(color, accept=True):
+    """Drive a real colour dialog without showing it.
+
+    setCurrentColor emits currentColorChanged, so the preview runs
+    exactly as it would while the user drags around the picker.
+    """
+
+    def fake_exec(dialog):
+        dialog.setCurrentColor(color)
+        if accept:
+            return QtWidgets.QDialog.DialogCode.Accepted.value
+        return QtWidgets.QDialog.DialogCode.Rejected.value
+
+    # A plain function, not a mock: assigned to the class it binds as a
+    # method, so the dialog arrives as self. autospec does not manage
+    # that for sip methods.
+    return patch.object(QtWidgets.QColorDialog, 'exec', fake_exec)
+
+
+def test_on_action_text_box_color(view):
     textitem = BeeTextItem('foo')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
 
-    view.on_action_text_box_color()
+    with color_dialog(QtGui.QColor(0, 0, 255, 100)):
+        view.on_action_text_box_color()
     assert len(view.undo_stack) == 1
     assert textitem.box_color == QtGui.QColor(0, 0, 255, 100)
+
+
+def test_text_box_color_previews_while_picking(view):
+    """The board updates as the colour changes, before OK is pressed."""
+
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    seen = []
+
+    def fake_exec(dialog):
+        dialog.setCurrentColor(QtGui.QColor(10, 20, 30, 255))
+        # What the item looks like while the dialog is still open
+        seen.append(QtGui.QColor(textitem.box_color))
+        return QtWidgets.QDialog.DialogCode.Accepted.value
+
+    with patch.object(QtWidgets.QColorDialog, 'exec', fake_exec):
+        view.on_action_text_box_color()
+
+    assert seen == [QtGui.QColor(10, 20, 30, 255)]
+
+
+def test_text_box_color_undo_restores_the_colour_from_before(view):
+    """Undo must not restore a previewed colour."""
+
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    before = QtGui.QColor(textitem.box_color)
+
+    with color_dialog(QtGui.QColor(0, 0, 255, 100)):
+        view.on_action_text_box_color()
+    view.undo_stack.undo()
+    assert textitem.box_color == before
+
+
+def test_text_box_color_cancelled_puts_the_colour_back(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    before = QtGui.QColor(textitem.box_color)
+
+    with color_dialog(QtGui.QColor(0, 0, 255, 100), accept=False):
+        view.on_action_text_box_color()
+    assert textitem.box_color == before
+    assert len(view.undo_stack) == 0
 
 
 def test_on_action_group_items(view):
@@ -1320,18 +1384,31 @@ def test_on_action_ungroup_items_when_no_group_selected(view):
     assert len(view.undo_stack) == 0
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
-       return_value=QtGui.QColor(1, 2, 3, 200))
-def test_on_action_group_box_color(color_mock, view):
+def test_on_action_group_box_color(view):
     item = BeeTextItem('one')
     view.scene.addItem(item)
     item.setSelected(True)
     view.on_action_group_items()
 
-    view.on_action_group_box_color()
+    with color_dialog(QtGui.QColor(1, 2, 3, 200)):
+        view.on_action_group_box_color()
     group = list(view.scene.items_by_type('group'))[0]
     assert group.box_color == QtGui.QColor(1, 2, 3, 200)
     assert len(view.undo_stack) == 2
+
+
+def test_group_box_color_cancelled_puts_the_colour_back(view):
+    item = BeeTextItem('one')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    before = QtGui.QColor(group.box_color)
+
+    with color_dialog(QtGui.QColor(1, 2, 3, 200), accept=False):
+        view.on_action_group_box_color()
+    assert group.box_color == before
+    assert len(view.undo_stack) == 1
 
 
 def test_on_action_lock_group(view):
@@ -1397,13 +1474,13 @@ def test_get_group_at_ignores_open_group(view):
         assert view.get_group_at(QtCore.QPoint(0, 0)) is None
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor')
-def test_on_action_group_box_color_when_no_group(color_mock, view):
+@patch.object(QtWidgets.QColorDialog, 'exec')
+def test_on_action_group_box_color_when_no_group(exec_mock, view):
     item = BeeTextItem('one')
     view.scene.addItem(item)
     item.setSelected(True)
     view.on_action_group_box_color()
-    color_mock.assert_not_called()
+    exec_mock.assert_not_called()
     assert len(view.undo_stack) == 0
 
 

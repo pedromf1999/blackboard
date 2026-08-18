@@ -635,7 +635,8 @@ class ChangeTextBoxColor(QtGui.QUndoCommand):
         self.color = color
         self.old_colors = [item.box_color for item in self.items]
 
-    def set_color(self, item, color):
+    @staticmethod
+    def set_color(item, color):
         item.box_color = color
         # The text colour comes from the box, so it changes along with it
         item.apply_text_font()
