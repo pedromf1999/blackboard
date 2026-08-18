@@ -9,7 +9,10 @@ version = {attr = "beeref.constants.VERSION"}
 include = ["beeref*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.html", "*.png", "*.svg", "*.otf", "*.ttf"]
+# .txt is here for the font licence that has to travel with the Ranade
+# files in beeref/assets/fonts. Without it an installed copy has the
+# fonts but not their licence.
+"*" = ["*.html", "*.png", "*.svg", "*.otf", "*.ttf", "*.txt"]
 
 [project]
 name = "Blackboard"
