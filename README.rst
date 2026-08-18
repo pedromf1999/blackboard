@@ -1,97 +1,67 @@
-BeeRef — A Simple Reference Image Viewer
-========================================
+Blackboard
+==========
 
-.. raw:: html
+A reference image board: drop in images, arrange them freely, annotate them,
+and keep them in view while you work.
 
-   <img align="left" width="100" height="100" src="https://raw.githubusercontent.com/rbreu/beeref/main/beeref/assets/logo.png">
+Blackboard is a personal fork of `BeeRef <https://github.com/rbreu/beeref>`_ by
+Rebecca Breu, forked at version 0.3.4.dev0 and developed for its author's own
+use. It is published because the licence invites it, not because it is a
+supported product: there is no roadmap, no release schedule, and issues or pull
+requests may go unanswered. If you want a maintained reference viewer, use
+`BeeRef <https://beeref.org>`_ — it is excellent, and everything good here
+started there.
 
-`BeeRef <https://beeref.org>`_ lets you quickly arrange your reference images and view them while you create. Its minimal interface is designed not to get in the way of your creative process.
+What it adds to BeeRef
+----------------------
 
-|python-version| |github-ci-flake8| |github-ci-pytest| |codecov| |downloads-total| |downloads-latest|
+- **Groups** — collect items into a box that moves, scales and rotates as one,
+  with the box colour and rounding under your control
+- **A layers panel** (``Ctrl+J``) listing everything in stacking order, with
+  drag-and-drop reordering
+- **Drawing tools** — freehand sketches, straight lines, curves and arrows
+- **Rich text** — per-word colour, highlighting, clickable links, and text
+  scaling by percentage rather than by point size
+- **A background grid** that adapts its spacing to the zoom level
+- **Text search** across the board with ``F3``
+- **A configurable canvas colour**, and a dark interface throughout
+- Boards are saved as ``.blk``; boards written by BeeRef still open
 
-.. image:: https://github.com/rbreu/beeref/blob/main/images/screenshot.png
+Installing on Windows
+---------------------
 
-.. |python-version| image:: https://github.com/rbreu/beeref/blob/main/images/python_version_badge.svg
-   :target: https://www.python.org/
+Download the zip from the `latest release
+<https://github.com/pedromf1999/blackboard/releases/latest>`_, extract all of
+it, and run ``Install.cmd``. It copies the application to
+``%LOCALAPPDATA%\Programs\Blackboard`` and associates ``.blk`` files with it.
+No administrator rights are needed, and ``.bee`` files are left alone so an
+existing BeeRef installation keeps its own.
 
-.. |github-ci-flake8| image:: https://github.com/rbreu/beeref/actions/workflows/flake8.yml/badge.svg
-   :target: https://github.com/rbreu/beeref/actions/workflows/flake8.yml
+Running from source
+-------------------
 
-.. |github-ci-pytest| image:: https://github.com/rbreu/beeref/actions/workflows/pytest.yml/badge.svg
-   :target: https://github.com/rbreu/beeref/actions/workflows/pytest.yml
+Python 3.11 or 3.12 (``pyproject.toml`` requires ``>=3.9,<3.13``)::
 
-.. |codecov| image:: https://codecov.io/gh/rbreu/beeref/branch/main/graph/badge.svg?token=QA8HR1VVAL
-   :target: https://codecov.io/gh/rbreu/beeref
+    py -3.11 -m venv .venv
+    .venv\Scripts\activate
+    pip install -e . -r requirements\dev.txt
+    python -m beeref
 
-.. |downloads-total| image:: https://img.shields.io/github/downloads/rbreu/beeref/total.svg
-   :target: https://github.com/rbreu/beeref/releases
+Checks are ``pytest tests`` and ``flake8 beeref tests``. Building a release is
+``powershell -ExecutionPolicy Bypass -File tools\release.ps1``, which runs both,
+builds the executable with PyInstaller and packages it for installation.
 
-.. |downloads-latest| image:: https://img.shields.io/github/downloads/rbreu/beeref/latest/total.svg
-   :target: https://github.com/rbreu/beeref/releases
+Licence and attribution
+-----------------------
 
+GPL-3, inherited from BeeRef. See ``LICENSE``.
 
-Installation
-------------
+BeeRef is copyright © 2021-2024 Rebecca Breu. The files in this repository that
+came from BeeRef have been modified from their originals, starting in August
+2026: the application was renamed, and the features listed above were added or
+changed throughout ``beeref/``. The full record of what was changed and when is
+the commit history of the ``bvref`` branch; the ``main`` branch holds the
+unmodified upstream code it started from, so the two can be compared directly.
 
-Stable Release
-~~~~~~~~~~~~~~
-
-Get the file for your operating system (Windows, Linux, macOS) from the `latest release <https://github.com/rbreu/beeref/releases>`_. The different Linux versions are built on different versions of Ubuntu. The should work on other distros as well, but you might have to try which one works.
-
-**Linux users** need to give the file executable rights before running it. Optional: If you want to have BeeRef appear in the app menu, save the desktop file from the `release section <https://github.com/rbreu/beeref/releases>`_ in ``~/.local/share/applications``, save the `logo <https://raw.githubusercontent.com/rbreu/beeref/main/beeref/assets/logo.png>`_, and adjust the path names in the desktop file to match the location of your BeeRef installation.
-
-**MacOS X users**, look at `detailed instructions <https://beeref.org/macosx-run.html>`_ if you have problems running BeeRef.
-
-Follow further releases via the `atom feed <https://github.com/rbreu/beeref/releases.atom>`_.
-
-
-Development Version
-~~~~~~~~~~~~~~~~~~~
-
-To get the current development version, you need to have a working Python 3 environment. Run the following command to install the development version::
-
-  pip install git+https://github.com/rbreu/beeref.git
-
-Then run ``beeref`` or ``beeref filename.bee``.
-
-
-Features
---------
-
-* Move, scale, rotate, crop and flip images
-* Mass-scale images to the same width, height or size
-* Mass-arrange images vertically, horizontally or for optimal usage of space
-* Add text notes
-* Enable always-on-top-mode and disable the title bar to let the BeeRef window unobtrusively float above your art program:
-
-.. image:: https://github.com/rbreu/beeref/blob/main/images/screenshot.png
-
-
-Regarding the bee file format
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-All images are embedded into the bee file as PNG or JPG. The bee file format is a sqlite database inside which the images are stored in an sqlar table—meaning they can be extracted with the `sqlite command line program <https://www.sqlite.org/cli.html>`_::
-
-  sqlite3 myfile.bee -Axv
-
-Options for exporting from inside BeeRef are planned, but the above always works independently of BeeRef.
-
-
-Troubleshooting
----------------
-
-You can access the log output via *Help -> Show Debug Log*. In case BeeRef doesn't start at all, you can find the log file here:
-
-Windows:
-
-  C:\Documents and Settings\USERNAME\Application Data\BeeRef\BeeRef.log
-
-Linux and MacOS:
-
-  /home/USERNAME/.config/BeeRef/BeeRef.log
-
-
-Notes for developers
---------------------
-
-BeeRef is written in Python and PyQt6. For more info, see `CONTRIBUTING.rst <https://github.com/rbreu/beeref/blob/main/CONTRIBUTING.rst>`_.
+The name and logo are this fork's own. "BeeRef" is Rebecca Breu's project, and
+this fork is not endorsed by or affiliated with it.
