@@ -481,6 +481,21 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         return [item for item in self.selectedItems(user_only=True)
                 if getattr(item, 'TYPE', None) == 'text']
 
+    def selected_draw_items(self):
+        """The currently selected sketches, lines, curves and arrows."""
+
+        return [item for item in self.selectedItems(user_only=True)
+                if getattr(item, 'TYPE', None) == 'draw']
+
+    def has_sizeable_selection(self):
+        """Whether anything selected can be made bigger or smaller.
+
+        Text scales its letters, drawings their line thickness; both are
+        driven by the same pair of shortcuts.
+        """
+
+        return bool(self.selected_text_items() or self.selected_draw_items())
+
     def has_single_image_selection(self):
         """Checks whether the current selection is a single image."""
 

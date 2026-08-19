@@ -330,18 +330,18 @@ actions = ActionList([
     ),
     Action(
         id='text_size_increase',
-        text='&Bigger Text',
+        text='&Bigger',
         # Ctrl+= as well as Ctrl++, since + needs shift on most layouts
         shortcuts=['Ctrl++', 'Ctrl+='],
-        callback='on_action_text_size_increase',
-        group='active_when_text_selection',
+        callback='on_action_size_increase',
+        group='active_when_sizeable_selection',
     ),
     Action(
         id='text_size_decrease',
-        text='S&maller Text',
+        text='S&maller',
         shortcuts=['Ctrl+-'],
-        callback='on_action_text_size_decrease',
-        group='active_when_text_selection',
+        callback='on_action_size_decrease',
+        group='active_when_sizeable_selection',
     ),
     Action(
         id='text_highlight_color',

@@ -165,6 +165,9 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
     DEFAULT_COLOR = (235, 235, 235, 255)
     DEFAULT_WIDTH = 4
+    # A line thinner than this disappears; thicker than this is a blob
+    MIN_WIDTH = 0.5
+    MAX_WIDTH = 400
     # Length of the arrow head, as a multiple of the line width
     ARROW_SIZE = 4
 
@@ -186,6 +189,13 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
     def get_default_name(self):
         return self.NAMES[self.kind]
+
+    def set_line_width(self, width):
+        """Set how thick the line is drawn, in item coordinates."""
+
+        self.prepareGeometryChange()
+        self.line_width = min(self.MAX_WIDTH, max(self.MIN_WIDTH, width))
+        self.update()
 
     @classmethod
     def create_from_data(cls, **kwargs):

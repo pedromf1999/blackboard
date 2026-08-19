@@ -81,6 +81,9 @@ class BeeGraphicsView(MainControlsMixin,
     # 10% of a heading is a lot more than 10% of a caption, which is what
     # keeps them looking related as they are scaled.
     TEXT_SIZE_STEP = 1.1
+    # Lines are small numbers, so they need a bigger step than text to
+    # get anywhere in a few presses
+    LINE_WIDTH_STEP = 1.25
 
     def __init__(self, app, parent=None):
         super().__init__(parent)
@@ -237,11 +240,16 @@ class BeeGraphicsView(MainControlsMixin,
         """Begin a new drawing at the given scene position."""
 
         self.drawing_points = [pos]
+        # draw_width is how thick the line should look on screen, so the
+        # width the item is given has to allow for the zoom: at 25% a
+        # four unit line is one pixel of hairline, and at 400% it is a
+        # slab. The stroke then scales with the scene like everything
+        # else, keeping its size relative to what it was drawn over.
         self.drawing_item = BeeDrawItem(
             points=[[pos.x(), pos.y()]],
             kind=self.draw_tool,
             color=self.draw_color.getRgb(),
-            width=self.draw_width)
+            width=self.draw_width / self.get_scale())
         self.scene.addItem(self.drawing_item)
         self.drawing_item.bring_to_front()
 
@@ -796,11 +804,23 @@ class BeeGraphicsView(MainControlsMixin,
         self.undo_stack.push(
             commands.ChangeTextFormat(items, new_htmls, old_htmls))
 
-    def on_action_text_size_increase(self):
-        self.scale_selected_text(self.TEXT_SIZE_STEP)
+    def scale_selected_drawings(self, factor):
+        """Make the selected sketches, lines and arrows thicker or thinner."""
 
-    def on_action_text_size_decrease(self):
+        items = self.scene.selected_draw_items()
+        if not items:
+            return
+        self.undo_stack.push(commands.ChangeLineWidth(items, factor))
+
+    def on_action_size_increase(self):
+        """Make whatever is selected bigger: text, or line thickness."""
+
+        self.scale_selected_text(self.TEXT_SIZE_STEP)
+        self.scale_selected_drawings(self.LINE_WIDTH_STEP)
+
+    def on_action_size_decrease(self):
         self.scale_selected_text(1 / self.TEXT_SIZE_STEP)
+        self.scale_selected_drawings(1 / self.LINE_WIDTH_STEP)
 
     def apply_text_char_format(self, items, charformat):
         """Apply the format to the given items, as one undo step."""
@@ -1255,6 +1275,8 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_single_image_selection())
         self.actiongroup_set_enabled('active_when_text_selection',
                                      self.scene.has_text_selection())
+        self.actiongroup_set_enabled('active_when_sizeable_selection',
+                                     self.scene.has_sizeable_selection())
         if hasattr(self, 'text_toolbar'):
             self.text_toolbar.setVisible(self.scene.has_text_selection())
 

@@ -550,7 +550,7 @@ def test_corner_radius_grows_with_the_text(view):
     before = item.corner_radius()
 
     for _ in range(5):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
 
     assert item.corner_radius() > before
 
@@ -562,7 +562,7 @@ def test_corner_radius_shrinks_with_the_text(view):
     before = item.corner_radius()
 
     for _ in range(5):
-        view.on_action_text_size_decrease()
+        view.on_action_size_decrease()
 
     assert item.corner_radius() < before
 
@@ -585,7 +585,7 @@ def test_text_margin_grows_with_the_text(view):
 
     before = weight()
     for _ in range(8):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
 
     assert item.document().documentMargin() > 4
     assert weight() == pytest.approx(before)
@@ -625,7 +625,7 @@ def test_corner_radius_keeps_its_proportion_across_sizes(view):
     view.scene.addItem(big)
     big.setSelected(True)
     for _ in range(8):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
 
     def proportion(item):
         return item.corner_radius() / item.one_line_height()
@@ -641,7 +641,7 @@ def test_corner_radius_never_swallows_a_small_box(view):
     view.scene.addItem(item)
     item.setSelected(True)
     for _ in range(8):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
 
     rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
     shorter = min(rect.width(), rect.height())
@@ -665,7 +665,7 @@ def test_corner_radius_keeps_its_weight_as_text_grows(view):
 
     before = weight()
     for _ in range(8):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
 
     assert weight() == pytest.approx(before, abs=0.02)
 

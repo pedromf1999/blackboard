@@ -54,10 +54,10 @@ class TextToolBar(QtWidgets.QWidget):
         # A real minus sign, which lines up with the plus better than a hyphen
         self.smaller = self.add_button(
             layout, '−', 'Make the text smaller',
-            view.on_action_text_size_decrease)
+            view.on_action_size_decrease)
         self.bigger = self.add_button(
             layout, '+', 'Make the text bigger',
-            view.on_action_text_size_increase)
+            view.on_action_size_increase)
 
         self.setLayout(layout)
         self.adjustSize()

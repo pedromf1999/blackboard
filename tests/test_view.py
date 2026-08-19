@@ -11,7 +11,9 @@ import pytest
 from beeref import commands, constants, widgets
 from beeref.actions import actions
 from beeref.config import logfile_name, settings_events
-from beeref.items import BeePixmapItem, BeeTextItem, BeeGroupItem
+from beeref.fileio.sql import SQLiteIO
+from beeref.items import (
+    BeePixmapItem, BeeTextItem, BeeGroupItem, BeeDrawItem)
 from beeref.view import BeeGraphicsView
 
 APP_TITLE = f'{constants.APPNAME} {constants.VERSION}'
@@ -1142,14 +1144,14 @@ def test_on_action_text_bold_without_text_selected(view):
     assert len(view.undo_stack) == 0
 
 
-def test_on_action_text_size_increase(view):
+def test_on_action_size_increase(view):
     textitem = BeeTextItem('bigger please')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
     before = char_format_at(textitem, 3).fontPointSize() or float(
         textitem.font().pointSize())
 
-    view.on_action_text_size_increase()
+    view.on_action_size_increase()
     after = char_format_at(textitem, 3).fontPointSize()
     assert after > before
     assert len(view.undo_stack) == 1
@@ -1158,14 +1160,14 @@ def test_on_action_text_size_increase(view):
     assert char_format_at(textitem, 3).fontPointSize() != after
 
 
-def test_on_action_text_size_decrease(view):
+def test_on_action_size_decrease(view):
     textitem = BeeTextItem('smaller please')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
-    view.on_action_text_size_increase()
+    view.on_action_size_increase()
     bigger = char_format_at(textitem, 3).fontPointSize()
 
-    view.on_action_text_size_decrease()
+    view.on_action_size_decrease()
     assert char_format_at(textitem, 3).fontPointSize() < bigger
 
 
@@ -1176,9 +1178,9 @@ def test_text_size_steps_are_proportional(view):
     view.scene.addItem(textitem)
     textitem.setSelected(True)
 
-    view.on_action_text_size_increase()
+    view.on_action_size_increase()
     first = char_format_at(textitem, 3).fontPointSize()
-    view.on_action_text_size_increase()
+    view.on_action_size_increase()
     second = char_format_at(textitem, 3).fontPointSize()
 
     # Every press multiplies by the same factor, so the second press adds
@@ -1206,7 +1208,7 @@ def test_text_size_keeps_relative_sizes_within_one_item(view):
     charformat.setFontPointSize(10)
     cursor.mergeCharFormat(charformat)
 
-    view.on_action_text_size_increase()
+    view.on_action_size_increase()
     assert char_format_at(textitem, 3).fontPointSize() == 44
     assert char_format_at(textitem, 10).fontPointSize() == 11
 
@@ -1216,7 +1218,7 @@ def test_text_size_does_not_grow_past_the_maximum(view):
     view.scene.addItem(textitem)
     textitem.setSelected(True)
     for _ in range(200):
-        view.on_action_text_size_increase()
+        view.on_action_size_increase()
     assert char_format_at(textitem, 1).fontPointSize() == view.TEXT_SIZE_MAX
 
 
@@ -1225,7 +1227,7 @@ def test_text_size_does_not_shrink_past_the_minimum(view):
     view.scene.addItem(textitem)
     textitem.setSelected(True)
     for _ in range(200):
-        view.on_action_text_size_decrease()
+        view.on_action_size_decrease()
     assert char_format_at(textitem, 1).fontPointSize() == view.TEXT_SIZE_MIN
 
 
@@ -2551,3 +2553,102 @@ def test_pasting_after_copying_a_group_gives_a_group(clipboard_mock, view):
     groups = [item for item in view.scene.items()
               if getattr(item, 'TYPE', None) == 'group']
     assert len(groups) == 2
+
+
+@pytest.mark.parametrize('zoom,expected', [(1, 4), (0.25, 16), (4, 1)])
+def test_new_drawings_stay_visible_at_any_zoom(view, zoom, expected):
+    """A stroke drawn zoomed out must not come out as a hairline."""
+
+    view.scale(zoom / view.get_scale(), zoom / view.get_scale())
+    view.set_draw_tool(BeeDrawItem.SKETCH)
+    view.start_drawing(QtCore.QPointF(0, 0))
+
+    assert view.drawing_item.line_width == pytest.approx(
+        expected, rel=0.01)
+
+
+def draw_item(view, width=None):
+    item = BeeDrawItem(points=[[0, 0], [50, 50]], width=width)
+    view.scene.addItem(item)
+    return item
+
+
+def test_size_increase_thickens_a_drawing(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    before = item.line_width
+
+    view.on_action_size_increase()
+    assert item.line_width > before
+    assert item.line_width == pytest.approx(before * view.LINE_WIDTH_STEP)
+
+
+def test_size_decrease_thins_a_drawing(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    before = item.line_width
+
+    view.on_action_size_decrease()
+    assert item.line_width < before
+
+
+def test_line_width_can_be_undone(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    before = item.line_width
+
+    view.on_action_size_increase()
+    view.undo_stack.undo()
+    assert item.line_width == before
+
+
+def test_line_width_stops_at_the_limits(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    for _ in range(100):
+        view.on_action_size_increase()
+    assert item.line_width == BeeDrawItem.MAX_WIDTH
+    for _ in range(200):
+        view.on_action_size_decrease()
+    assert item.line_width == BeeDrawItem.MIN_WIDTH
+
+
+def test_size_change_covers_text_and_drawings_together(view):
+    drawing = draw_item(view)
+    text = BeeTextItem('words')
+    view.scene.addItem(text)
+    drawing.setSelected(True)
+    text.setSelected(True)
+    thickness = drawing.line_width
+    size = char_format_at(text, 1).fontPointSize() or float(
+        text.font().pointSize())
+
+    view.on_action_size_increase()
+    assert drawing.line_width > thickness
+    assert char_format_at(text, 1).fontPointSize() > size
+
+
+def test_drawings_count_as_sizeable(view):
+    item = draw_item(view)
+    assert view.scene.has_sizeable_selection() is False
+    item.setSelected(True)
+    assert view.scene.has_sizeable_selection() is True
+
+
+def test_line_width_survives_a_save(tmpfile, view):
+    """Thickness is part of the drawing, so it has to be stored."""
+
+    item = draw_item(view)
+    item.setSelected(True)
+    view.on_action_size_increase()
+    width = item.line_width
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    for existing in list(view.scene.items_for_save()):
+        view.scene.removeItem(existing)
+    SQLiteIO(tmpfile, view.scene).read()
+    view.scene.add_queued_items()
+
+    loaded = list(view.scene.items_by_type('draw'))
+    assert len(loaded) == 1
+    assert loaded[0].line_width == pytest.approx(width)

@@ -641,6 +641,24 @@ class ChangeTextFormat(QtGui.QUndoCommand):
         self.apply(self.old_htmls)
 
 
+class ChangeLineWidth(QtGui.QUndoCommand):
+    """Change how thick drawings are."""
+
+    def __init__(self, items, factor):
+        super().__init__('Change line width')
+        self.items = list(items)
+        self.factor = factor
+        self.old_widths = [item.line_width for item in self.items]
+
+    def redo(self):
+        for item, width in zip(self.items, self.old_widths):
+            item.set_line_width(width * self.factor)
+
+    def undo(self):
+        for item, width in zip(self.items, self.old_widths):
+            item.set_line_width(width)
+
+
 class ChangeTextWidth(QtGui.QUndoCommand):
     """Change the width text items wrap their text at."""
 

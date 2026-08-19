@@ -18,6 +18,7 @@ MENU_SEPARATOR = 0
 # The contents of these menus are also used on their own as the context
 # menu when right-clicking a text item or a group
 TEXT_MENU = '&Text'
+DRAW_MENU = '&Draw'
 GROUP_MENU = '&Group'
 
 menu_structure = [
@@ -134,6 +135,15 @@ menu_structure = [
             MENU_SEPARATOR,
             'group_box_color',
             'lock_group',
+        ],
+    },
+    {
+        'menu': DRAW_MENU,
+        'items': [
+            # The same two commands as in the Text menu: one pair of
+            # shortcuts makes whatever is selected bigger or smaller
+            'text_size_increase',
+            'text_size_decrease',
         ],
     },
     {
