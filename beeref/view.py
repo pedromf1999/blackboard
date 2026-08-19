@@ -844,14 +844,23 @@ class BeeGraphicsView(MainControlsMixin,
         items = self.scene.selected_text_items()
         if not items:
             return
-        color = QtWidgets.QColorDialog.getColor(
-            QtGui.QColor(), self, 'Choose Highlight Colour')
-        if not color.isValid():
-            return
+        old_htmls = [item.toHtml() for item in items]
 
-        charformat = QtGui.QTextCharFormat()
-        charformat.setBackground(color)
-        self.apply_text_char_format(items, charformat)
+        def preview(color):
+            for item in items:
+                item.apply_highlight(color)
+
+        color = self.pick_color_live(
+            'Choose Highlight Colour', QtGui.QColor(), preview)
+        # Whatever the last preview left behind is the chosen result;
+        # the originals go back so the undo command records the text as
+        # it was before any of this
+        new_htmls = [item.toHtml() for item in items]
+        for item, html in zip(items, old_htmls):
+            item.setHtml(html)
+        if color is not None:
+            self.undo_stack.push(
+                commands.ChangeTextFormat(items, new_htmls, old_htmls))
 
     def on_action_text_box_color(self):
         items = self.scene.selected_text_items()

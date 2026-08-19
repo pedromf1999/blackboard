@@ -1257,19 +1257,96 @@ def test_text_toolbar_buttons_scale_the_text(view):
     assert char_format_at(textitem, 3).fontPointSize() > before
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
-       return_value=QtGui.QColor(255, 255, 0))
-def test_on_action_text_highlight_color(color_mock, view):
+def test_on_action_text_highlight_color(view):
     textitem = BeeTextItem('foo')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
 
-    view.on_action_text_highlight_color()
+    with color_dialog(QtGui.QColor(255, 255, 0)):
+        view.on_action_text_highlight_color()
     assert len(view.undo_stack) == 1
     cursor = textitem.textCursor()
     cursor.select(QtGui.QTextCursor.SelectionType.Document)
     assert cursor.charFormat().background().color() == QtGui.QColor(
         255, 255, 0)
+
+
+def test_highlight_previews_while_picking(view):
+    """The words change as the colour changes, before OK is pressed."""
+
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    seen = []
+
+    def fake_exec(dialog):
+        dialog.setCurrentColor(QtGui.QColor(255, 255, 0))
+        seen.append(char_format_at(textitem, 1).background().color())
+        return QtWidgets.QDialog.DialogCode.Accepted.value
+
+    with patch.object(QtWidgets.QColorDialog, 'exec', fake_exec):
+        view.on_action_text_highlight_color()
+
+    assert seen == [QtGui.QColor(255, 255, 0)]
+
+
+def test_highlight_cancelled_puts_the_text_back(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    before = textitem.toHtml()
+
+    with color_dialog(QtGui.QColor(255, 255, 0), accept=False):
+        view.on_action_text_highlight_color()
+    assert textitem.toHtml() == before
+    assert len(view.undo_stack) == 0
+
+
+def test_highlight_undo_restores_the_text_from_before(view):
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    before = textitem.toHtml()
+
+    with color_dialog(QtGui.QColor(255, 255, 0)):
+        view.on_action_text_highlight_color()
+    view.undo_stack.undo()
+    assert textitem.toHtml() == before
+
+
+@pytest.mark.parametrize('highlight,expected', [
+    ((255, 255, 0), (0, 0, 0)),
+    ((10, 10, 60), (255, 255, 255))])
+def test_highlighted_words_take_their_colour_from_the_highlight(
+        view, highlight, expected):
+    """Not from the box: the words sit on the highlight."""
+
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    with color_dialog(QtGui.QColor(*highlight)):
+        view.on_action_text_highlight_color()
+    assert char_format_at(textitem, 1).foreground().color() == QtGui.QColor(
+        *expected)
+
+
+def test_changing_the_box_colour_keeps_a_highlight_readable(view):
+    """The box recolours its text, and must not flatten highlights."""
+
+    textitem = BeeTextItem('foo')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+    with color_dialog(QtGui.QColor(255, 255, 0)):
+        view.on_action_text_highlight_color()
+    on_highlight = char_format_at(textitem, 1).foreground().color()
+
+    with color_dialog(QtGui.QColor(0, 0, 0, 255)):
+        view.on_action_text_box_color()
+
+    assert char_format_at(textitem, 1).background().color() == QtGui.QColor(
+        255, 255, 0)
+    assert char_format_at(textitem, 1).foreground().color() == on_highlight
 
 
 def color_dialog(color, accept=True):
@@ -2735,17 +2812,13 @@ def test_text_toolbar_box_colour_button_opens_the_picker(view):
     assert textitem.box_color == QtGui.QColor(1, 2, 3, 255)
 
 
-# Highlighting still asks through getColor, which reports nothing until
-# OK, unlike the box and group colours
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
-       return_value=QtGui.QColor(9, 9, 9, 255))
-def test_text_toolbar_highlight_button_opens_the_picker(color_mock, view):
+def test_text_toolbar_highlight_button_opens_the_picker(view):
     textitem = BeeTextItem('colour me')
     view.scene.addItem(textitem)
     textitem.setSelected(True)
 
-    view.text_toolbar.highlight.click()
-    color_mock.assert_called_once()
+    with color_dialog(QtGui.QColor(9, 9, 9, 255)):
+        view.text_toolbar.highlight.click()
     assert char_format_at(textitem, 2).background().color() == QtGui.QColor(
         9, 9, 9, 255)
 

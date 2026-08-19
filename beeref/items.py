@@ -1173,8 +1173,10 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
         charformat = QtGui.QTextCharFormat()
         charformat.setFontFamilies([self.get_text_font().family()])
-        charformat.setForeground(self.defaultTextColor())
         self.apply_char_format(charformat)
+        # Colour is per run rather than one colour for the lot, so a
+        # highlight keeps words readable: see refresh_text_colors
+        self.refresh_text_colors()
 
     @classmethod
     def create_from_data(cls, **kwargs):
@@ -1345,26 +1347,23 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
 
         super().mousePressEvent(event)
 
-    def scale_font_size(self, factor, minimum, maximum):
-        """Multiply the size of the selected text, or of all of it.
-
-        Every run of text is scaled by its own size, so differences
-        within the selection survive: a heading stays bigger than the
-        body text around it. Setting one size for the whole selection,
-        as a plain point size does, would flatten them together.
-        """
+    def selected_range(self):
+        """The selected text, or all of it when nothing is selected."""
 
         cursor = self.textCursor()
         if cursor.hasSelection():
-            start = cursor.selectionStart()
-            end = cursor.selectionEnd()
-        else:
-            start = 0
-            end = self.document().characterCount() - 1
+            return cursor.selectionStart(), cursor.selectionEnd()
+        return 0, self.document().characterCount() - 1
 
-        # Collect first, edit afterwards: editing while walking the
-        # document invalidates the fragments being walked
-        edits = []
+    def text_runs(self, start, end):
+        """Each stretch of text between start and end sharing a format.
+
+        Returns (from, to, format) tuples, collected before anything is
+        changed: editing the document while walking it invalidates the
+        fragments being walked.
+        """
+
+        runs = []
         block = self.document().findBlock(start)
         while block.isValid() and block.position() < end:
             it = block.begin()
@@ -1377,23 +1376,87 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
                 frag_end = frag_start + fragment.length()
                 if frag_end <= start or frag_start >= end:
                     continue
-                size = fragment.charFormat().fontPointSize()
-                if size <= 0:
-                    # Text that was never sized reports zero; QFontInfo
-                    # resolves what it is actually being drawn at
-                    size = QtGui.QFontInfo(self.font()).pointSize()
-                edits.append((max(frag_start, start), min(frag_end, end),
-                              min(maximum, max(minimum, size * factor))))
+                runs.append((max(frag_start, start), min(frag_end, end),
+                             fragment.charFormat()))
             block = block.next()
+        return runs
 
-        edit_cursor = QtGui.QTextCursor(self.document())
-        for frag_start, frag_end, size in edits:
-            edit_cursor.setPosition(frag_start)
-            edit_cursor.setPosition(
-                frag_end, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    def apply_to_run(self, start, end, charformat):
+        """Merge a format into one stretch of text."""
+
+        cursor = QtGui.QTextCursor(self.document())
+        cursor.setPosition(start)
+        cursor.setPosition(end, QtGui.QTextCursor.MoveMode.KeepAnchor)
+        cursor.mergeCharFormat(charformat)
+
+    def text_color_over(self, background=None):
+        """The colour text reads best in where it sits.
+
+        Highlighted words sit on their highlight, everything else on the
+        box, and a translucent highlight is judged by what it looks like
+        over that box.
+        """
+
+        if (background is None or not background.isValid()
+                or background.alpha() == 0):
+            return QtGui.QColor(self.defaultTextColor())
+        return readable_grey(blend_over(background, self.visible_box_color()))
+
+    def run_background(self, charformat):
+        """The highlight colour of a run, or None if it has none."""
+
+        brush = charformat.background()
+        if brush.style() == Qt.BrushStyle.NoBrush:
+            return None
+        return brush.color()
+
+    def apply_highlight(self, color):
+        """Highlight the selection, in a colour the words can be read on."""
+
+        charformat = QtGui.QTextCharFormat()
+        charformat.setBackground(color)
+        charformat.setForeground(self.text_color_over(color))
+        self.apply_char_format(charformat)
+
+    def refresh_text_colors(self):
+        """Recolour every run for the background it sits on.
+
+        Plain text follows the box, highlighted words follow their own
+        highlight. One colour across the whole text would make
+        highlighted words unreadable whenever the box colour changed.
+        """
+
+        for start, end, charformat in self.text_runs(
+                0, self.document().characterCount() - 1):
+            new_format = QtGui.QTextCharFormat()
+            new_format.setForeground(
+                self.text_color_over(self.run_background(charformat)))
+            self.apply_to_run(start, end, new_format)
+
+    def scale_font_size(self, factor, minimum, maximum):
+        """Multiply the size of the selected text, or of all of it.
+
+        Every run of text is scaled by its own size, so differences
+        within the selection survive: a heading stays bigger than the
+        body text around it. Setting one size for the whole selection,
+        as a plain point size does, would flatten them together.
+        """
+
+        start, end = self.selected_range()
+        edits = []
+        for run_start, run_end, charformat in self.text_runs(start, end):
+            size = charformat.fontPointSize()
+            if size <= 0:
+                # Text that was never sized reports zero; QFontInfo
+                # resolves what it is actually being drawn at
+                size = QtGui.QFontInfo(self.font()).pointSize()
+            edits.append((run_start, run_end,
+                          min(maximum, max(minimum, size * factor))))
+
+        for run_start, run_end, size in edits:
             charformat = QtGui.QTextCharFormat()
             charformat.setFontPointSize(size)
-            edit_cursor.mergeCharFormat(charformat)
+            self.apply_to_run(run_start, run_end, charformat)
 
     def apply_char_format(self, charformat):
         """Apply the given char format to the current selection, or to the
