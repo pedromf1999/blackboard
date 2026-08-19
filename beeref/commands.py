@@ -641,6 +641,31 @@ class ChangeTextFormat(QtGui.QUndoCommand):
         self.apply(self.old_htmls)
 
 
+class ChangeTextWidth(QtGui.QUndoCommand):
+    """Change the width text items wrap their text at."""
+
+    def __init__(self, items, width, old_widths, ignore_first_redo=False):
+        super().__init__('Change text width')
+        self.items = list(items)
+        self.width = width
+        self.old_widths = list(old_widths)
+        self.ignore_first_redo = ignore_first_redo
+        self.first_redo = True
+
+    def redo(self):
+        if self.first_redo:
+            self.first_redo = False
+            if self.ignore_first_redo:
+                # The drag already left the items at the new width
+                return
+        for item in self.items:
+            item.set_wrap_width(self.width)
+
+    def undo(self):
+        for item, width in zip(self.items, self.old_widths):
+            item.set_wrap_width(width)
+
+
 class ChangeTextBoxColor(QtGui.QUndoCommand):
     """Change the colour of the box drawn behind text items."""
 

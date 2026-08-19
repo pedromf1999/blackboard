@@ -119,6 +119,15 @@ class BaseItemMixin:
         if vertical:
             self.setRotation(self.rotation() + 180)
 
+    def reflows_text(self):
+        """Whether dragging an edge rewraps rather than stretches.
+
+        Text items override this: squashing letters out of shape is not
+        what dragging the side of a text box means anywhere else.
+        """
+
+        return False
+
     def parent_scale(self):
         """The scale applied by the groups this item sits in."""
 
@@ -217,6 +226,7 @@ class SelectableMixin(BaseItemMixin):
     SCALE_MODE = 1
     ROTATE_MODE = 2
     STRETCH_MODE = 3
+    WRAP_MODE = 4
 
     def init_selectable(self):
         self.setAcceptHoverEvents(True)
@@ -388,7 +398,7 @@ class SelectableMixin(BaseItemMixin):
         outer_margin = self.select_resize_size / 2
         inner_margin = self.select_resize_size / 2
         origin = self.bounding_rect_unselected().topLeft()
-        return [
+        edges = [
             # top:
             {
                 'rect': QtCore.QRectF(
@@ -426,6 +436,13 @@ class SelectableMixin(BaseItemMixin):
                 'vertical': False,
             }
         ]
+
+        if self.reflows_text():
+            # A text box is as tall as its text, so there is nothing for
+            # the top and bottom to do. Offering handles that cannot
+            # change anything is worse than not offering them.
+            return [edge for edge in edges if not edge['vertical']]
+        return edges
 
     def boundingRect(self):
         if not self.has_selection_outline():
@@ -546,11 +563,48 @@ class SelectableMixin(BaseItemMixin):
             # item in one direction only
             for edge in self.get_edge_bounds():
                 if edge['rect'].contains(event.pos()):
-                    self.start_stretch(edge)
+                    if self.reflows_text():
+                        self.start_wrap(edge)
+                    else:
+                        self.start_stretch(edge)
                     event.accept()
                     return
 
         super().mousePressEvent(event)
+
+    def start_wrap(self, edge):
+        """Begin rewrapping the text by dragging a side.
+
+        The opposite side stays put, so the distance from it to the
+        cursor is the width the text should wrap at.
+        """
+
+        self.active_mode = self.WRAP_MODE
+        rect = self.bounding_rect_unselected()
+        near_right = edge['rect'].center().x() > self.center.x()
+        fixed = rect.left() if near_right else rect.right()
+        anchor = QtCore.QPointF(fixed, self.center.y())
+        axis = QtCore.QPointF(1 if near_right else -1, 0)
+
+        self.event_anchor = self.mapToScene(anchor)
+        origin = self.mapToScene(QtCore.QPointF(0, 0))
+        direction = self.mapToScene(axis) - origin
+        length = math.sqrt(QtCore.QPointF.dotProduct(direction, direction))
+        self.wrap_axis = direction / length
+        self.wrap_orig = {item: (item.textWidth() if item.textWidth() > 0
+                                 else item.width)
+                          for item in self.selection_action_items()
+                          if item.reflows_text()}
+
+    def get_wrap_width(self, event):
+        """The width the text should wrap at, for the current drag."""
+
+        moved = event.scenePos() - self.event_anchor
+        distance = QtCore.QPointF.dotProduct(self.wrap_axis, moved)
+        # The drag is measured on the canvas; the width is in the item's
+        # own coordinates, which the item's scale and any group around
+        # it sit between
+        return distance / (self.scale() * self.parent_scale())
 
     def start_stretch(self, edge):
         """Begin stretching the item by one of its edges.
@@ -714,6 +768,12 @@ class SelectableMixin(BaseItemMixin):
                               item.mapFromScene(self.event_anchor))
             event.accept()
             return
+        if self.active_mode == self.WRAP_MODE:
+            width = self.get_wrap_width(event)
+            for item in self.wrap_orig:
+                item.set_wrap_width(width)
+            event.accept()
+            return
         if self.active_mode == self.ROTATE_MODE:
             snap = (event.modifiers() == Qt.KeyboardModifier.ControlModifier
                     or event.modifiers() == Qt.KeyboardModifier.ShiftModifier)
@@ -751,6 +811,17 @@ class SelectableMixin(BaseItemMixin):
                         self.selection_action_items(),
                         self.get_rotate_delta(event.scenePos()),
                         self.event_anchor,
+                        ignore_first_redo=True))
+            event.accept()
+            self.active_mode = None
+            return
+        elif self.active_mode == self.WRAP_MODE:
+            width = self.get_wrap_width(event)
+            if any(width != orig for orig in self.wrap_orig.values()):
+                self.scene().undo_stack.push(
+                    commands.ChangeTextWidth(
+                        list(self.wrap_orig), width,
+                        list(self.wrap_orig.values()),
                         ignore_first_redo=True))
             event.accept()
             self.active_mode = None

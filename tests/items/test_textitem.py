@@ -4,7 +4,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 import pytest
 
-from beeref.items import BeeTextItem, item_registry
+from beeref.items import BeeTextItem, BeePixmapItem, item_registry
 
 
 def test_in_items_registry():
@@ -662,3 +662,78 @@ def test_corner_radius_keeps_its_weight_as_text_grows(view):
         view.on_action_text_size_increase()
 
     assert weight() == pytest.approx(before, abs=0.02)
+
+
+def test_wrap_width_rewraps_the_text(view):
+    """Narrowing the box makes the text taller, not squashed."""
+
+    item = BeeTextItem('one two three four five six seven eight nine ten')
+    view.scene.addItem(item)
+    wide = QtWidgets.QGraphicsTextItem.boundingRect(item)
+
+    item.set_wrap_width(wide.width() / 3)
+    narrow = QtWidgets.QGraphicsTextItem.boundingRect(item)
+
+    assert narrow.width() < wide.width()
+    assert narrow.height() > wide.height()
+    # Rewrapping is not stretching: the letters keep their shape
+    assert item.stretch == (1, 1)
+
+
+def test_wrap_width_never_cuts_a_word_in_half(view):
+    item = BeeTextItem('antidisestablishmentarianism')
+    view.scene.addItem(item)
+    item.set_wrap_width(item.MIN_WRAP_WIDTH)
+
+    option = item.document().defaultTextOption()
+    assert option.wrapMode() == QtGui.QTextOption.WrapMode.WordWrap
+    # The long word hangs over the edge rather than being broken up
+    assert item.toPlainText() == 'antidisestablishmentarianism'
+
+
+def test_wrap_width_has_a_minimum(view):
+    item = BeeTextItem('some text')
+    view.scene.addItem(item)
+    item.set_wrap_width(1)
+    assert item.textWidth() == item.MIN_WRAP_WIDTH
+
+
+def test_wrap_width_is_saved_and_restored(view):
+    item = BeeTextItem('a fair amount of words here')
+    view.scene.addItem(item)
+    item.set_wrap_width(120)
+
+    data = item.get_extra_save_data()
+    assert data['text_width'] == 120
+
+    restored = BeeTextItem(**data)
+    assert restored.textWidth() == 120
+
+
+def test_untouched_text_saves_no_width(view):
+    """Boards that never used this stay exactly as they were."""
+
+    item = BeeTextItem('plain')
+    view.scene.addItem(item)
+    assert 'text_width' not in item.get_extra_save_data()
+
+
+def test_copy_keeps_the_wrap_width(view):
+    item = BeeTextItem('wrapped text here')
+    view.scene.addItem(item)
+    item.set_wrap_width(90)
+    assert item.create_copy().textWidth() == 90
+
+
+def test_text_items_offer_no_vertical_edge_handles(view):
+    item = BeeTextItem('foo')
+    view.scene.addItem(item)
+    assert [edge['vertical'] for edge in item.get_edge_bounds()] == [
+        False, False]
+
+
+def test_images_still_stretch_from_every_edge(view, imgfilename3x3):
+    item = BeePixmapItem(QtGui.QImage(imgfilename3x3))
+    view.scene.addItem(item)
+    assert item.reflows_text() is False
+    assert len(item.get_edge_bounds()) == 4

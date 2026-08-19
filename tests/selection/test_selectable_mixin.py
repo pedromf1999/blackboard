@@ -1368,3 +1368,62 @@ def test_ctrl_click_stays_deselected_after_release(view):
 
     assert second.isSelected() is False
     assert first.isSelected() is True
+
+
+def right_edge_of(item):
+    return [edge for edge in item.get_edge_bounds()
+            if not edge['vertical']][-1]
+
+
+def drag_event(item, item_x):
+    event = MagicMock()
+    event.scenePos.return_value = item.mapToScene(QtCore.QPointF(item_x, 0))
+    return event
+
+
+def test_dragging_a_text_edge_rewraps_instead_of_stretching(view):
+    item = BeeTextItem('one two three four five six seven eight')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    item.event_start = item.mapToScene(QtCore.QPointF(0, 0))
+
+    item.start_wrap(right_edge_of(item))
+    item.mouseMoveEvent(drag_event(item, 150))
+
+    assert item.textWidth() == approx(150, abs=1)
+    # The letters are not squashed; only the wrapping changed
+    assert item.stretch == (1, 1)
+
+
+def test_dragging_a_text_edge_can_be_undone(view):
+    item = BeeTextItem('one two three four five six seven eight')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    item.event_start = item.mapToScene(QtCore.QPointF(0, 0))
+    before = item.width
+
+    item.start_wrap(right_edge_of(item))
+    item.mouseMoveEvent(drag_event(item, 120))
+    item.mouseReleaseEvent(drag_event(item, 120))
+
+    assert len(view.scene.undo_stack) == 1
+    view.scene.undo_stack.undo()
+    assert item.width == approx(before, abs=1)
+
+
+def test_dragging_a_text_edge_inside_a_group_uses_the_group_scale(view):
+    item = BeeTextItem('one two three four five six seven eight')
+    view.scene.addItem(item)
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    item.setParentItem(group)
+    group.fit_to_children()
+    group.setScale(2)
+    item.setSelected(True)
+    item.event_start = item.mapToScene(QtCore.QPointF(0, 0))
+
+    item.start_wrap(right_edge_of(item))
+    item.mouseMoveEvent(drag_event(item, 150))
+
+    # 150 in the item's own coordinates, whatever the group is scaled to
+    assert item.textWidth() == approx(150, abs=1)

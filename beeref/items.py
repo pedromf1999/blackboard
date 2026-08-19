@@ -1094,7 +1094,8 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     URL_RE = re.compile(r'(?:https?://|www\.)\S+', re.IGNORECASE)
     URL_TRAILING_CHARS = '.,;:!?)]}\'"'
 
-    def __init__(self, text=None, html=None, box_color=None, **kwargs):
+    def __init__(self, text=None, html=None, box_color=None,
+                 text_width=None, **kwargs):
         super().__init__(text or "Text")
         self.save_id = None
         logger.debug(f'Initialized {self}')
@@ -1103,6 +1104,14 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.is_editable = True
         self.edit_mode = False
         self.settings = BeeSettings()
+        # Wrap at whole words only. Qt's default also breaks inside a
+        # word when one does not fit, which is never what is wanted in a
+        # note: a word too long for the box hangs over the edge instead.
+        option = self.document().defaultTextOption()
+        option.setWrapMode(QtGui.QTextOption.WrapMode.WordWrap)
+        self.document().setDefaultTextOption(option)
+        if text_width:
+            self.set_wrap_width(text_width)
         # Setting the box colour also picks the text colour to go with it
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         self.setFont(self.get_text_font())
@@ -1189,9 +1198,14 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         # 'text' is the plain text version, which BeeRef (and older
         # versions of this fork) will read; 'html' holds the formatting
         # and is ignored by anything that doesn't know about it.
-        return {'text': self.toPlainText(),
+        data = {'text': self.toPlainText(),
                 'html': self.toHtml(),
                 'box_color': self.box_color.getRgb()}
+        if self.textWidth() > 0:
+            # Only stored once the box has been given a width to wrap
+            # at, so untouched text items save exactly as before
+            data['text_width'] = self.textWidth()
+        return data
 
     def contains(self, point):
         return self.boundingRect().contains(point)
@@ -1370,9 +1384,26 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             cursor.select(QtGui.QTextCursor.SelectionType.Document)
         cursor.mergeCharFormat(charformat)
 
+    # Narrower than this and the text has nowhere to go
+    MIN_WRAP_WIDTH = 40
+
+    def reflows_text(self):
+        """Dragging an edge rewraps the text rather than stretching it."""
+
+        return True
+
+    def set_wrap_width(self, width):
+        """Set the width the text wraps at, in item coordinates."""
+
+        self.prepareGeometryChange()
+        self.setTextWidth(max(self.MIN_WRAP_WIDTH, width))
+        self.update_document_margin()
+
     def create_copy(self):
         item = BeeTextItem(html=self.toHtml(),
-                           box_color=self.box_color.getRgb())
+                           box_color=self.box_color.getRgb(),
+                           text_width=(self.textWidth()
+                                       if self.textWidth() > 0 else None))
         item.setPos(self.pos())
         item.setZValue(self.zValue())
         item.setScale(self.scale())
