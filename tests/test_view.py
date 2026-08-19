@@ -2881,3 +2881,95 @@ def test_colour_picker_is_left_alone_without_a_selection(view):
     with patch.object(QtWidgets.QColorDialog, 'exec', fake_exec):
         view.on_action_group_box_color()
     assert seen == {}
+
+
+def pinned_bar(view, pos=(0, 0)):
+    """A selected text item and the bar that should be stuck to it."""
+
+    view.resize(900, 700)
+    textitem = BeeTextItem('follow me')
+    view.scene.addItem(textitem)
+    textitem.setPos(*pos)
+    textitem.setSelected(True)
+    view.on_selection_changed()
+    return textitem, view.text_toolbar
+
+
+def item_on_view(view, item):
+    return view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+
+
+def test_text_bar_sits_above_the_text(view):
+    textitem, bar = pinned_bar(view, (200, 300))
+    rect = item_on_view(view, textitem)
+
+    assert bar.isVisible() is True
+    assert bar.geometry().bottom() <= rect.top()
+    # and centred on it, give or take rounding
+    assert abs(bar.geometry().center().x() - rect.center().x()) <= 2
+
+
+def test_text_bar_follows_the_text_when_it_moves(view):
+    textitem, bar = pinned_bar(view, (0, 300))
+    before = bar.pos()
+
+    textitem.setPos(400, 300)
+    # Keep the text in the middle of the window, so the bar is placed by
+    # where the text is rather than by the edge it would be clamped to
+    view.centerOn(textitem.sceneBoundingRect().center())
+    view.update_text_toolbar()
+    assert bar.pos() != before
+    assert abs(bar.geometry().center().x()
+               - item_on_view(view, textitem).center().x()) <= 2
+
+
+def test_text_bar_follows_the_text_when_zooming(view):
+    textitem, bar = pinned_bar(view, (0, 300))
+    view.centerOn(textitem.sceneBoundingRect().center())
+    view.update_text_toolbar()
+    before = bar.geometry()
+
+    view.scale(2, 2)
+    view.centerOn(textitem.sceneBoundingRect().center())
+    view.update_text_toolbar()
+    rect = item_on_view(view, textitem)
+    # The text is twice the size on screen, so the bar has moved with it
+    assert bar.geometry() != before
+    assert abs(bar.geometry().center().x() - rect.center().x()) <= 2
+    assert bar.geometry().bottom() <= rect.top()
+
+
+def test_text_bar_hangs_below_when_there_is_no_room_above(view):
+    """Text at the very top of the window still gets its buttons."""
+
+    _, bar = pinned_bar(view)
+    against_the_top = QtCore.QRect(300, 0, 200, 60)
+
+    bar.pin_to(against_the_top)
+    assert bar.geometry().top() >= against_the_top.bottom()
+    assert bar.geometry().top() >= 0
+
+
+def test_text_bar_sits_above_when_there_is_room(view):
+    _, bar = pinned_bar(view)
+    lower_down = QtCore.QRect(300, 400, 200, 60)
+
+    bar.pin_to(lower_down)
+    assert bar.geometry().bottom() <= lower_down.top()
+
+
+def test_text_bar_stays_inside_the_window(view):
+    textitem, bar = pinned_bar(view, (0, 300))
+    for pos in ((-5000, 300), (5000, 300), (0, -5000), (0, 5000)):
+        textitem.setPos(*pos)
+        view.update_text_toolbar()
+        assert view.rect().contains(bar.geometry()) is True
+
+
+def test_text_bar_goes_away_with_the_selection(view):
+    textitem, bar = pinned_bar(view)
+    assert bar.isVisible() is True
+
+    textitem.setSelected(False)
+    view.on_selection_changed()
+    assert bar.isVisible() is False

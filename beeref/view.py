@@ -160,9 +160,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_toolbar.reposition()
         self.draw_toolbar.show()
 
-        # Sits under the drawing tools, and only while text is selected
+        # Follows the selected text around; see update_text_toolbar
         self.text_toolbar = widgets.text_toolbar.TextToolBar(self, self)
-        self.text_toolbar.reposition(below=self.draw_toolbar)
         self.text_toolbar.hide()
 
         self.apply_palette_to_color_dialogs()
@@ -358,6 +357,9 @@ class BeeGraphicsView(MainControlsMixin,
         painter.drawLines(lines)
 
     def on_scene_changed(self, region):
+        # Anything that moves or resizes an item lands here, which is
+        # what keeps the text buttons stuck to their text
+        self.update_text_toolbar()
         if not self.scene.items():
             logger.debug('No items in scene')
             self.setTransform(QtGui.QTransform())
@@ -1342,8 +1344,7 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_text_selection())
         self.actiongroup_set_enabled('active_when_sizeable_selection',
                                      self.scene.has_sizeable_selection())
-        if hasattr(self, 'text_toolbar'):
-            self.text_toolbar.setVisible(self.scene.has_text_selection())
+        self.update_text_toolbar()
 
         if self.scene.has_selection():
             item = self.scene.selectedItems(user_only=True)[0]
@@ -1409,6 +1410,7 @@ class BeeGraphicsView(MainControlsMixin,
         super().scale(*args, **kwargs)
         self.scene.on_view_scale_change()
         self.recalc_scene_rect()
+        self.update_text_toolbar()
 
     def get_scale(self):
         return self.transform().m11()
@@ -1585,9 +1587,36 @@ class BeeGraphicsView(MainControlsMixin,
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.recalc_scene_rect()
+        self.update_text_toolbar()
         self.welcome_overlay.resize(self.size())
         if self.shortcuts_hint.isVisible():
             self.shortcuts_hint.reposition()
+
+    def update_text_toolbar(self):
+        """Show the text buttons over the selected text, or not at all.
+
+        Called whenever anything could have moved the text on screen:
+        the selection changing, an item being dragged, zooming,
+        panning, or the window being resized.
+        """
+
+        if not hasattr(self, 'text_toolbar'):
+            return
+        items = self.scene.selected_text_items()
+        if not items:
+            self.text_toolbar.hide()
+            return
+
+        rect = items[0].sceneBoundingRect()
+        for item in items[1:]:
+            rect = rect.united(item.sceneBoundingRect())
+        self.text_toolbar.pin_to(self.mapFromScene(rect).boundingRect())
+        self.text_toolbar.show()
+
+    def scrollContentsBy(self, dx, dy):
+        super().scrollContentsBy(dx, dy)
+        # Panning moves the text under a bar that would otherwise stay put
+        self.update_text_toolbar()
 
     def escape(self):
         """Back to the mouse, with nothing selected.

@@ -37,7 +37,7 @@ class TextToolBar(QtWidgets.QWidget):
     """
 
     MARGIN = 20
-    # Space between this bar and the one above it
+    # Space left between the bar and the text it belongs to
     GAP = 8
     BUTTON_SIZE = 34
     ICON_SIZE = 20
@@ -93,10 +93,26 @@ class TextToolBar(QtWidgets.QWidget):
         layout.addWidget(button)
         return button
 
-    def reposition(self, below=None):
-        """Sit under the given widget, or in the top left corner."""
+    def pin_to(self, rect):
+        """Sit just above the given rectangle of the viewport.
 
-        top = self.MARGIN
-        if below is not None:
-            top = below.y() + below.height() + self.GAP
-        self.move(self.MARGIN, top)
+        The bar follows the text it belongs to, so the buttons are
+        always next to what they act on. When there is no room above --
+        the text is near the top of the window -- it goes underneath
+        instead, and it never leaves the visible area.
+        """
+
+        self.adjustSize()
+        size = self.size()
+        area = self.parentWidget().rect()
+
+        x = rect.center().x() - size.width() // 2
+        x = max(0, min(x, area.width() - size.width()))
+
+        y = rect.top() - size.height() - self.GAP
+        if y < 0:
+            # No room above the text, so hang underneath it
+            y = rect.bottom() + self.GAP
+        y = max(0, min(y, area.height() - size.height()))
+
+        self.move(x, y)
