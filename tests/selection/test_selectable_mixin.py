@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
 
 from beeref.assets import BeeAssets
 from beeref import commands
@@ -1289,3 +1290,81 @@ def test_selection_outline_stays_screen_sized_for_images(view):
     view.scene.addItem(item)
     assert item.selection_corner_radius() == item.fixed_length_for_viewport(
         CORNER_RADIUS)
+
+
+# The tests above call the handlers directly. These send a whole click --
+# press and release -- through the viewport, because the bug they guard
+# against was in the release, which a direct press test cannot see.
+
+def click_at(view, scene_pos, modifier):
+    pos = view.mapFromScene(scene_pos)
+    QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton,
+                     modifier, pos)
+    QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton,
+                       modifier, pos)
+
+
+def image_item_at(view, x, y):
+    img = QtGui.QImage(100, 100, QtGui.QImage.Format.Format_RGB32)
+    img.fill(QtGui.QColor(200, 100, 100))
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+    item.setPos(x, y)
+    return item
+
+
+def test_shift_click_keeps_the_earlier_selection_after_release(view):
+    view.resize(800, 600)
+    first = image_item_at(view, 0, 0)
+    second = image_item_at(view, 300, 0)
+    view.on_action_fit_scene()
+    first.setSelected(True)
+
+    click_at(view, second.mapToScene(QtCore.QPointF(50, 50)),
+             Qt.KeyboardModifier.ShiftModifier)
+
+    assert second.isSelected() is True
+    assert first.isSelected() is True
+
+
+def test_shift_click_adds_a_second_group(view):
+    view.resize(800, 600)
+
+    def group_at(x):
+        item = BeeTextItem('in a group')
+        view.scene.addItem(item)
+        group = BeeGroupItem()
+        view.scene.addItem(group)
+        item.setParentItem(group)
+        group.fit_to_children()
+        group.set_children_interactive(False)
+        group.setPos(x, 0)
+        return group
+
+    first = group_at(0)
+    second = group_at(400)
+    view.on_action_fit_scene()
+    first.setSelected(True)
+
+    click_at(view, second.mapToScene(second.rect().center()),
+             Qt.KeyboardModifier.ShiftModifier)
+
+    assert second.isSelected() is True
+    assert first.isSelected() is True
+
+
+def test_ctrl_click_stays_deselected_after_release(view):
+    """Qt toggles on release, which put the item straight back."""
+
+    view.resize(800, 600)
+    first = image_item_at(view, 0, 0)
+    second = image_item_at(view, 300, 0)
+    view.on_action_fit_scene()
+    first.setSelected(True)
+    second.setSelected(True)
+
+    click_at(view, second.mapToScene(QtCore.QPointF(50, 50)),
+             Qt.KeyboardModifier.ControlModifier)
+
+    assert second.isSelected() is False
+    assert first.isSelected() is True

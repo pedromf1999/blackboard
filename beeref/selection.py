@@ -769,7 +769,31 @@ class SelectableMixin(BaseItemMixin):
             self.active_mode = None
             return
         self.active_mode = None
+
+        if self.selection_modifier_held(event):
+            # Qt clears the rest of the selection on release for any click
+            # that did not move, unless its own multi-select modifier
+            # (Ctrl) is held. This application selects with Shift and
+            # deselects with Ctrl, so Qt saw an ordinary click and threw
+            # the rest of the selection away again -- after the press
+            # handler had just added to it. Swallow the release the same
+            # way the press is swallowed.
+            event.accept()
+            return
+
         super().mouseReleaseEvent(event)
+
+    def selection_modifier_held(self, event):
+        """Whether this click is meant to add to or take from the selection."""
+
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        if not (self.flags()
+                & QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable):
+            return False
+        modifiers = event.modifiers()
+        return bool(modifiers & (Qt.KeyboardModifier.ShiftModifier
+                                 | Qt.KeyboardModifier.ControlModifier))
 
     def on_view_scale_change(self):
         self.prepareGeometryChange()
