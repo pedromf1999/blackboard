@@ -2698,3 +2698,62 @@ def test_escape_while_editing_text_is_left_to_the_text(view):
         QtCore.QEvent.Type.KeyPress, Qt.Key.Key_Escape,
         Qt.KeyboardModifier.NoModifier))
     assert view.draw_tool == BeeDrawItem.LINE
+
+
+def test_text_toolbar_has_all_five_buttons(view):
+    bar = view.text_toolbar
+    buttons = [bar.bold, bar.smaller, bar.bigger, bar.highlight,
+               bar.box_color]
+    for button in buttons:
+        assert button.icon().isNull() is False
+        assert button.toolTip()
+        assert button.focusPolicy() == Qt.FocusPolicy.NoFocus
+
+
+def test_text_toolbar_buttons_are_wired_to_the_commands(view):
+    textitem = BeeTextItem('format me')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.text_toolbar.bold.click()
+    assert char_format_at(textitem, 2).fontWeight() == QtGui.QFont.Weight.Bold
+
+    size = char_format_at(textitem, 2).fontPointSize()
+    view.text_toolbar.bigger.click()
+    assert char_format_at(textitem, 2).fontPointSize() > size
+    view.text_toolbar.smaller.click()
+    assert char_format_at(textitem, 2).fontPointSize() == pytest.approx(size)
+
+
+def test_text_toolbar_box_colour_button_opens_the_picker(view):
+    textitem = BeeTextItem('colour me')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    with color_dialog(QtGui.QColor(1, 2, 3, 255)):
+        view.text_toolbar.box_color.click()
+    assert textitem.box_color == QtGui.QColor(1, 2, 3, 255)
+
+
+# Highlighting still asks through getColor, which reports nothing until
+# OK, unlike the box and group colours
+@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+       return_value=QtGui.QColor(9, 9, 9, 255))
+def test_text_toolbar_highlight_button_opens_the_picker(color_mock, view):
+    textitem = BeeTextItem('colour me')
+    view.scene.addItem(textitem)
+    textitem.setSelected(True)
+
+    view.text_toolbar.highlight.click()
+    color_mock.assert_called_once()
+    assert char_format_at(textitem, 2).background().color() == QtGui.QColor(
+        9, 9, 9, 255)
+
+
+def test_size_buttons_repeat_while_held_but_the_others_do_not(view):
+    bar = view.text_toolbar
+    assert bar.bigger.autoRepeat() is True
+    assert bar.smaller.autoRepeat() is True
+    assert bar.bold.autoRepeat() is False
+    assert bar.highlight.autoRepeat() is False
+    assert bar.box_color.autoRepeat() is False

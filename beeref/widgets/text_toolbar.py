@@ -17,18 +17,22 @@
 
 import logging
 
-from PyQt6 import QtWidgets
+from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import Qt
+
+from beeref.assets import BeeAssets
 
 
 logger = logging.getLogger(__name__)
 
 
 class TextToolBar(QtWidgets.QWidget):
-    """Minus and plus buttons for scaling the selected text.
+    """The buttons for formatting the selected text.
 
-    Each click scales by a percentage rather than by a number of points,
-    so the steps stay proportional however big the text already is. Shown
+    Bold, smaller and bigger, highlight colour and box colour: the same
+    commands as the Text menu, within reach of the text being worked on.
+    Sizing scales by a percentage rather than by a number of points, so
+    the steps stay proportional however big the text already is. Shown
     only while text is selected, and sits under the drawing tools.
     """
 
@@ -36,6 +40,7 @@ class TextToolBar(QtWidgets.QWidget):
     # Space between this bar and the one above it
     GAP = 8
     BUTTON_SIZE = 34
+    ICON_SIZE = 20
 
     def __init__(self, parent, view):
         super().__init__(parent)
@@ -51,29 +56,40 @@ class TextToolBar(QtWidgets.QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(4)
 
-        # A real minus sign, which lines up with the plus better than a hyphen
+        self.bold = self.add_button(
+            layout, 'bold', 'Bold', view.on_action_text_bold)
+        # Only the size buttons repeat while held: pressing and holding
+        # bold or a colour has nothing sensible to keep doing
         self.smaller = self.add_button(
-            layout, '−', 'Make the text smaller',
-            view.on_action_size_decrease)
+            layout, 'smaller', 'Make the text smaller',
+            view.on_action_size_decrease, repeat=True)
         self.bigger = self.add_button(
-            layout, '+', 'Make the text bigger',
-            view.on_action_size_increase)
+            layout, 'bigger', 'Make the text bigger',
+            view.on_action_size_increase, repeat=True)
+        self.highlight = self.add_button(
+            layout, 'highlight', 'Highlight colour',
+            view.on_action_text_highlight_color)
+        self.box_color = self.add_button(
+            layout, 'box_color', 'Box colour',
+            view.on_action_text_box_color)
 
         self.setLayout(layout)
         self.adjustSize()
 
-    def add_button(self, layout, label, tooltip, callback):
+    def add_button(self, layout, icon, tooltip, callback, repeat=False):
         button = QtWidgets.QToolButton(self)
-        button.setText(label)
         button.setToolTip(tooltip)
+        button.setIcon(BeeAssets().tool_icon(icon))
+        button.setIconSize(QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
         button.clicked.connect(callback)
-        # Holding the button keeps scaling, so going a long way is one
-        # press rather than twenty clicks
-        button.setAutoRepeat(True)
-        button.setAutoRepeatDelay(400)
-        button.setAutoRepeatInterval(120)
+        if repeat:
+            # Holding the button keeps scaling, so going a long way is
+            # one press rather than twenty clicks
+            button.setAutoRepeat(True)
+            button.setAutoRepeatDelay(400)
+            button.setAutoRepeatInterval(120)
         layout.addWidget(button)
         return button
 
