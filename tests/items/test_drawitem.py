@@ -126,3 +126,47 @@ def test_only_the_line_is_clickable(view):
     assert shape.contains(QtCore.QPointF(100, 100)) is True
     # The far corner of the bounding box is not on the line
     assert shape.contains(QtCore.QPointF(190, 10)) is False
+
+
+def test_bounding_rect_hugs_a_sketch(qapp):
+    """The box has to sit on the line, not four widths away from it."""
+
+    item = BeeDrawItem(points=[[0, 0], [100, 0]], kind=BeeDrawItem.SKETCH,
+                       width=10)
+    path = item.path.boundingRect()
+    rect = item.bounding_rect_unselected()
+    assert rect.left() == pytest.approx(path.left() - 5)
+    assert rect.right() == pytest.approx(path.right() + 5)
+
+
+def test_bounding_rect_grows_with_the_line_not_faster(qapp):
+    """Doubling the thickness must not do more than double the margin."""
+
+    def margin(width):
+        item = BeeDrawItem(points=[[0, 0], [100, 0]],
+                           kind=BeeDrawItem.SKETCH, width=width)
+        return (item.path.boundingRect().left()
+                - item.bounding_rect_unselected().left())
+
+    assert margin(20) == pytest.approx(margin(10) * 2)
+    assert margin(10) == pytest.approx(5)
+
+
+def test_bounding_rect_still_holds_an_arrow_head(qapp):
+    """Arrows draw beyond their path, so their box has to allow for it."""
+
+    for kind in (BeeDrawItem.ARROW, BeeDrawItem.SPLINE_ARROW):
+        item = BeeDrawItem(points=[[0, 0], [100, 0]], kind=kind, width=12)
+        head = item.arrow_head()
+        assert head is not None
+        assert item.bounding_rect_unselected().contains(
+            head.boundingRect())
+
+
+def test_thickening_keeps_the_box_around_the_arrow_head(qapp):
+    item = BeeDrawItem(points=[[0, 0], [80, 30]], kind=BeeDrawItem.ARROW,
+                       width=4)
+    for _ in range(6):
+        item.set_line_width(item.line_width * 1.25)
+        assert item.bounding_rect_unselected().contains(
+            item.arrow_head().boundingRect())
