@@ -302,7 +302,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
             item.do_flip()
         return item
 
-    def copy_to_clipboard(self, clipboard):
+    def add_to_mimedata(self, mimedata):
         # Nothing sensible to hand to other applications
         pass
 
@@ -527,7 +527,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         item.set_children_interactive(False)
         return item
 
-    def copy_to_clipboard(self, clipboard):
+    def add_to_mimedata(self, mimedata):
         # Nothing sensible to hand to other applications
         pass
 
@@ -759,8 +759,8 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         logger.debug(f'Got {len(gamut)} color gamut values')
         return gamut
 
-    def copy_to_clipboard(self, clipboard):
-        clipboard.setPixmap(self.pixmap())
+    def add_to_mimedata(self, mimedata):
+        mimedata.setImageData(self.pixmap().toImage())
 
     def reset_crop(self):
         self.crop = QtCore.QRectF(
@@ -1425,8 +1425,8 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             return
         super().keyPressEvent(event)
 
-    def copy_to_clipboard(self, clipboard):
-        clipboard.setText(self.toPlainText())
+    def add_to_mimedata(self, mimedata):
+        mimedata.setText(self.toPlainText())
 
 
 @register_item
@@ -1502,5 +1502,5 @@ class BeeErrorItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         # Never flip error messages
         pass
 
-    def copy_to_clipboard(self, clipboard):
-        clipboard.setText(self.toPlainText())
+    def add_to_mimedata(self, mimedata):
+        mimedata.setText(self.toPlainText())

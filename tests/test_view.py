@@ -11,7 +11,7 @@ import pytest
 from beeref import commands, constants, widgets
 from beeref.actions import actions
 from beeref.config import logfile_name, settings_events
-from beeref.items import BeePixmapItem, BeeTextItem
+from beeref.items import BeePixmapItem, BeeTextItem, BeeGroupItem
 from beeref.view import BeeGraphicsView
 
 APP_TITLE = f'{constants.APPNAME} {constants.VERSION}'
@@ -711,11 +711,13 @@ def test_on_action_copy_image(clipboard_mock, view, imgfilename3x3):
     view.scene.addItem(item)
     view.cancel_active_modes = MagicMock()
     item.setSelected(True)
-    mimedata = QtCore.QMimeData()
-    clipboard_mock.return_value.mimeData.return_value = mimedata
     view.on_action_copy()
 
-    clipboard_mock.return_value.setPixmap.assert_called_once()
+    # Everything is handed over in one QMimeData: the image for other
+    # applications and the marker for us
+    clipboard_mock.return_value.setMimeData.assert_called_once()
+    mimedata = clipboard_mock.return_value.setMimeData.call_args[0][0]
+    assert mimedata.hasImage() is True
     view.scene.internal_clipboard == [item]
     assert mimedata.data('beeref/items') == b'1'
     view.cancel_active_modes.assert_called_once_with()
@@ -727,11 +729,11 @@ def test_on_action_copy_text(clipboard_mock, view, imgfilename3x3):
     view.scene.addItem(item)
     view.cancel_active_modes = MagicMock()
     item.setSelected(True)
-    mimedata = QtCore.QMimeData()
-    clipboard_mock.return_value.mimeData.return_value = mimedata
     view.on_action_copy()
 
-    clipboard_mock.return_value.setText.assert_called_once_with('foo bar')
+    clipboard_mock.return_value.setMimeData.assert_called_once()
+    mimedata = clipboard_mock.return_value.setMimeData.call_args[0][0]
+    assert mimedata.text() == 'foo bar'
     view.scene.internal_clipboard == [item]
     assert mimedata.data('beeref/items') == b'1'
     view.cancel_active_modes.assert_called_once_with()
@@ -2462,3 +2464,90 @@ def test_text_toolbar_stays_up_when_clicked_repeatedly(view):
 def test_text_size_actions_have_shortcuts():
     assert actions.actions['text_size_increase'].shortcuts
     assert actions.actions['text_size_decrease'].shortcuts
+
+
+def clipboard_image_item(view, color):
+    img = QtGui.QImage(60, 60, QtGui.QImage.Format.Format_RGB32)
+    img.fill(color)
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+    return item
+
+
+def grouped_image(view, color):
+    inner = clipboard_image_item(view, color)
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    inner.setParentItem(group)
+    group.fit_to_children()
+    return group
+
+
+def fake_clipboard(clipboard_mock):
+    """A clipboard that just remembers what it was handed.
+
+    The real one is not dependable here: on Windows the clipboard
+    belongs to a window, and the fixtures create and destroy windows
+    between tests, so content set in one test can vanish in the next.
+    """
+
+    held = {}
+    clipboard_mock.return_value.setMimeData.side_effect = (
+        lambda mimedata: held.__setitem__('data', mimedata))
+    clipboard_mock.return_value.mimeData.side_effect = (
+        lambda: held.get('data', QtCore.QMimeData()))
+    clipboard_mock.return_value.image.side_effect = (
+        lambda: held.get('data', QtCore.QMimeData()).imageData()
+        or QtGui.QImage())
+    clipboard_mock.return_value.text.side_effect = (
+        lambda: held.get('data', QtCore.QMimeData()).text())
+    return held
+
+
+@patch('PyQt6.QtWidgets.QApplication.clipboard')
+def test_copying_a_group_clears_the_previously_copied_image(
+        clipboard_mock, view):
+    """Otherwise a paste can fall back to an image copied long before."""
+
+    fake_clipboard(clipboard_mock)
+    loose = clipboard_image_item(view, QtGui.QColor(0, 200, 0))
+    group = grouped_image(view, QtGui.QColor(200, 0, 0))
+
+    loose.setSelected(True)
+    view.on_action_copy()
+    assert clipboard_mock.return_value.mimeData().hasImage() is True
+
+    loose.setSelected(False)
+    group.setSelected(True)
+    view.on_action_copy()
+    assert clipboard_mock.return_value.mimeData().hasImage() is False
+
+
+@patch('PyQt6.QtWidgets.QApplication.clipboard')
+def test_copy_puts_the_marker_on_the_clipboard(clipboard_mock, view):
+    """The marker is what sends paste to the internal clipboard."""
+
+    fake_clipboard(clipboard_mock)
+    item = clipboard_image_item(view, QtGui.QColor(0, 0, 200))
+    item.setSelected(True)
+    view.on_action_copy()
+    assert clipboard_mock.return_value.mimeData().data(
+        'beeref/items') == b'1'
+
+
+@patch('PyQt6.QtWidgets.QApplication.clipboard')
+def test_pasting_after_copying_a_group_gives_a_group(clipboard_mock, view):
+    fake_clipboard(clipboard_mock)
+    loose = clipboard_image_item(view, QtGui.QColor(0, 200, 0))
+    group = grouped_image(view, QtGui.QColor(200, 0, 0))
+
+    loose.setSelected(True)
+    view.on_action_copy()
+    loose.setSelected(False)
+    group.setSelected(True)
+    view.on_action_copy()
+    view.on_action_paste()
+
+    groups = [item for item in view.scene.items()
+              if getattr(item, 'TYPE', None) == 'group']
+    assert len(groups) == 2

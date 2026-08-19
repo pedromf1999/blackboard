@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui
 from PyQt6.QtCore import Qt
 
 from beeref.items import BeePixmapItem, item_registry
@@ -445,11 +445,11 @@ def test_color_gamut_ignores_almost_transparent(qapp):
     assert item.color_gamut == {}
 
 
-def test_copy_to_clipboard(qapp, imgfilename3x3):
-    clipboard = QtWidgets.QApplication.clipboard()
+def test_add_to_mimedata(qapp, imgfilename3x3):
+    mimedata = QtCore.QMimeData()
     item = BeePixmapItem(QtGui.QImage(imgfilename3x3), 'foo.png')
-    item.copy_to_clipboard(clipboard)
-    assert clipboard.pixmap().size() == item.pixmap().size()
+    item.add_to_mimedata(mimedata)
+    assert mimedata.imageData().size() == item.pixmap().size()
 
 
 def test_reset_crop(qapp, imgfilename3x3):

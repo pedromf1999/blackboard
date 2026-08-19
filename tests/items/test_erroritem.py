@@ -85,11 +85,11 @@ def test_create_copy(qapp):
     assert copy.flip() == 1
 
 
-def test_item_to_clipboard(qapp):
-    clipboard = QtWidgets.QApplication.clipboard()
+def test_item_to_mimedata(qapp):
+    mimedata = QtCore.QMimeData()
     item = BeeErrorItem('foo bar')
-    item.copy_to_clipboard(clipboard)
-    assert clipboard.text() == 'foo bar'
+    item.add_to_mimedata(mimedata)
+    assert mimedata.text() == 'foo bar'
 
 
 def test_flip(qapp):

@@ -1184,18 +1184,28 @@ class BeeGraphicsView(MainControlsMixin,
         clipboard = QtWidgets.QApplication.clipboard()
         items = self.scene.selectedItems(user_only=True)
 
+        # Everything goes onto the clipboard in one go. The marker and
+        # whatever other applications can use have to be set together:
+        # the QMimeData returned by clipboard.mimeData() belongs to the
+        # clipboard, and changing it in place is not supported. Doing
+        # that lost the marker, and then pasting fell back to whatever
+        # was on the clipboard from before -- which is why copying a
+        # group, which offers other applications nothing, pasted the
+        # image copied before it.
+        mimedata = QtCore.QMimeData()
+
         # At the moment, we can only copy one image to the global
         # clipboard. (Later, we might create an image of the whole
         # selection for external copying.)
-        items[0].copy_to_clipboard(clipboard)
+        items[0].add_to_mimedata(mimedata)
 
-        # However, we can copy all items to the internal clipboard:
-        self.scene.copy_selection_to_internal_clipboard()
-
-        # We set a marker for ourselves in the global clipboard so
-        # that we know to look up the internal clipboard when pasting:
-        clipboard.mimeData().setData(
+        # The marker tells us to look up the internal clipboard when
+        # pasting, which is where all of the items are kept
+        mimedata.setData(
             'beeref/items', QtCore.QByteArray.number(len(items)))
+        clipboard.setMimeData(mimedata)
+
+        self.scene.copy_selection_to_internal_clipboard()
 
     def on_action_paste(self):
         self.cancel_active_modes()
