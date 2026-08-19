@@ -1444,11 +1444,9 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         return super().has_selection_handles() and not self.edit_mode
 
     def keyPressEvent(self, event):
-        if (event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return)
-                and event.modifiers() == Qt.KeyboardModifier.NoModifier):
-            self.exit_edit_mode()
-            event.accept()
-            return
+        # Enter starts a new paragraph, the way it does when typing
+        # anywhere else. Editing ends by clicking outside the item, or
+        # with Escape to throw the changes away.
         if (event.key() == Qt.Key.Key_Escape
                 and event.modifiers() == Qt.KeyboardModifier.NoModifier):
             self.exit_edit_mode(commit=False)

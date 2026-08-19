@@ -129,7 +129,7 @@ Scope both commands explicitly. `setup.cfg` excludes only `squashfs-root`,
 `build` and `dist`, so a bare `flake8 .` lints everything inside `.venv` and
 buries real errors under thousands from third-party source.
 
-Current baseline: **1407 passing, 9 failing**. The nine fail on unmodified
+Current baseline: **1410 passing, 9 failing**. The nine fail on unmodified
 upstream code too — two in `tests/fileio/test_export_images_to_directory.py`
 about a directory not being writeable, seven in `tests/test_view.py` about
 window flags, move-window mouse handling and `\` vs `/` path separators. Treat

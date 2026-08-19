@@ -2,6 +2,7 @@ from unittest.mock import patch, MagicMock
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
 import pytest
 
 from beeref.items import BeeTextItem, BeePixmapItem, item_registry
@@ -488,7 +489,10 @@ def test_key_press_event_shift_enter(exit_mock, key_press_mock, view):
 
 @patch('PyQt6.QtWidgets.QGraphicsTextItem.keyPressEvent')
 @patch('beeref.items.BeeTextItem.exit_edit_mode')
-def test_key_press_event_return(exit_mock, key_press_mock, view):
+def test_key_press_event_return_keeps_editing(exit_mock, key_press_mock,
+                                              view):
+    """Enter makes a new paragraph rather than ending the edit."""
+
     item = BeeTextItem('foo bar')
     view.scene.addItem(item)
     view.scene.edit_item = item
@@ -496,13 +500,14 @@ def test_key_press_event_return(exit_mock, key_press_mock, view):
     event.key.return_value = Qt.Key.Key_Return
     event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     item.keyPressEvent(event)
-    key_press_mock.assert_not_called()
-    exit_mock.assert_called_once_with()
+    key_press_mock.assert_called_once_with(event)
+    exit_mock.assert_not_called()
+    assert view.scene.edit_item == item
 
 
 @patch('PyQt6.QtWidgets.QGraphicsTextItem.keyPressEvent')
 @patch('beeref.items.BeeTextItem.exit_edit_mode')
-def test_key_press_event_enter(exit_mock, key_press_mock, view):
+def test_key_press_event_enter_keeps_editing(exit_mock, key_press_mock, view):
     item = BeeTextItem('foo bar')
     view.scene.addItem(item)
     view.scene.edit_item = item
@@ -510,8 +515,9 @@ def test_key_press_event_enter(exit_mock, key_press_mock, view):
     event.key.return_value = Qt.Key.Key_Enter
     event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     item.keyPressEvent(event)
-    key_press_mock.assert_not_called()
-    exit_mock.assert_called_once_with()
+    key_press_mock.assert_called_once_with(event)
+    exit_mock.assert_not_called()
+    assert view.scene.edit_item == item
 
 
 @patch('PyQt6.QtWidgets.QGraphicsTextItem.keyPressEvent')
@@ -737,3 +743,59 @@ def test_images_still_stretch_from_every_edge(view, imgfilename3x3):
     view.scene.addItem(item)
     assert item.reflows_text() is False
     assert len(item.get_edge_bounds()) == 4
+
+
+def press_key(item, key, modifier=Qt.KeyboardModifier.NoModifier, text=''):
+    event = QtGui.QKeyEvent(QtCore.QEvent.Type.KeyPress, key, modifier, text)
+    item.keyPressEvent(event)
+
+
+def test_enter_adds_a_paragraph_to_the_text(view):
+    """Enter types a new paragraph instead of ending the edit."""
+
+    item = BeeTextItem('first line')
+    view.scene.addItem(item)
+    item.enter_edit_mode()
+    cursor = item.textCursor()
+    cursor.movePosition(QtGui.QTextCursor.MoveOperation.End)
+    item.setTextCursor(cursor)
+
+    press_key(item, Qt.Key.Key_Return, text='\r')
+    press_key(item, Qt.Key.Key_A, text='a')
+
+    assert item.toPlainText().splitlines() == ['first line', 'a']
+    assert item.edit_mode is True
+    assert view.scene.edit_item is item
+
+
+def test_escape_still_discards_the_edit(view):
+    item = BeeTextItem('keep me')
+    view.scene.addItem(item)
+    item.enter_edit_mode()
+    cursor = item.textCursor()
+    cursor.movePosition(QtGui.QTextCursor.MoveOperation.End)
+    item.setTextCursor(cursor)
+    press_key(item, Qt.Key.Key_X, text='x')
+
+    press_key(item, Qt.Key.Key_Escape)
+    assert item.toPlainText() == 'keep me'
+    assert item.edit_mode is False
+
+
+def test_clicking_outside_ends_the_edit(view):
+    """Which is the only way out now that Enter types a paragraph."""
+
+    view.resize(800, 600)
+    item = BeeTextItem('some text')
+    view.scene.addItem(item)
+    item.setPos(0, 0)
+    view.on_action_fit_scene()
+    item.enter_edit_mode()
+    assert view.scene.edit_item is item
+
+    empty = view.mapFromScene(item.mapToScene(QtCore.QPointF(-400, -400)))
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton,
+                     Qt.KeyboardModifier.NoModifier, empty)
+
+    assert item.edit_mode is False
+    assert view.scene.edit_item is None

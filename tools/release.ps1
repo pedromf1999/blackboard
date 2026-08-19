@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 # --- expected test baseline -------------------------------------------------
 # Nine tests fail on unmodified upstream code too (see CLAUDE.md). Anything
 # beyond that is a real regression and stops the release.
-$ExpectedPassed    = 1407
+$ExpectedPassed    = 1410
 $MaxAllowedFailed  = 9
 
 function Fail($message) {
