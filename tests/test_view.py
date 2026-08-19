@@ -2830,3 +2830,54 @@ def test_size_buttons_repeat_while_held_but_the_others_do_not(view):
     assert bar.bold.autoRepeat() is False
     assert bar.highlight.autoRepeat() is False
     assert bar.box_color.autoRepeat() is False
+
+
+def dialog_position(view, item_pos):
+    """Where the colour picker ends up for an item at the given place."""
+
+    view.resize(900, 700)
+    textitem = BeeTextItem('colour me')
+    view.scene.addItem(textitem)
+    textitem.setPos(*item_pos)
+    textitem.setSelected(True)
+    seen = {}
+
+    def fake_exec(dialog):
+        seen['dialog'] = dialog.geometry()
+        seen['size'] = dialog.sizeHint()
+        return QtWidgets.QDialog.DialogCode.Rejected.value
+
+    with patch.object(QtWidgets.QColorDialog, 'exec', fake_exec):
+        view.on_action_text_box_color()
+    return textitem, seen
+
+
+def test_colour_picker_does_not_sit_on_the_selection(view):
+    textitem, seen = dialog_position(view, (0, 0))
+    on_view = view.mapFromScene(textitem.sceneBoundingRect()).boundingRect()
+    item_rect = QtCore.QRect(
+        view.viewport().mapToGlobal(on_view.topLeft()), on_view.size())
+
+    assert seen['dialog'].intersects(item_rect) is False
+
+
+def test_colour_picker_stays_on_the_screen(view):
+    _, seen = dialog_position(view, (0, 0))
+    screen = view.screen().availableGeometry()
+    assert screen.contains(seen['dialog'].topLeft())
+    assert seen['dialog'].left() >= screen.left()
+    assert seen['dialog'].left() + seen['size'].width() <= screen.right() + 1
+
+
+def test_colour_picker_is_left_alone_without_a_selection(view):
+    """Nothing to avoid, so Qt's own placement is fine."""
+
+    seen = {}
+
+    def fake_exec(dialog):
+        seen['moved'] = dialog.pos()
+        return QtWidgets.QDialog.DialogCode.Rejected.value
+
+    with patch.object(QtWidgets.QColorDialog, 'exec', fake_exec):
+        view.on_action_group_box_color()
+    assert seen == {}

@@ -12,7 +12,7 @@ include = ["beeref*"]
 # .txt is here for the font licence that has to travel with the Ranade
 # files in beeref/assets/fonts. Without it an installed copy has the
 # fonts but not their licence.
-"*" = ["*.html", "*.png", "*.svg", "*.otf", "*.ttf", "*.txt"]
+"*" = ["*.html", "*.png", "*.svg", "*.otf", "*.ttf", "*.txt", "*.hex"]
 
 [project]
 name = "Blackboard"

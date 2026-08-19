@@ -34,10 +34,13 @@ class BeeAssets:
             cls._instance.on_new()
         return cls._instance
 
+    PALETTE_FILE = 'jehkoba64.hex'
+
     def on_new(self):
         logger.debug(f'Assets path: {self.PATH}')
 
         self._tool_icons = {}
+        self.palette = self.load_palette()
         self.font_family = self.load_fonts()
         self.logo = QtGui.QIcon(str(self.PATH.joinpath('logo.png')))
         assert self.logo.isNull() is False
@@ -108,6 +111,35 @@ class BeeAssets:
         icon = QtGui.QIcon(QtGui.QPixmap.fromImage(image))
         self._tool_icons[name] = icon
         return icon
+
+    def load_palette(self):
+        """The colours offered by the colour pickers.
+
+        One hex value per line, as palette files are usually written, so
+        the file can be replaced with any other palette without touching
+        code. Anything unreadable is skipped rather than bringing the
+        application down over a colour swatch.
+        """
+
+        colors = []
+        path = self.PATH.joinpath(self.PALETTE_FILE)
+        try:
+            text = path.read_text(encoding='utf-8')
+        except OSError:
+            logger.exception(f'Could not read palette {path}')
+            return colors
+
+        for line in text.splitlines():
+            line = line.strip().lstrip('#')
+            if not line:
+                continue
+            color = QtGui.QColor(f'#{line}')
+            if color.isValid():
+                colors.append(color)
+            else:
+                logger.warning(f'Skipping unreadable palette entry: {line}')
+        logger.debug(f'Loaded {len(colors)} palette colours')
+        return colors
 
     def cursor_from_image(self, filename, hotspot):
         app = QtWidgets.QApplication.instance()

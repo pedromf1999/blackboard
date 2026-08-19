@@ -22,6 +22,7 @@ import os.path
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
+from beeref.assets import BeeAssets
 from beeref.actions import ActionsMixin, actions
 from beeref import commands
 from beeref.config import (
@@ -163,6 +164,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.text_toolbar = widgets.text_toolbar.TextToolBar(self, self)
         self.text_toolbar.reposition(below=self.draw_toolbar)
         self.text_toolbar.hide()
+
+        self.apply_palette_to_color_dialogs()
 
         # A reminder of the shortcuts, until the user dismisses it
         self.shortcuts_hint.show_if_wanted()
@@ -669,6 +672,58 @@ class BeeGraphicsView(MainControlsMixin,
             if checked and self.scene.active_group is group:
                 self.scene.exit_group()
 
+    # Space left between the picker and what it is recolouring
+    DIALOG_GAP = 16
+
+    def move_dialog_beside_selection(self, dialog):
+        """Put a dialog next to the selection instead of over it.
+
+        Previewing a colour is pointless if the picker is covering the
+        thing being coloured, and dialogs open centred on their parent,
+        which is exactly where the selection usually is. Prefers the
+        right of the selection, falls back to its left, and stays on the
+        screen either way.
+        """
+
+        items = self.scene.selectedItems(user_only=True)
+        if not items:
+            return
+        dialog.adjustSize()
+        size = dialog.sizeHint()
+
+        rect = items[0].sceneBoundingRect()
+        for item in items[1:]:
+            rect = rect.united(item.sceneBoundingRect())
+        on_view = self.mapFromScene(rect).boundingRect()
+        topleft = self.viewport().mapToGlobal(on_view.topLeft())
+        topright = self.viewport().mapToGlobal(on_view.topRight())
+
+        screen = self.screen().availableGeometry()
+        x = topright.x() + self.DIALOG_GAP
+        if x + size.width() > screen.right():
+            x = topleft.x() - self.DIALOG_GAP - size.width()
+        x = max(screen.left(), min(x, screen.right() - size.width()))
+        y = max(screen.top(),
+                min(topleft.y(), screen.bottom() - size.height()))
+        dialog.move(x, y)
+
+    @staticmethod
+    def apply_palette_to_color_dialogs():
+        """Put our palette in the colour picker's swatches.
+
+        Qt offers 48 standard slots and 16 custom ones, which together
+        take exactly the 64 colours of the palette. The setters are
+        static, so this reaches every colour dialog the application
+        opens, including the ones in the settings.
+        """
+
+        colors = BeeAssets().palette
+        standard = QtWidgets.QColorDialog.customCount()
+        for i, color in enumerate(colors[:48]):
+            QtWidgets.QColorDialog.setStandardColor(i, color)
+        for i, color in enumerate(colors[48:48 + standard]):
+            QtWidgets.QColorDialog.setCustomColor(i, color)
+
     def pick_color_live(self, title, initial, preview, alpha=True):
         """Ask for a colour, showing each choice on the board as it is made.
 
@@ -691,6 +746,7 @@ class BeeGraphicsView(MainControlsMixin,
             dialog.setOption(
                 QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
         dialog.currentColorChanged.connect(preview)
+        self.move_dialog_beside_selection(dialog)
         accepted = dialog.exec()
         color = dialog.currentColor()
         if accepted and color.isValid():
