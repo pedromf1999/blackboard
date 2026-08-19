@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch, mock_open
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
 import pytest
 
 from beeref import commands, constants, widgets
@@ -2652,3 +2653,48 @@ def test_line_width_survives_a_save(tmpfile, view):
     loaded = list(view.scene.items_by_type('draw'))
     assert len(loaded) == 1
     assert loaded[0].line_width == pytest.approx(width)
+
+
+def escape_key(view):
+    QTest.keyClick(view.viewport(), Qt.Key.Key_Escape)
+
+
+def test_escape_puts_the_drawing_tool_away(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    view.set_draw_tool(BeeDrawItem.SKETCH)
+
+    escape_key(view)
+    assert view.draw_tool is None
+    assert view.scene.has_selection() is False
+
+
+def test_escape_deselects_without_a_drawing_tool(view):
+    item = draw_item(view)
+    item.setSelected(True)
+    assert view.draw_tool is None
+
+    escape_key(view)
+    assert view.scene.has_selection() is False
+
+
+def test_escape_updates_the_toolbar(view):
+    view.set_draw_tool(BeeDrawItem.ARROW)
+    assert view.draw_toolbar.buttons[BeeDrawItem.ARROW].isChecked() is True
+
+    escape_key(view)
+    assert view.draw_toolbar.buttons[None].isChecked() is True
+
+
+def test_escape_while_editing_text_is_left_to_the_text(view):
+    """Escape there discards the edit; it must not also clear the tool."""
+
+    textitem = BeeTextItem('keep me')
+    view.scene.addItem(textitem)
+    view.set_draw_tool(BeeDrawItem.LINE)
+    textitem.enter_edit_mode()
+
+    view.keyPressEvent(QtGui.QKeyEvent(
+        QtCore.QEvent.Type.KeyPress, Qt.Key.Key_Escape,
+        Qt.KeyboardModifier.NoModifier))
+    assert view.draw_tool == BeeDrawItem.LINE

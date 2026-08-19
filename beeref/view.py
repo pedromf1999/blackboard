@@ -1524,11 +1524,32 @@ class BeeGraphicsView(MainControlsMixin,
         if self.shortcuts_hint.isVisible():
             self.shortcuts_hint.reposition()
 
+    def escape(self):
+        """Back to the mouse, with nothing selected.
+
+        One key to get out of whatever is going on: put the drawing tool
+        away, drop any half-finished mode, and clear the selection.
+        """
+
+        self.cancel_active_modes()
+        if self.draw_tool is not None:
+            self.set_draw_tool(None)
+        self.scene.deselect_all_items()
+
     def keyPressEvent(self, event):
         if self.keyPressEventMainControls(event):
             return
         if self.active_mode == self.SAMPLE_COLOR_MODE:
             self.cancel_sample_color_mode()
+            event.accept()
+            return
+        if (event.key() == Qt.Key.Key_Escape
+                and self.scene.edit_item is None
+                and self.scene.crop_item is None):
+            # Text being edited and images being cropped answer Escape
+            # themselves, by throwing the change away, so leave those to
+            # the item and only take over when nothing is mid-edit
+            self.escape()
             event.accept()
             return
         super().keyPressEvent(event)
