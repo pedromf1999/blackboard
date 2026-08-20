@@ -47,10 +47,25 @@ def test_font_files_are_shipped():
     assert 'FFL.txt' in names
 
 
-def test_text_items_use_the_bundled_font(qapp):
+def test_text_items_use_the_interface_font(qapp):
+    """New notes are written in the interface font.
+
+    Ranade used to be forced on every note. It is one of two choices
+    now, reachable from the button beside bold.
+    """
+
     from beeref.items import BeeTextItem
 
-    assert BeeTextItem('foo').font().family() == 'Ranade'
+    interface = QtWidgets.QApplication.instance().font().family()
+    assert BeeTextItem('foo').font().family() == interface
+
+
+def test_the_bundled_font_is_still_offered(qapp):
+    from beeref.items import BeeTextItem
+
+    interface, bundled = BeeTextItem('foo').font_families()
+    assert bundled == 'Ranade'
+    assert bundled != interface
 
 
 def test_interface_keeps_the_system_font(qapp):
@@ -59,8 +74,13 @@ def test_interface_keeps_the_system_font(qapp):
     assert QtWidgets.QApplication.instance().font().family() != 'Ranade'
 
 
-def test_stored_text_gets_the_canvas_font(qapp):
-    """Text written before the font changed is brought up to date."""
+def test_stored_text_keeps_the_font_it_was_written_in(qapp):
+    """Opening a board must not rewrite the fonts chosen in it.
+
+    Every note used to be forced to the canvas font on load,
+    which would now throw away a choice of font each time a
+    board was reopened.
+    """
 
     from beeref.items import BeeTextItem
 
@@ -72,7 +92,7 @@ def test_stored_text_gets_the_canvas_font(qapp):
 
     cursor = item.textCursor()
     cursor.select(QtGui.QTextCursor.SelectionType.Document)
-    assert cursor.charFormat().font().family() == 'Ranade'
+    assert cursor.charFormat().font().family() == 'Some Old Font'
     assert item.toPlainText() == 'an old note'
 
 

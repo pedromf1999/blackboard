@@ -696,8 +696,10 @@ class ChangeTextBoxColor(QtGui.QUndoCommand):
     @staticmethod
     def set_color(item, color):
         item.box_color = color
-        # The text colour comes from the box, so it changes along with it
-        item.apply_text_font()
+        # The text colour comes from the box, so it changes along with it.
+        # Only the colour: rewriting the font here would undo a choice of
+        # font every time the box was recoloured.
+        item.refresh_text_colors()
 
     def redo(self):
         for item in self.items:

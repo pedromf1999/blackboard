@@ -3090,3 +3090,22 @@ def test_right_click_then_insert_row(view):
     before = table_shape(view)
     view.on_action_table_row_insert()
     assert table_shape(view) == (before[0] + 1, before[1])
+
+
+def test_text_font_action_switches_and_switches_back(view):
+    item = BeeTextItem('hello')
+    view.scene.addItem(item)
+    item.setSelected(True)
+    interface, bundled = item.font_families()
+
+    view.on_action_text_font()
+    assert item.uses_bundled_font() is True
+
+    view.on_action_text_font()
+    assert item.uses_bundled_font() is False
+
+
+def test_text_font_action_does_nothing_without_a_selection(view):
+    view.scene.deselect_all_items()
+    view.on_action_text_font()
+    assert view.undo_stack.count() == 0

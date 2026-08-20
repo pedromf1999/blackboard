@@ -885,6 +885,26 @@ class BeeGraphicsView(MainControlsMixin,
         charformat.setFontWeight(weight)
         self.apply_text_char_format(items, charformat)
 
+    def on_action_text_font(self):
+        """Switch the selected words between the two fonts.
+
+        The interface font is what text is written in; the bundled
+        Ranade is the alternative. Toggling from what the first item
+        currently uses means a second press puts it back.
+        """
+
+        items = self.scene.selected_text_items()
+        if not items:
+            return
+        interface, bundled = items[0].font_families()
+        if not bundled:
+            logger.debug('Bundled font not available; nothing to switch to')
+            return
+        family = interface if items[0].uses_bundled_font() else bundled
+        charformat = QtGui.QTextCharFormat()
+        charformat.setFontFamilies([family])
+        self.apply_text_char_format(items, charformat)
+
     def text_is_bold(self, item):
         cursor = item.textCursor()
         if not cursor.hasSelection():

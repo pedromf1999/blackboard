@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 import pytest
 
+from beeref import commands
 from beeref.items import BeeTextItem, BeePixmapItem, item_registry
 
 
@@ -970,3 +971,48 @@ def test_dragging_a_row_boundary_makes_it_taller(view):
 
     assert item.row_extra_height(item.tables()[0], 0) == 30
     assert item.boundingRect().height() > before
+
+
+def document_family(item):
+    cursor = item.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    return cursor.charFormat().font().family()
+
+
+def test_new_text_uses_the_interface_font(view):
+    """Ranade used to be forced on every note; it is a choice now."""
+
+    item = BeeTextItem('hello')
+    view.scene.addItem(item)
+    interface, bundled = item.font_families()
+
+    assert item.get_text_font().family() == interface
+    assert item.uses_bundled_font() is False
+    assert bundled != interface
+
+
+def test_font_family_can_be_switched(view):
+    item = BeeTextItem('hello')
+    view.scene.addItem(item)
+    interface, bundled = item.font_families()
+
+    item.apply_font_family(bundled)
+    assert item.uses_bundled_font() is True
+    assert document_family(item) == bundled
+
+    item.apply_font_family(interface)
+    assert item.uses_bundled_font() is False
+
+
+def test_changing_the_box_colour_keeps_the_font(view):
+    """Recolouring used to rewrite the whole note's font."""
+
+    item = BeeTextItem('hello')
+    view.scene.addItem(item)
+    _, bundled = item.font_families()
+    item.apply_font_family(bundled)
+
+    commands.ChangeTextBoxColor.set_color(item, QtGui.QColor(200, 30, 30))
+
+    assert document_family(item) == bundled
+    assert item.box_color == QtGui.QColor(200, 30, 30)

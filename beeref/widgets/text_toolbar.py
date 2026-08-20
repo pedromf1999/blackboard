@@ -37,6 +37,9 @@ class TextToolBar(PinnedToolBar):
 
         self.bold = self.add_button(
             'bold', 'Bold', view.on_action_text_bold)
+        self.font = self.add_button(
+            'font', 'Switch between the interface font and Ranade',
+            view.on_action_text_font)
         # Only the size buttons repeat while held: pressing and holding
         # bold or a colour has nothing sensible to keep doing
         self.smaller = self.add_button(

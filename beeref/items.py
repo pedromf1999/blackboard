@@ -1144,40 +1144,48 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             # Rich text takes precedence over the plain text version,
             # which is only kept for compatibility with BeeRef
             self.setHtml(html)
-            # Stored text brings its own font family along, which has to
-            # be overridden; new text already uses the font set above
-            self.apply_text_font()
+            # Stored text carries its own colours, which have to
+            # follow the box it now sits in
+            self.refresh_text_colors()
         self.update_document_margin()
 
     def get_text_font(self):
-        """The font for text on the canvas.
+        """The font new text is written in: the interface font.
 
-        This is the bundled font rather than the interface font, which
-        stays as the system one because it is hinted for small sizes.
+        The bundled Ranade used to be forced on every note. It is one
+        of two choices now, so nothing is forced -- including on notes
+        written before, which keep whatever they were written in.
         """
 
         font = self.font()
-        family = BeeAssets().font_family
-        if family:
-            font.setFamily(family)
         font.setHintingPreference(
             QtGui.QFont.HintingPreference.PreferFullHinting)
         return font
 
-    def apply_text_font(self):
-        """Make the whole text use the canvas font and box text colour.
+    def font_families(self):
+        """The two fonts text can be written in.
 
-        Stored rich text carries its own font family and colours, so
-        text written earlier would otherwise keep them instead of
-        following the box it sits in.
+        The interface font, and the bundled one. The bundled one is
+        ``None`` when the font files could not be loaded.
         """
 
+        return QtWidgets.QApplication.font().family(), BeeAssets().font_family
+
+    def uses_bundled_font(self):
+        """Whether the selection, or the whole text, is in Ranade."""
+
+        _, bundled = self.font_families()
+        if not bundled:
+            return False
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        return cursor.charFormat().font().family() == bundled
+
+    def apply_font_family(self, family):
         charformat = QtGui.QTextCharFormat()
-        charformat.setFontFamilies([self.get_text_font().family()])
+        charformat.setFontFamilies([family])
         self.apply_char_format(charformat)
-        # Colour is per run rather than one colour for the lot, so a
-        # highlight keeps words readable: see refresh_text_colors
-        self.refresh_text_colors()
 
     @classmethod
     def create_from_data(cls, **kwargs):

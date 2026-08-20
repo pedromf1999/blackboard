@@ -329,6 +329,12 @@ actions = ActionList([
         group='active_when_text_selection',
     ),
     Action(
+        id='text_font',
+        text='&Font',
+        callback='on_action_text_font',
+        group='active_when_text_selection',
+    ),
+    Action(
         id='text_size_increase',
         text='&Bigger',
         # Ctrl+= as well as Ctrl++, since + needs shift on most layouts
