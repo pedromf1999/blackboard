@@ -1179,6 +1179,9 @@ class BeeGraphicsView(MainControlsMixin,
         else:
             self.filename = filename
             self.scene.add_queued_items()
+            # Loading adds images before everything else, which reverses
+            # items that share a z value; put them back as they were
+            self.scene.restack_as_saved()
             self.on_action_fit_scene()
 
     def on_action_open_recent_file(self, filename):

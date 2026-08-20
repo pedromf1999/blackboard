@@ -1049,3 +1049,60 @@ def test_sqliteio_roundtrip_table(tmpfile, view):
     assert corner == 'corner'
     assert widths == [item.TABLE_COLUMN_WIDTH] * 3
     assert background == QtGui.QColor(60, 140, 200)
+
+
+def stacking(scene):
+    """The items back to front, the way Qt stacks them."""
+
+    mine = set(scene.items_for_save())
+    return [i for i in reversed(scene.items()) if i in mine]
+
+
+def test_items_sharing_a_z_keep_their_order(tmpfile, view):
+    """Loading adds every image first, which reversed tied items.
+
+    Qt stacks items with the same z by the order they reached the
+    scene. A note saved behind an image came back in front of it, which
+    looks like things moving about on their own.
+    """
+
+    note = BeeTextItem('behind')
+    view.scene.addItem(note)
+    note.setZValue(0)
+    # A real image, so it comes back as a picture rather than as the
+    # error item a file with no image data produces
+    image = QtGui.QImage(4, 4, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor(100, 100, 100))
+    picture = BeePixmapItem(image, filename='bee.png')
+    view.scene.addItem(picture)
+    picture.setZValue(0)
+
+    before = [i.TYPE for i in stacking(view.scene)]
+    assert before == ['text', 'pixmap']
+
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+    for item in list(view.scene.items_for_save()):
+        if item.parentItem() is None:
+            view.scene.removeItem(item)
+    SQLiteIO(tmpfile, view.scene, readonly=True).read()
+    view.scene.add_queued_items()
+    view.scene.restack_as_saved()
+
+    assert [i.TYPE for i in stacking(view.scene)] == before
+
+
+def test_restacking_leaves_new_items_on_top(tmpfile, view):
+    """Something added since the file was read has no id to sort by."""
+
+    note = BeeTextItem('from the file')
+    view.scene.addItem(note)
+    note.setZValue(0)
+    note.save_id = 1
+
+    fresh = BeeTextItem('added just now')
+    view.scene.addItem(fresh)
+    fresh.setZValue(0)
+    assert fresh.save_id is None
+
+    view.scene.restack_as_saved()
+    assert stacking(view.scene)[-1] is fresh

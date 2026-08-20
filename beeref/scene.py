@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with BeeRef.  If not, see <https://www.gnu.org/licenses/>.
 
+from collections import defaultdict
 from functools import partial
 import logging
 import math
@@ -815,6 +816,34 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 grouped.append((item, parent_group))
 
         self.restore_groups(grouped)
+
+    def restack_as_saved(self):
+        """Put items that share a z value back in the order they were in.
+
+        Qt stacks items with the same z by the order they reached the
+        scene, and loading adds every image before anything else -- so
+        an image and a note sharing a z came back the wrong way round,
+        which looks like things moving about, and a group's box landing
+        over its own contents looks like they left it.
+
+        Row order is the record of what was in front: items are written
+        in stacking order, so their ids follow it.
+        """
+
+        siblings = defaultdict(list)
+        for item in self.items_for_save():
+            siblings[item.parentItem()].append(item)
+
+        for group in siblings.values():
+            if len(group) < 2:
+                continue
+            # Items added since the file was read have no id yet, and
+            # belong on top of everything that came out of it
+            group.sort(key=lambda i: (
+                i.zValue(),
+                i.save_id if i.save_id is not None else math.inf))
+            for behind, in_front in zip(group, group[1:]):
+                behind.stackBefore(in_front)
 
     def restore_groups(self, grouped):
         """Puts loaded items back into their groups.
