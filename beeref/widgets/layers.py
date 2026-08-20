@@ -382,7 +382,12 @@ class LayersTree(QtWidgets.QTreeWidget):
 
 
 class LayersTitleBar(QtWidgets.QWidget):
-    """Title bar with buttons for collapsing and closing the panel."""
+    """Title bar for the layers panel: an arrow, and a name beside it.
+
+    There is no close button. Collapsing leaves nothing but the arrow,
+    which is a small enough thing to leave on screen that being able to
+    banish it altogether would only be a way to lose it.
+    """
 
     def __init__(self, dock):
         super().__init__(dock)
@@ -390,65 +395,84 @@ class LayersTitleBar(QtWidgets.QWidget):
 
         self.collapse_button = QtWidgets.QToolButton(self)
         self.collapse_button.setAutoRaise(True)
-        self.collapse_button.setToolTip('Collapse')
         self.collapse_button.clicked.connect(self.dock.toggle_collapsed)
 
-        close_button = QtWidgets.QToolButton(self)
-        close_button.setAutoRaise(True)
-        close_button.setToolTip('Close')
-        close_button.setIcon(self.style().standardIcon(
-            QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton))
-        close_button.clicked.connect(self.dock.close)
+        self.label = QtWidgets.QLabel(dock.windowTitle(), self)
 
         layout = QtWidgets.QHBoxLayout()
         layout.setContentsMargins(2, 2, 2, 2)
         layout.addWidget(self.collapse_button)
-        layout.addWidget(QtWidgets.QLabel(dock.windowTitle(), self))
+        layout.addWidget(self.label)
         layout.addStretch(100)
-        layout.addWidget(close_button)
         self.setLayout(layout)
         self.update_collapse_button(False)
 
     def update_collapse_button(self, collapsed):
+        # Collapsed, the arrow points into the canvas, which is the way
+        # the panel opens. Expanded it points down, over what it opened.
         self.collapse_button.setArrowType(
-            Qt.ArrowType.RightArrow if collapsed else Qt.ArrowType.DownArrow)
+            Qt.ArrowType.LeftArrow if collapsed else Qt.ArrowType.DownArrow)
         self.collapse_button.setToolTip('Expand' if collapsed else 'Collapse')
+        self.label.setVisible(not collapsed)
 
 
 class LayersDock(QtWidgets.QDockWidget):
-    """The dockable panel holding the layers tree."""
+    """The dockable panel holding the layers tree.
+
+    Always on screen, and either collapsed to a narrow strip carrying
+    just its arrow, or open. It cannot be closed: collapsed it costs
+    almost no room, so closing would only be a way of losing it.
+    """
+
+    # What to open at when there is no earlier width to go back to.
+    DEFAULT_WIDTH = 240
 
     def __init__(self, parent, view):
         super().__init__('Layers', parent)
         self.view = view
+        self.main_window = parent
         self.setObjectName('LayersDock')
         self.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea
                              | Qt.DockWidgetArea.RightDockWidgetArea)
+        # Movable, but not closable: the strip is the way to put it away
+        self.setFeatures(
+            QtWidgets.QDockWidget.DockWidgetFeature.DockWidgetMovable)
         self.tree = LayersTree(self, view)
         self.setWidget(self.tree)
         self.collapsed = False
+        self.expanded_width = self.DEFAULT_WIDTH
         self.titlebar = LayersTitleBar(self)
         self.setTitleBarWidget(self.titlebar)
         parent.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self)
-        self.hide()
+        self.set_collapsed(True)
 
     def toggle_collapsed(self):
         self.set_collapsed(not self.collapsed)
 
+    def collapsed_width(self):
+        """How wide the strip is: the arrow, and nothing else."""
+
+        return self.titlebar.sizeHint().width()
+
     def set_collapsed(self, value):
-        """Shrink the panel to just its title bar, or restore it."""
+        """Shrink the panel to a strip holding its arrow, or open it.
+
+        Collapsing takes the width away, not the height. The panel is
+        docked down one side, so leaving the width behind left a tall
+        empty column taking up the room the canvas wants.
+        """
 
         logger.debug(f'Collapsing layers panel: {value}')
+        if value and not self.collapsed:
+            # Come back to the width it was dragged to
+            self.expanded_width = max(self.width(), self.DEFAULT_WIDTH)
         self.collapsed = value
         self.tree.setVisible(not value)
         self.titlebar.update_collapse_button(value)
         if value:
-            self.setFixedHeight(self.titlebar.sizeHint().height())
+            self.setFixedWidth(self.collapsed_width())
         else:
-            self.setMinimumHeight(0)
-            self.setMaximumHeight(QWIDGETSIZE_MAX)
-
-    def closeEvent(self, event):
-        # Keep the menu entry in step when closed via the title bar
-        self.view.on_layers_dock_closed()
-        super().closeEvent(event)
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(QWIDGETSIZE_MAX)
+            self.main_window.resizeDocks(
+                [self], [self.expanded_width], Qt.Orientation.Horizontal)

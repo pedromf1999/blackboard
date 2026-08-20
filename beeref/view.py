@@ -218,14 +218,15 @@ class BeeGraphicsView(MainControlsMixin,
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(color)))
 
     def on_action_show_layers(self, checked):
-        self.layers_dock.setVisible(checked)
+        """Open the layers panel, or collapse it back to its strip.
+
+        The panel is always on screen, so this opens and closes it
+        rather than showing and hiding it.
+        """
+
+        self.layers_dock.set_collapsed(not checked)
         if checked:
             self.layers_dock.tree.refresh()
-
-    def on_layers_dock_closed(self):
-        """Untick the menu entry when the panel is closed by its button."""
-
-        actions.actions['show_layers'].qaction.setChecked(False)
 
     def set_draw_tool(self, kind):
         """Pick a drawing tool, or ``None`` to go back to selecting."""

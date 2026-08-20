@@ -1,11 +1,9 @@
 import os.path
-from unittest.mock import patch
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
 from beeref import commands
-from beeref.actions.actions import actions
 from beeref.utils import contrast_ratio, relative_luminance
 from beeref.items import BeeGroupItem, BeePixmapItem, BeeTextItem
 
@@ -48,25 +46,20 @@ def entries(tree):
     return result
 
 
-def test_dock_starts_hidden(view):
-    assert view.layers_dock.isVisible() is False
+def test_dock_starts_collapsed(view):
+    """On screen from the start, but only as its strip."""
+
+    dock = view.layers_dock
+    assert dock.collapsed is True
+    assert dock.tree.isVisible() is False
 
 
-def test_closing_dock_hides_it_and_unticks_the_menu(view):
-    view.on_action_show_layers(True)
-    action = actions['show_layers'].qaction
-    action.setChecked(True)
+def test_dock_cannot_be_closed(view):
+    """Collapsed it costs almost nothing, so closing would only lose it."""
 
-    view.layers_dock.close()
-    assert view.layers_dock.isVisible() is False
-    assert action.isChecked() is False
-
-
-def test_closing_dock_does_not_quit(view):
-    view.on_action_show_layers(True)
-    with patch('PyQt6.QtWidgets.QApplication.quit') as quit_mock:
-        view.layers_dock.close()
-    quit_mock.assert_not_called()
+    features = view.layers_dock.features()
+    closable = QtWidgets.QDockWidget.DockWidgetFeature.DockWidgetClosable
+    assert bool(features & closable) is False
 
 
 def test_dock_can_be_collapsed(view):
@@ -77,7 +70,20 @@ def test_dock_can_be_collapsed(view):
     dock.toggle_collapsed()
     assert dock.collapsed is True
     assert dock.tree.isVisible() is False
-    assert dock.maximumHeight() == dock.titlebar.sizeHint().height()
+    # The width goes, not the height: it is docked down one side, so
+    # keeping the width left a tall empty column beside the canvas
+    assert dock.maximumWidth() == dock.collapsed_width()
+
+
+def test_collapsed_strip_is_only_the_arrow(view):
+    dock = view.layers_dock
+    view.on_action_show_layers(True)
+    open_width = dock.collapsed_width()
+    view.on_action_show_layers(False)
+
+    assert dock.titlebar.label.isVisible() is False
+    # Without the name beside it, the strip is far narrower
+    assert dock.collapsed_width() < open_width
 
 
 def test_dock_can_be_expanded_again(view):
@@ -87,15 +93,29 @@ def test_dock_can_be_expanded_again(view):
     dock.toggle_collapsed()
     assert dock.collapsed is False
     assert dock.tree.isVisible() is True
-    assert dock.maximumHeight() > dock.titlebar.sizeHint().height()
+    assert dock.maximumWidth() > dock.collapsed_width()
+
+
+def test_shortcut_opens_and_collapses(view):
+    """Ctrl+J opens it fully, and puts it away again."""
+
+    dock = view.layers_dock
+    view.on_action_show_layers(True)
+    assert dock.collapsed is False
+    assert dock.tree.isVisible() is True
+
+    view.on_action_show_layers(False)
+    assert dock.collapsed is True
+    assert dock.tree.isVisible() is False
 
 
 def test_collapse_button_arrow_follows_state(view):
     dock = view.layers_dock
+    view.on_action_show_layers(True)
     button = dock.titlebar.collapse_button
     assert button.arrowType() == Qt.ArrowType.DownArrow
     dock.toggle_collapsed()
-    assert button.arrowType() == Qt.ArrowType.RightArrow
+    assert button.arrowType() == Qt.ArrowType.LeftArrow
 
 
 def test_lists_items_topmost_first(view):
