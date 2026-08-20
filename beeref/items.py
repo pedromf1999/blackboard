@@ -1158,8 +1158,16 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         """
 
         font = self.font()
+        # Vertical hinting, not full. Full hinting snaps each letter's
+        # width to a whole pixel, and it does not snap them all by the
+        # same amount: in "minimum" at 9pt an m gains two thirds of a
+        # pixel while an i gains a tenth, so the spacing within a word
+        # comes out uneven -- and the canvas then magnifies that as it
+        # is zoomed. Hinting only vertically keeps the crispness along
+        # the baseline that small text wants, and leaves the widths
+        # alone.
         font.setHintingPreference(
-            QtGui.QFont.HintingPreference.PreferFullHinting)
+            QtGui.QFont.HintingPreference.PreferVerticalHinting)
         return font
 
     def font_families(self):

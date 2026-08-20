@@ -1016,3 +1016,26 @@ def test_changing_the_box_colour_keeps_the_font(view):
 
     assert document_family(item) == bundled
     assert item.box_color == QtGui.QColor(200, 30, 30)
+
+
+def test_canvas_text_is_not_horizontally_hinted(view):
+    """Full hinting made the spacing within a word uneven.
+
+    It rounds every letter's width to a whole pixel, and not by the
+    same amount for each: an m gains far more than an i, so the rhythm
+    of a word is thrown out -- and zooming magnifies it.
+    """
+
+    item = BeeTextItem('minimum')
+    view.scene.addItem(item)
+    font = item.get_text_font()
+
+    assert font.hintingPreference() == (
+        QtGui.QFont.HintingPreference.PreferVerticalHinting)
+
+    metrics = QtGui.QFontMetricsF(font)
+    widths = [metrics.horizontalAdvance(c) for c in 'minimum']
+    # Letters keep their true widths rather than being snapped
+    assert any(width != round(width) for width in widths)
+    # The same letter is always the same width
+    assert widths[0] == widths[4] == widths[6]
