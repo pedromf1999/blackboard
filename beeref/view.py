@@ -133,6 +133,8 @@ class BeeGraphicsView(MainControlsMixin,
         # in one jump is what makes zooming feel steppy
         self.pending_zoom = 0
         self.zoom_anchor = None
+        # What a pan could not spend, kept for the next one
+        self.pan_remainder = QtCore.QPointF(0, 0)
         self.zoom_timer = QtCore.QTimer(self)
         self.zoom_timer.setInterval(self.ZOOM_INTERVAL)
         self.zoom_timer.timeout.connect(self.step_zoom)
@@ -1611,10 +1613,21 @@ class BeeGraphicsView(MainControlsMixin,
             logger.debug('No items in scene; ignore pan')
             return
 
+        # Scroll bars only hold whole numbers, and a smooth zoom asks
+        # for many small movements. Throwing away the fraction each
+        # time leaves the view shuffling back and forth by a pixel,
+        # which reads as everything trembling -- text worst of all, its
+        # letters landing on a different pixel from one frame to the
+        # next. What is left over is carried into the next move.
+        wanted = QtCore.QPointF(delta) + self.pan_remainder
+        x = round(wanted.x())
+        y = round(wanted.y())
+        self.pan_remainder = QtCore.QPointF(wanted.x() - x, wanted.y() - y)
+
         hscroll = self.horizontalScrollBar()
-        hscroll.setValue(int(hscroll.value() + delta.x()))
+        hscroll.setValue(hscroll.value() + x)
         vscroll = self.verticalScrollBar()
-        vscroll.setValue(int(vscroll.value() + delta.y()))
+        vscroll.setValue(vscroll.value() + y)
 
     def zoom(self, delta, anchor):
         if not self.scene.items():
@@ -1626,9 +1639,12 @@ class BeeGraphicsView(MainControlsMixin,
         # We can't use QGraphicsView's AnchorUnderMouse since it
         # uses the current cursor position while we need the initial mouse
         # press position for zooming with Ctrl + Middle Drag
-        anchor = QtCore.QPoint(round(anchor.x()),
-                               round(anchor.y()))
-        ref_point = self.mapToScene(anchor)
+        # Worked out in fractions of a pixel rather than whole ones.
+        # Rounding the anchor, and the correction that follows it, on
+        # every step of a smooth zoom is what made the canvas tremble.
+        anchor = QtCore.QPointF(anchor)
+        to_scene, _ = self.viewportTransform().inverted()
+        ref_point = to_scene.map(anchor)
         if delta == 0:
             return
         factor = 1 + abs(delta / 1000)
@@ -1645,7 +1661,7 @@ class BeeGraphicsView(MainControlsMixin,
                 logger.debug('Minimum zoom size reached')
                 return
 
-        self.pan(self.mapFromScene(ref_point) - anchor)
+        self.pan(self.viewportTransform().map(ref_point) - anchor)
         self.reset_previous_transform()
 
     def smooth_zoom(self, delta, anchor):

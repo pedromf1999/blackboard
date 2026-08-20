@@ -3175,3 +3175,45 @@ def test_wheel_zoom_adds_up_when_spun_quickly(view, imgfilename3x3):
 
     # Turns add to each other rather than replacing one another
     assert view.pending_zoom == 600
+
+
+def scrollable_view(view, imgfilename3x3):
+    """A view with somewhere to scroll to."""
+
+    for x in (0, 2000, 4000):
+        item = BeePixmapItem(QtGui.QImage(imgfilename3x3))
+        view.scene.addItem(item)
+        item.setPos(x, x)
+    view.recalc_scene_rect()
+    return view.horizontalScrollBar()
+
+
+def test_pan_keeps_what_it_could_not_spend(view, imgfilename3x3):
+    """Movements smaller than a pixel used to be thrown away.
+
+    A smooth zoom corrects its anchor by a fraction of a pixel each
+    frame. Dropping every one of those left the canvas drifting off the
+    anchor until a whole pixel had built up and it snapped back, which
+    is what made everything tremble.
+    """
+
+    hscroll = scrollable_view(view, imgfilename3x3)
+    hscroll.setValue((hscroll.minimum() + hscroll.maximum()) // 2)
+    start = hscroll.value()
+
+    for _ in range(10):
+        view.pan(QtCore.QPointF(0.4, 0.0))
+
+    assert hscroll.value() == start + 4
+
+
+def test_pan_does_not_drift_on_whole_pixels(view, imgfilename3x3):
+    hscroll = scrollable_view(view, imgfilename3x3)
+    hscroll.setValue((hscroll.minimum() + hscroll.maximum()) // 2)
+    start = hscroll.value()
+
+    for _ in range(10):
+        view.pan(QtCore.QPointF(3.0, 0.0))
+
+    assert hscroll.value() == start + 30
+    assert view.pan_remainder.x() == 0
