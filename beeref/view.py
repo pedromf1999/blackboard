@@ -473,6 +473,9 @@ class BeeGraphicsView(MainControlsMixin,
             elif not item.isSelected():
                 self.scene.deselect_all_items()
                 item.setSelected(True)
+            # Work the table commands from the cell that was clicked
+            item.put_cursor_at(item.mapFromScene(self.mapToScene(point)))
+            self.update_table_actions()
             self.text_context_menu.exec(self.mapToGlobal(point))
             return
 
@@ -929,6 +932,17 @@ class BeeGraphicsView(MainControlsMixin,
         new_htmls = [item.toHtml() for item in items]
         self.undo_stack.push(
             commands.ChangeTextFormat(items, new_htmls, old_htmls))
+
+    def update_table_actions(self):
+        """Enable the table commands when there is a table to work on.
+
+        Separate from the selection handler because right-clicking a
+        cell also decides this: it moves the cursor into the cell, and
+        the menu about to open has to reflect that.
+        """
+
+        self.actiongroup_set_enabled('active_when_table',
+                                     self.scene.has_table_selection())
 
     def on_action_insert_table(self):
         """Put a table where the text cursor is, or in a new note."""
@@ -1447,8 +1461,7 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_single_image_selection())
         self.actiongroup_set_enabled('active_when_text_selection',
                                      self.scene.has_text_selection())
-        self.actiongroup_set_enabled('active_when_table',
-                                     self.scene.has_table_selection())
+        self.update_table_actions()
         self.actiongroup_set_enabled('active_when_sizeable_selection',
                                      self.scene.has_sizeable_selection())
         self.update_pinned_toolbars()

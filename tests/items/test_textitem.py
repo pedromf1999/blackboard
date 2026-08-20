@@ -888,3 +888,85 @@ def test_cell_colour_keeps_the_words_readable(view):
                         QtGui.QTextCursor.MoveMode.KeepAnchor)
     assert cursor.charFormat().foreground().color() == item.text_color_over(
         white)
+
+
+def boundaries(item):
+    table = item.tables()[0]
+    columns, rows = item.table_boundaries(table)
+    del table
+    return columns, rows
+
+
+def test_grip_found_on_a_column_boundary(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 3)
+    columns, rows = boundaries(item)
+
+    index, x = columns[0]
+    point = QtCore.QPointF(x, rows[0][1] - 5)
+    assert item.table_grip_at(point) == ('column', 0, index)
+
+    # Well inside a cell, away from every boundary, nothing is grabbed
+    assert item.table_grip_at(QtCore.QPointF(x - 30, rows[0][1] - 12)) is None
+
+
+def test_grip_found_on_a_row_boundary(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 3)
+    columns, rows = boundaries(item)
+
+    index, y = rows[0]
+    point = QtCore.QPointF(columns[0][1] - 30, y)
+    assert item.table_grip_at(point) == ('row', 0, index)
+
+
+def test_dragging_a_column_boundary_widens_it(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 3)
+    columns, rows = boundaries(item)
+    index, x = columns[0]
+    start = QtCore.QPointF(x, rows[0][1] - 5)
+    before = item.column_widths(item.tables()[0])
+
+    item.start_table_drag(('column', 0, index), start)
+    item.drag_table_boundary(QtCore.QPointF(x + 40, start.y()))
+
+    after = item.column_widths(item.tables()[0])
+    assert after[0] == before[0] + 40
+    # Only the column being dragged changes
+    assert after[1:] == before[1:]
+
+
+def test_a_column_cannot_be_dragged_away_to_nothing(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 2)
+    columns, rows = boundaries(item)
+    index, x = columns[0]
+    start = QtCore.QPointF(x, rows[0][1] - 5)
+
+    item.start_table_drag(('column', 0, index), start)
+    item.drag_table_boundary(QtCore.QPointF(x - 500, start.y()))
+
+    assert item.column_widths(item.tables()[0])[0] == item.TABLE_MIN_WIDTH
+
+
+def test_dragging_a_row_boundary_makes_it_taller(view):
+    """Qt sizes rows to their contents, so the padding is the handle."""
+
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(3, 2)
+    columns, rows = boundaries(item)
+    index, y = rows[0]
+    start = QtCore.QPointF(columns[0][1] - 30, y)
+    before = item.boundingRect().height()
+
+    item.start_table_drag(('row', 0, index), start)
+    item.drag_table_boundary(QtCore.QPointF(start.x(), y + 30))
+
+    assert item.row_extra_height(item.tables()[0], 0) == 30
+    assert item.boundingRect().height() > before

@@ -489,10 +489,13 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         cursor being in one of its tables.
         """
 
-        item = self.edit_item
-        if item is None or getattr(item, 'TYPE', None) != 'text':
-            return None
-        return item if item.current_table() is not None else None
+        candidates = [self.edit_item] + self.selected_text_items()
+        for item in candidates:
+            if (item is not None
+                    and getattr(item, 'TYPE', None) == 'text'
+                    and item.current_table() is not None):
+                return item
+        return None
 
     def has_table_selection(self):
         return self.item_with_table() is not None

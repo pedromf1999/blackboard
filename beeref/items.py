@@ -1135,6 +1135,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         # Setting the box colour also picks the text colour to go with it
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         self.setFont(self.get_text_font())
+        self.table_drag = None
         # Whatever changes the text can change how big it is, so the
         # margin is kept up to date from one place rather than from
         # every caller that might resize a word
@@ -1313,6 +1314,108 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)
 
+    # How close to a boundary counts as grabbing it, and how small a
+    # row or column may be dragged, both in item coordinates.
+    TABLE_GRIP = 5
+    TABLE_MIN_WIDTH = 20
+    TABLE_MIN_EXTRA_HEIGHT = 0
+
+    def cell_rect(self, table, row, column):
+        """Where a cell's contents sit, in item coordinates."""
+
+        layout = self.document().documentLayout()
+        return layout.blockBoundingRect(
+            table.cellAt(row, column).firstCursorPosition().block())
+
+    def table_boundaries(self, table):
+        """Where the column and row boundaries are.
+
+        Each entry is the index of the column or row that a drag there
+        resizes, paired with its position. Taken from the laid out
+        cells rather than added up from the stored widths, so borders
+        and padding are already accounted for.
+        """
+
+        layout = self.document().documentLayout()
+        frame = layout.frameBoundingRect(table)
+
+        columns = []
+        for c in range(table.columns() - 1):
+            here = self.cell_rect(table, 0, c).right()
+            next_one = self.cell_rect(table, 0, c + 1).left()
+            columns.append((c, (here + next_one) / 2))
+        columns.append((table.columns() - 1, frame.right()))
+
+        rows = []
+        for r in range(table.rows() - 1):
+            here = self.cell_rect(table, r, 0).bottom()
+            next_one = self.cell_rect(table, r + 1, 0).top()
+            rows.append((r, (here + next_one) / 2))
+        rows.append((table.rows() - 1, frame.bottom()))
+        return columns, rows
+
+    def table_grip_at(self, pos):
+        """What a press at this point would resize, if anything.
+
+        Returns ``(kind, table number, index)`` -- the kind being
+        'column' or 'row' -- or None. The table is named by its number
+        in the note rather than handed back: a note can hold more than
+        one, and the drag must not end up resizing a different one.
+        Only boundaries within the table's own height or width count,
+        so the space beside a table does not grab its rows.
+        """
+
+        layout = self.document().documentLayout()
+        grip = self.TABLE_GRIP
+        for number, table in enumerate(self.tables()):
+            frame = layout.frameBoundingRect(table)
+            columns, rows = self.table_boundaries(table)
+            if frame.top() - grip <= pos.y() <= frame.bottom() + grip:
+                for index, x in columns:
+                    if abs(pos.x() - x) <= grip:
+                        return ('column', number, index)
+            if frame.left() - grip <= pos.x() <= frame.right() + grip:
+                for index, y in rows:
+                    if abs(pos.y() - y) <= grip:
+                        return ('row', number, index)
+        return None
+
+    def row_extra_height(self, table, row):
+        """The padding added to a row on top of the table's own."""
+
+        return table.cellAt(row, 0).format().toTableCellFormat(
+            ).bottomPadding()
+
+    def set_row_extra_height(self, table, row, extra):
+        """Make a row taller by padding its cells underneath.
+
+        Qt sizes rows to their contents and offers no row height, so
+        the padding is the only handle there is.
+        """
+
+        extra = max(self.TABLE_MIN_EXTRA_HEIGHT, extra)
+        for column in range(table.columns()):
+            cell = table.cellAt(row, column)
+            fmt = cell.format().toTableCellFormat()
+            fmt.setBottomPadding(extra)
+            cell.setFormat(fmt)
+
+    def put_cursor_at(self, pos):
+        """Move the cursor to a point given in item coordinates.
+
+        Right-clicking a cell has to put the cursor in it, or the table
+        commands would have no cell to work from and would stay greyed
+        out on a note that plainly holds a table.
+        """
+
+        layout = self.document().documentLayout()
+        cursor_pos = layout.hitTest(pos, Qt.HitTestAccuracy.FuzzyHit)
+        if cursor_pos < 0:
+            return
+        cursor = self.textCursor()
+        cursor.setPosition(cursor_pos)
+        self.setTextCursor(cursor)
+
     def get_url_at(self, pos):
         """The URL at the given position in item coordinates, if any."""
 
@@ -1335,6 +1438,17 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
                 return url
         return None
 
+    def hoverMoveEvent(self, event):
+        """Show a split cursor over a row or column boundary."""
+
+        grip = self.table_grip_at(event.pos())
+        if grip is not None:
+            self.set_cursor(Qt.CursorShape.SplitHCursor
+                            if grip[0] == 'column'
+                            else Qt.CursorShape.SplitVCursor)
+            return
+        super().hoverMoveEvent(event)
+
     def mousePressEvent(self, event):
         if (event.button() == Qt.MouseButton.LeftButton
                 and event.modifiers() == Qt.KeyboardModifier.ControlModifier):
@@ -1345,7 +1459,70 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
                 event.accept()
                 return
 
+        if (event.button() == Qt.MouseButton.LeftButton
+                and not event.modifiers()):
+            grip = self.table_grip_at(event.pos())
+            if grip is not None:
+                self.start_table_drag(grip, event.pos())
+                event.accept()
+                return
+
         super().mousePressEvent(event)
+
+    def start_table_drag(self, grip, pos):
+        """Begin dragging a row or column boundary.
+
+        Only numbers are remembered, never the table itself: finishing
+        the drag replaces the note's html, which destroys every frame
+        in the document and would leave a held table dangling.
+        """
+
+        kind, number, index = grip
+        table = self.tables()[number]
+        if kind == 'column':
+            size = self.column_widths(table)[index]
+        else:
+            size = self.row_extra_height(table, index)
+        self.table_drag = {
+            'kind': kind,
+            'number': number,
+            'index': index,
+            'start': pos,
+            'size': size,
+            'html': self.toHtml(),
+        }
+        logger.debug(f'Started dragging table {kind} {index}')
+
+    def mouseMoveEvent(self, event):
+        if getattr(self, 'table_drag', None):
+            self.drag_table_boundary(event.pos())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def drag_table_boundary(self, pos):
+        drag = self.table_drag
+        table = self.tables()[drag['number']]
+        if drag['kind'] == 'column':
+            widths = self.column_widths(table)
+            moved = pos.x() - drag['start'].x()
+            widths[drag['index']] = max(
+                self.TABLE_MIN_WIDTH, drag['size'] + moved)
+            self.set_column_widths(table, widths)
+        else:
+            moved = pos.y() - drag['start'].y()
+            self.set_row_extra_height(
+                table, drag['index'], drag['size'] + moved)
+
+    def mouseReleaseEvent(self, event):
+        drag = getattr(self, 'table_drag', None)
+        if drag:
+            self.table_drag = None
+            self.scene().undo_stack.push(commands.ChangeTextFormat(
+                [self], [self.toHtml()], [drag['html']]))
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def selected_range(self):
         """The selected text, or all of it when nothing is selected."""
@@ -1681,7 +1858,10 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         if commit:
             self.scene().undo_stack.push(
                 commands.ChangeText(self, self.toHtml(), self.old_text))
-            if not self.toPlainText().strip():
+            if not self.toPlainText().strip() and not self.tables():
+                # A note holding a table is not empty, even before a
+                # word is typed into it: an empty table is the whole
+                # point of having just made one
                 logger.debug('Removing empty text item')
                 self.scene().undo_stack.push(
                     commands.DeleteItems(self.scene(), [self]))

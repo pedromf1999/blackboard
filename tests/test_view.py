@@ -3034,3 +3034,59 @@ def test_table_commands_do_nothing_without_a_table(view):
     view.on_action_table_column_remove()
     view.on_action_table_cell_color()
     assert view.undo_stack.count() == 0
+
+
+def table_note(view):
+    """A note holding a table, no longer being edited."""
+
+    view.on_action_insert_table()
+    item = view.scene.item_with_table()
+    item.exit_edit_mode()
+    item.setPos(0, 0)
+    return item
+
+
+def cell_point(view, item, row, column):
+    """The view position of a cell, for right-clicking it."""
+
+    table = item.tables()[0]
+    centre = item.document().documentLayout().blockBoundingRect(
+        table.cellAt(row, column).firstCursorPosition().block()).center()
+    del table
+    return view.mapFromScene(item.mapToScene(centre))
+
+
+def test_a_note_holding_a_table_is_not_empty(view):
+    """Clicking away from a fresh table used to delete it.
+
+    An empty note is removed when editing ends, and a table nobody has
+    typed into yet has no text at all.
+    """
+
+    item = table_note(view)
+    assert item.scene() is view.scene
+    assert len(item.tables()) == 1
+
+
+def test_right_click_puts_the_cursor_in_the_cell(view):
+    item = table_note(view)
+    view.scene.deselect_all_items()
+
+    with patch.object(view.text_context_menu, 'exec'):
+        view.on_context_menu(cell_point(view, item, 1, 1))
+
+    cell = item.current_cell()
+    assert (cell.row(), cell.column()) == (1, 1)
+    # And the commands are reachable, rather than greyed out on a note
+    # that plainly holds a table
+    assert actions.actions['table_row_insert'].qaction.isEnabled() is True
+
+
+def test_right_click_then_insert_row(view):
+    item = table_note(view)
+    with patch.object(view.text_context_menu, 'exec'):
+        view.on_context_menu(cell_point(view, item, 0, 0))
+
+    before = table_shape(view)
+    view.on_action_table_row_insert()
+    assert table_shape(view) == (before[0] + 1, before[1])
