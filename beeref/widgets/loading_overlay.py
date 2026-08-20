@@ -18,8 +18,6 @@ import logging
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from beeref.assets import BeeAssets
-from beeref.config import BeeSettings
-from beeref.utils import relative_luminance
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +39,6 @@ class LoadingOverlay(QtWidgets.QWidget):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.settings = BeeSettings()
         self.hide()
 
     def start(self):
@@ -52,16 +49,10 @@ class LoadingOverlay(QtWidgets.QWidget):
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        background = QtGui.QColor(
-            self.settings.valueOrDefault('View/canvas_color'))
-        painter.fillRect(self.rect(), background)
+        painter.fillRect(self.rect(), QtGui.QColor(0, 0, 0))
 
-        # The artwork is dark, for a light background. The canvas is
-        # dark by default but its colour can be changed, so which
-        # version to use is decided by what it is sitting on.
-        dark = relative_luminance(background) < 0.5
         width = min(self.width() * self.WIDTH_SHARE, self.MAX_WIDTH)
-        wordmark = BeeAssets().wordmark(width, inverted=dark)
+        wordmark = BeeAssets().wordmark(width, light_word=True)
         if wordmark is None:
             return
 

@@ -113,17 +113,21 @@ class BeeAssets:
         self._tool_icons[name] = icon
         return icon
 
-    def wordmark(self, width, inverted=False):
+    # Where the icon ends and the word begins, as a fraction of the
+    # artwork's width. Measured from the artwork: the tile finishes at
+    # 0.17 and the B of Blackboard starts at 0.24.
+    WORDMARK_SPLIT = 0.21
+
+    def wordmark(self, width, light_word=False):
         """The Blackboard wordmark, drawn at the given width.
 
-        The artwork is dark on nothing, meant for a light background.
-        Inverting it gives a version for a dark one: the word turns
-        white and the tile turns pale with a dark B, which is the same
-        lockup rather than a recolouring of it. Returns ``None`` when
-        the artwork cannot be loaded.
+        The icon is left exactly as drawn -- a dark tile with a light B,
+        which reads on a dark background already. Only the word beside
+        it is repainted, since the artwork has it in black for a light
+        background. Returns ``None`` when the artwork cannot be loaded.
         """
 
-        key = (round(width), inverted)
+        key = (round(width), light_word)
         if key in self._wordmarks:
             return self._wordmarks[key]
 
@@ -142,9 +146,16 @@ class BeeAssets:
         painter = QtGui.QPainter(image)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         renderer.render(painter)
+        if light_word:
+            # Only the part beyond the icon, and only its colour: the
+            # shape it already has is kept by drawing inside it
+            painter.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+            split = round(image.width() * self.WORDMARK_SPLIT)
+            painter.fillRect(
+                QtCore.QRect(split, 0, image.width() - split, image.height()),
+                QtGui.QColor(255, 255, 255))
         painter.end()
-        if inverted:
-            image.invertPixels(QtGui.QImage.InvertMode.InvertRgb)
 
         self._wordmarks[key] = image
         return image

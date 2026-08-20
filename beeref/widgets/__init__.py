@@ -54,6 +54,22 @@ class BeeProgressDialog(QtWidgets.QProgressDialog):
         worker.user_input_required.connect(self.on_finished)
         self.canceled.connect(worker.on_canceled)
 
+    def move_below_center(self, share=0.78):
+        """Sit lower than the middle of the window.
+
+        A progress dialog centres itself on what it belongs to, which
+        puts it straight over the wordmark shown while a board opens.
+        """
+
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        middle = parent.mapToGlobal(
+            QtCore.QPoint(parent.width() // 2,
+                          round(parent.height() * share)))
+        self.move(middle.x() - self.width() // 2, middle.y())
+
     def on_progress(self, value):
         logger.debug(f'Progress dialog: {value}')
         self.setValue(value)

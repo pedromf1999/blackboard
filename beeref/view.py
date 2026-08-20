@@ -1197,6 +1197,8 @@ class BeeGraphicsView(MainControlsMixin,
             f'Loading {filename}',
             worker=self.worker,
             parent=self)
+        # Out of the way of the wordmark behind it
+        self.progress.move_below_center()
         self.worker.start()
 
     def on_action_open(self):

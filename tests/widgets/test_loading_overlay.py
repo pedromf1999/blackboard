@@ -26,25 +26,38 @@ def test_shown_while_opening_and_hidden_after(view, tmpdir):
     assert overlay.isVisible() is False
 
 
-def test_wordmark_is_inverted_for_a_dark_canvas(qapp):
-    """The artwork is dark, meant for a light background."""
+def test_only_the_word_is_repainted(qapp):
+    """The icon is left as drawn; only the word beside it turns white.
 
-    plain = BeeAssets().wordmark(400)
-    inverted = BeeAssets().wordmark(400, inverted=True)
+    The artwork has the word in black, for a light background, while
+    the icon is already a dark tile with a light B.
+    """
+
+    assets = BeeAssets()
+    plain = assets.wordmark(400)
+    lit = assets.wordmark(400, light_word=True)
 
     assert plain is not None
     assert plain.width() == 400
-    assert inverted.size() == plain.size()
+    assert lit.size() == plain.size()
 
-    # Somewhere in the word, the two are opposites of each other
-    differences = 0
-    for x in range(0, plain.width(), 7):
-        for y in range(0, plain.height(), 7):
-            one = plain.pixelColor(x, y)
-            other = inverted.pixelColor(x, y)
-            if one.alpha() > 200 and one.red() + other.red() == 255:
-                differences += 1
-    assert differences > 0
+    split = round(400 * assets.WORDMARK_SPLIT)
+
+    # The icon is untouched
+    for x in range(0, split, 5):
+        for y in range(0, plain.height(), 5):
+            assert lit.pixelColor(x, y) == plain.pixelColor(x, y)
+
+    # The word is white wherever it has ink
+    inked = 0
+    for x in range(split, 400, 5):
+        for y in range(0, plain.height(), 5):
+            pixel = lit.pixelColor(x, y)
+            if pixel.alpha() > 200:
+                inked += 1
+                assert (pixel.red(), pixel.green(), pixel.blue()) == (
+                    255, 255, 255)
+    assert inked > 0, 'the word has to be there'
 
 
 def test_wordmark_is_shipped():
@@ -61,3 +74,26 @@ def test_overlay_paints_the_wordmark(view):
     assert middle != background, 'the wordmark has to be visible on it'
     assert QtGui.QColor(middle).lightness() > QtGui.QColor(
         background).lightness()
+
+
+def test_background_is_black(view):
+    """Pure black, not the canvas colour."""
+
+    overlay = view.loading_overlay
+    overlay.start()
+    image = overlay.grab().toImage()
+    assert image.pixelColor(3, 3) == QtGui.QColor(0, 0, 0)
+
+
+def test_progress_bar_sits_below_the_wordmark(view):
+    """Centred, it would cover the very thing it is shown over."""
+
+    from beeref.widgets import BeeProgressDialog
+    from unittest.mock import MagicMock
+
+    dialog = BeeProgressDialog('Loading', worker=MagicMock(), parent=view)
+    dialog.move_below_center()
+
+    middle = view.mapToGlobal(view.rect().center()).y()
+    assert dialog.y() > middle
+    dialog.deleteLater()
