@@ -20,7 +20,7 @@ import logging
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
-from beeref import commands
+from beeref import commands, constants
 from beeref.utils import readable_grey
 
 
@@ -381,6 +381,51 @@ class LayersTree(QtWidgets.QTreeWidget):
         self.schedule_refresh()
 
 
+class LayersHandle(QtWidgets.QToolButton):
+    """The square that stands in for the panel while it is put away.
+
+    A dock widget always fills the height of the side it is docked to,
+    so a collapsed panel could only ever be a full-height strip. This
+    sits over the canvas instead: one small square, at the top of the
+    side the panel lives on.
+    """
+
+    MARGIN = 8
+    SIZE = 26
+
+    def __init__(self, parent, view):
+        super().__init__(parent)
+        self.view = view
+        self.area = Qt.DockWidgetArea.RightDockWidgetArea
+        self.setObjectName('LayersHandle')
+        color = constants.COLORS['Active:Window']
+        self.setStyleSheet(
+            f'#LayersHandle {{ background-color: rgba('
+            f'{color[0]}, {color[1]}, {color[2]}, 0.95);'
+            'border-radius: 5px; }')
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setToolTip('Show the layers panel (Ctrl+J)')
+        self.clicked.connect(view.toggle_layers_panel)
+        self.set_side(self.area)
+
+    def set_side(self, area):
+        """Point into the canvas, which is the way the panel opens."""
+
+        self.area = area
+        self.setArrowType(
+            Qt.ArrowType.RightArrow
+            if area == Qt.DockWidgetArea.LeftDockWidgetArea
+            else Qt.ArrowType.LeftArrow)
+
+    def reposition(self):
+        parent = self.parentWidget()
+        if self.area == Qt.DockWidgetArea.LeftDockWidgetArea:
+            x = self.MARGIN
+        else:
+            x = parent.width() - self.width() - self.MARGIN
+        self.move(x, self.MARGIN)
+
+
 class LayersTitleBar(QtWidgets.QWidget):
     """Title bar for the layers panel: an arrow, and a name beside it.
 
@@ -408,12 +453,12 @@ class LayersTitleBar(QtWidgets.QWidget):
         self.update_collapse_button(False)
 
     def update_collapse_button(self, collapsed):
-        # Collapsed, the arrow points into the canvas, which is the way
-        # the panel opens. Expanded it points down, over what it opened.
+        # This bar is only on screen while the panel is open, so the
+        # arrow points down, over what it will put away. Collapsed, the
+        # handle over the canvas takes over.
         self.collapse_button.setArrowType(
             Qt.ArrowType.LeftArrow if collapsed else Qt.ArrowType.DownArrow)
         self.collapse_button.setToolTip('Expand' if collapsed else 'Collapse')
-        self.label.setVisible(not collapsed)
 
 
 class LayersDock(QtWidgets.QDockWidget):
@@ -447,19 +492,17 @@ class LayersDock(QtWidgets.QDockWidget):
         self.set_collapsed(True)
 
     def toggle_collapsed(self):
-        self.set_collapsed(not self.collapsed)
+        """Go through the menu entry, so it and the setting keep step."""
 
-    def collapsed_width(self):
-        """How wide the strip is: the arrow, and nothing else."""
-
-        return self.titlebar.sizeHint().width()
+        self.view.toggle_layers_panel()
 
     def set_collapsed(self, value):
-        """Shrink the panel to a strip holding its arrow, or open it.
+        """Put the panel away, or open it.
 
-        Collapsing takes the width away, not the height. The panel is
-        docked down one side, so leaving the width behind left a tall
-        empty column taking up the room the canvas wants.
+        Collapsed, the panel leaves the window altogether and its handle
+        takes over: a dock widget always fills the height of the side it
+        is docked to, so shrinking it could only ever leave a full
+        height strip standing beside the canvas for no reason.
         """
 
         logger.debug(f'Collapsing layers panel: {value}')
@@ -467,12 +510,12 @@ class LayersDock(QtWidgets.QDockWidget):
             # Come back to the width it was dragged to
             self.expanded_width = max(self.width(), self.DEFAULT_WIDTH)
         self.collapsed = value
-        self.tree.setVisible(not value)
         self.titlebar.update_collapse_button(value)
         if value:
-            self.setFixedWidth(self.collapsed_width())
+            self.hide()
         else:
-            self.setMinimumWidth(0)
-            self.setMaximumWidth(QWIDGETSIZE_MAX)
+            self.tree.setVisible(True)
+            self.show()
             self.main_window.resizeDocks(
                 [self], [self.expanded_width], Qt.Orientation.Horizontal)
+        self.view.update_layers_handle()

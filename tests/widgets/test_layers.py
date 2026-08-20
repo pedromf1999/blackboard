@@ -1,5 +1,6 @@
 import os.path
 
+from beeref.actions.actions import actions
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
@@ -46,6 +47,12 @@ def entries(tree):
     return result
 
 
+def open_layers(view):
+    """Open the panel the way the application does, through the menu."""
+
+    actions['show_layers'].qaction.setChecked(True)
+
+
 def test_dock_starts_collapsed(view):
     """On screen from the start, but only as its strip."""
 
@@ -63,37 +70,65 @@ def test_dock_cannot_be_closed(view):
 
 
 def test_dock_can_be_collapsed(view):
-    view.on_action_show_layers(True)
+    open_layers(view)
     dock = view.layers_dock
     assert dock.collapsed is False
 
     dock.toggle_collapsed()
     assert dock.collapsed is True
-    assert dock.tree.isVisible() is False
-    # The width goes, not the height: it is docked down one side, so
-    # keeping the width left a tall empty column beside the canvas
-    assert dock.maximumWidth() == dock.collapsed_width()
+    # The panel leaves the window entirely. A dock widget fills the
+    # height of the side it is docked to, so shrinking it could only
+    # leave a full height strip standing there for no reason.
+    assert dock.isVisible() is False
 
 
-def test_collapsed_strip_is_only_the_arrow(view):
-    dock = view.layers_dock
-    view.on_action_show_layers(True)
-    open_width = dock.collapsed_width()
+def test_handle_stands_in_for_the_collapsed_panel(view):
+    """Put away, the panel leaves one small square behind."""
+
     view.on_action_show_layers(False)
+    handle = view.layers_handle
+    assert handle.isVisible() is True
+    assert handle.width() == handle.SIZE
+    assert handle.height() == handle.SIZE
 
-    assert dock.titlebar.label.isVisible() is False
-    # Without the name beside it, the strip is far narrower
-    assert dock.collapsed_width() < open_width
+    view.on_action_show_layers(True)
+    assert handle.isVisible() is False
+
+
+def test_handle_sits_on_the_side_the_panel_docks_to(view):
+    view.on_action_show_layers(False)
+    handle = view.layers_handle
+
+    handle.set_side(Qt.DockWidgetArea.RightDockWidgetArea)
+    handle.reposition()
+    assert handle.x() > view.width() / 2
+    assert handle.arrowType() == Qt.ArrowType.LeftArrow
+
+    handle.set_side(Qt.DockWidgetArea.LeftDockWidgetArea)
+    handle.reposition()
+    assert handle.x() < view.width() / 2
+    assert handle.arrowType() == Qt.ArrowType.RightArrow
 
 
 def test_dock_can_be_expanded_again(view):
-    view.on_action_show_layers(True)
+    open_layers(view)
     dock = view.layers_dock
     dock.toggle_collapsed()
     dock.toggle_collapsed()
     assert dock.collapsed is False
     assert dock.tree.isVisible() is True
-    assert dock.maximumWidth() > dock.collapsed_width()
+    assert dock.isVisible() is True
+
+
+def test_collapsing_from_the_arrow_keeps_the_menu_in_step(view):
+    """The panel, the menu entry and the stored setting are one thing."""
+
+    qaction = actions['show_layers'].qaction
+    open_layers(view)
+
+    view.layers_dock.toggle_collapsed()
+    assert view.layers_dock.collapsed is True
+    assert qaction.isChecked() is False
 
 
 def test_shortcut_opens_and_collapses(view):
@@ -111,7 +146,7 @@ def test_shortcut_opens_and_collapses(view):
 
 def test_collapse_button_arrow_follows_state(view):
     dock = view.layers_dock
-    view.on_action_show_layers(True)
+    open_layers(view)
     button = dock.titlebar.collapse_button
     assert button.arrowType() == Qt.ArrowType.DownArrow
     dock.toggle_collapsed()

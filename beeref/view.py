@@ -95,6 +95,7 @@ class BeeGraphicsView(MainControlsMixin,
         self.welcome_overlay = widgets.welcome_overlay.WelcomeOverlay(self)
         # Built early: a resize can arrive before the end of setup
         self.shortcuts_hint = widgets.shortcuts_hint.ShortcutsHint(self)
+        self.layers_handle = widgets.layers.LayersHandle(self, self)
 
         # Set before the actions are built, since the grid toggle acts
         # on it as soon as it is restored from the settings
@@ -139,6 +140,7 @@ class BeeGraphicsView(MainControlsMixin,
         # Built before the actions, since the toggle acts on it as soon
         # as it is restored from the settings
         self.layers_dock = widgets.layers.LayersDock(parent, self)
+        self.update_layers_handle()
 
         # Context menu and actions
         self.build_menu_and_actions()
@@ -218,15 +220,40 @@ class BeeGraphicsView(MainControlsMixin,
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(color)))
 
     def on_action_show_layers(self, checked):
-        """Open the layers panel, or collapse it back to its strip.
-
-        The panel is always on screen, so this opens and closes it
-        rather than showing and hiding it.
-        """
+        """Open the layers panel, or put it away behind its handle."""
 
         self.layers_dock.set_collapsed(not checked)
         if checked:
             self.layers_dock.tree.refresh()
+
+    def toggle_layers_panel(self):
+        """Open or put away the panel, from wherever it was asked for.
+
+        Everything goes through the menu entry: ticking it runs the
+        callback and stores the setting, so the panel, the menu and what
+        is remembered for next time cannot drift apart.
+        """
+
+        qaction = actions.actions['show_layers'].qaction
+        qaction.setChecked(not qaction.isChecked())
+
+    def update_layers_handle(self):
+        """Show the handle only while the panel itself is away."""
+
+        dock = getattr(self, 'layers_dock', None)
+        if dock is None:
+            # The panel settles its own state while it is being built,
+            # before the view has a name for it. The view puts the
+            # handle right as soon as it does.
+            return
+        if dock.collapsed:
+            self.layers_handle.set_side(
+                self.parent.dockWidgetArea(dock))
+            self.layers_handle.reposition()
+            self.layers_handle.show()
+            self.layers_handle.raise_()
+        else:
+            self.layers_handle.hide()
 
     def set_draw_tool(self, kind):
         """Pick a drawing tool, or ``None`` to go back to selecting."""
@@ -1604,6 +1631,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.welcome_overlay.resize(self.size())
         if self.shortcuts_hint.isVisible():
             self.shortcuts_hint.reposition()
+        if self.layers_handle.isVisible():
+            self.layers_handle.reposition()
 
     def pin_toolbar_to(self, toolbar, items):
         """Put a bar over the given items, or hide it if there are none."""
