@@ -2049,7 +2049,7 @@ def test_delta_zero(pan_mock, reset_mock, view, item):
     pan_mock.assert_not_called()
 
 
-@patch('beeref.view.BeeGraphicsView.zoom')
+@patch('beeref.view.BeeGraphicsView.smooth_zoom')
 def test_wheel_event_zoom(zoom_mock, view):
     event = MagicMock()
     event.angleDelta.return_value = QtCore.QPointF(0.0, 40.0)
@@ -2060,7 +2060,7 @@ def test_wheel_event_zoom(zoom_mock, view):
     event.accept.assert_called_once_with()
 
 
-@patch('beeref.view.BeeGraphicsView.zoom')
+@patch('beeref.view.BeeGraphicsView.smooth_zoom')
 def test_wheel_event_zoom_custom_inverted(zoom_mock, view, kbsettings):
     kbsettings.MOUSEWHEEL_ACTIONS['zoom2'].set_modifiers(['Alt'])
     kbsettings.MOUSEWHEEL_ACTIONS['zoom2'].set_inverted(True)
@@ -3138,3 +3138,40 @@ def test_compact_file_runs_in_the_background(view):
         view.on_action_compact_file()
     threaded.assert_called_once()
     assert threaded.call_args.args[0] is fileio.compact_bee
+
+
+def test_wheel_zoom_is_spread_over_frames(view, imgfilename3x3):
+    """A notch of the wheel eases in rather than jumping at once."""
+
+    view.scene.addItem(BeePixmapItem(QtGui.QImage(imgfilename3x3)))
+    anchor = QtCore.QPointF(50.0, 50.0)
+    before = view.get_scale()
+
+    view.smooth_zoom(120, anchor)
+    # Nothing has moved yet; the work is waiting to be done
+    assert view.get_scale() == before
+    assert view.pending_zoom == 120
+    assert view.zoom_timer.isActive() is True
+
+    scales = []
+    for _ in range(40):
+        view.step_zoom()
+        scales.append(view.get_scale())
+
+    assert scales[0] > before, 'the first step has to move'
+    assert scales == sorted(scales), 'zooming in never goes backwards'
+    # Each step covers less ground than the one before it
+    assert scales[1] - scales[0] > scales[5] - scales[4]
+    assert view.zoom_timer.isActive() is False
+    assert view.pending_zoom == 0
+
+
+def test_wheel_zoom_adds_up_when_spun_quickly(view, imgfilename3x3):
+    view.scene.addItem(BeePixmapItem(QtGui.QImage(imgfilename3x3)))
+    anchor = QtCore.QPointF(50.0, 50.0)
+
+    for _ in range(5):
+        view.smooth_zoom(120, anchor)
+
+    # Turns add to each other rather than replacing one another
+    assert view.pending_zoom == 600

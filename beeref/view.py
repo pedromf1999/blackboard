@@ -68,6 +68,14 @@ class BeeGraphicsView(MainControlsMixin,
 
     PAN_MODE = 1
     ZOOM_MODE = 2
+
+    # Smoothing the wheel zoom: how often a step is taken, how much of
+    # what is left each step covers, and how little is worth another
+    # step. Dragging to zoom is left alone -- it already follows the
+    # mouse, and easing it would only add lag.
+    ZOOM_INTERVAL = 16
+    ZOOM_SMOOTHING = 0.3
+    ZOOM_REMAINDER = 1
     SAMPLE_COLOR_MODE = 3
 
     # On-screen bounds in pixels between which the grid spacing is kept
@@ -120,6 +128,14 @@ class BeeGraphicsView(MainControlsMixin,
         self.filename = None
         self.previous_transform = None
         self.active_mode = None
+        # Wheel zooming is spread over a few frames: a notch of the
+        # wheel is a change of about twelve percent, and arriving there
+        # in one jump is what makes zooming feel steppy
+        self.pending_zoom = 0
+        self.zoom_anchor = None
+        self.zoom_timer = QtCore.QTimer(self)
+        self.zoom_timer.setInterval(self.ZOOM_INTERVAL)
+        self.zoom_timer.timeout.connect(self.step_zoom)
         self.text_search_query = ''
         self.text_search_index = -1
 
@@ -1632,6 +1648,31 @@ class BeeGraphicsView(MainControlsMixin,
         self.pan(self.mapFromScene(ref_point) - anchor)
         self.reset_previous_transform()
 
+    def smooth_zoom(self, delta, anchor):
+        """Zoom towards the anchor over the next few frames.
+
+        Turns of the wheel add up rather than replacing each other, so
+        spinning it quickly still arrives where it should.
+        """
+
+        self.pending_zoom += delta
+        self.zoom_anchor = anchor
+        if not self.zoom_timer.isActive():
+            self.zoom_timer.start()
+
+    def step_zoom(self):
+        """One frame of a smoothed zoom."""
+
+        if abs(self.pending_zoom) <= self.ZOOM_REMAINDER:
+            step = self.pending_zoom
+            self.pending_zoom = 0
+            self.zoom_timer.stop()
+        else:
+            step = self.pending_zoom * self.ZOOM_SMOOTHING
+            self.pending_zoom -= step
+        if step:
+            self.zoom(step, self.zoom_anchor)
+
     def wheelEvent(self, event):
         action, inverted\
             = self.keyboard_settings.mousewheel_action_for_event(event)
@@ -1641,7 +1682,7 @@ class BeeGraphicsView(MainControlsMixin,
             delta = delta * -1
 
         if action == 'zoom':
-            self.zoom(delta, event.position())
+            self.smooth_zoom(delta, event.position())
             event.accept()
             return
         if action == 'pan_horizontal':
