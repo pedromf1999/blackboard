@@ -17,8 +17,7 @@
 
 import logging
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import Qt
+from PyQt6 import QtCore, QtWidgets
 
 from beeref.assets import BeeAssets
 from beeref.items import BeeDrawItem
@@ -66,14 +65,9 @@ class DrawToolBar(QtWidgets.QWidget):
             layout.addWidget(button)
             self.buttons[kind] = button
 
-        self.color_button = QtWidgets.QToolButton(self)
-        self.color_button.setToolTip('Drawing colour')
-        self.color_button.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
-        self.color_button.clicked.connect(self.view.on_action_draw_color)
-        layout.addWidget(self.color_button)
-
+        # The colour lives on the bar that follows a selected drawing,
+        # where it is next to the line it recolours
         self.setLayout(layout)
-        self.update_color(self.view.draw_color)
         self.update_checked(None)
         self.adjustSize()
 
@@ -82,21 +76,6 @@ class DrawToolBar(QtWidgets.QWidget):
 
         for tool, button in self.buttons.items():
             button.setChecked(tool == kind)
-
-    def update_color(self, color):
-        """Show the colour new drawings will use."""
-
-        pixmap = QtGui.QPixmap(self.ICON_SIZE, self.ICON_SIZE)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QtGui.QPainter(pixmap)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        painter.setPen(QtGui.QPen(QtGui.QColor(120, 120, 120)))
-        painter.setBrush(QtGui.QBrush(color))
-        painter.drawEllipse(1, 1, self.ICON_SIZE - 2, self.ICON_SIZE - 2)
-        painter.end()
-        self.color_button.setIcon(QtGui.QIcon(pixmap))
-        self.color_button.setIconSize(
-            QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
 
     def reposition(self):
         """Sit in the top left corner of the view."""

@@ -160,9 +160,12 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_toolbar.reposition()
         self.draw_toolbar.show()
 
-        # Follows the selected text around; see update_text_toolbar
+        # These follow what is selected; see update_pinned_toolbars
         self.text_toolbar = widgets.text_toolbar.TextToolBar(self, self)
         self.text_toolbar.hide()
+        self.draw_item_toolbar = widgets.draw_item_toolbar.DrawItemToolBar(
+            self, self)
+        self.draw_item_toolbar.hide()
 
         self.apply_palette_to_color_dialogs()
 
@@ -285,16 +288,25 @@ class BeeGraphicsView(MainControlsMixin,
     def on_action_draw_color(self):
         """Set the colour for new drawings, and for any selected ones."""
 
-        color = QtWidgets.QColorDialog.getColor(
-            self.draw_color, self, 'Choose Drawing Colour')
-        if not color.isValid():
+        items = self.scene.selected_draw_items()
+        originals = [item.color for item in items]
+
+        def preview(color):
+            for item in items:
+                item.color = color
+                item.update()
+
+        color = self.pick_color_live(
+            'Choose Drawing Colour', self.draw_color, preview)
+
+        # Back to the colours they had, so the undo command records what
+        # was there before rather than the last thing previewed
+        for item, original in zip(items, originals):
+            item.color = original
+            item.update()
+        if color is None:
             return
         self.draw_color = color
-        if hasattr(self, 'draw_toolbar'):
-            self.draw_toolbar.update_color(color)
-
-        items = [item for item in self.scene.selectedItems(user_only=True)
-                 if item.TYPE == BeeDrawItem.TYPE]
         if items:
             self.undo_stack.push(commands.ChangeDrawColor(items, color))
 
@@ -358,8 +370,8 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_scene_changed(self, region):
         # Anything that moves or resizes an item lands here, which is
-        # what keeps the text buttons stuck to their text
-        self.update_text_toolbar()
+        # what keeps the bars stuck to what they act on
+        self.update_pinned_toolbars()
         if not self.scene.items():
             logger.debug('No items in scene')
             self.setTransform(QtGui.QTransform())
@@ -1344,7 +1356,7 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_text_selection())
         self.actiongroup_set_enabled('active_when_sizeable_selection',
                                      self.scene.has_sizeable_selection())
-        self.update_text_toolbar()
+        self.update_pinned_toolbars()
 
         if self.scene.has_selection():
             item = self.scene.selectedItems(user_only=True)[0]
@@ -1410,7 +1422,7 @@ class BeeGraphicsView(MainControlsMixin,
         super().scale(*args, **kwargs)
         self.scene.on_view_scale_change()
         self.recalc_scene_rect()
-        self.update_text_toolbar()
+        self.update_pinned_toolbars()
 
     def get_scale(self):
         return self.transform().m11()
@@ -1587,36 +1599,52 @@ class BeeGraphicsView(MainControlsMixin,
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.recalc_scene_rect()
-        self.update_text_toolbar()
+        self.update_pinned_toolbars()
         self.welcome_overlay.resize(self.size())
         if self.shortcuts_hint.isVisible():
             self.shortcuts_hint.reposition()
 
-    def update_text_toolbar(self):
-        """Show the text buttons over the selected text, or not at all.
+    def pin_toolbar_to(self, toolbar, items):
+        """Put a bar over the given items, or hide it if there are none."""
 
-        Called whenever anything could have moved the text on screen:
-        the selection changing, an item being dragged, zooming,
-        panning, or the window being resized.
-        """
-
-        if not hasattr(self, 'text_toolbar'):
+        if toolbar is None:
             return
-        items = self.scene.selected_text_items()
         if not items:
-            self.text_toolbar.hide()
+            toolbar.hide()
             return
-
         rect = items[0].sceneBoundingRect()
         for item in items[1:]:
             rect = rect.united(item.sceneBoundingRect())
-        self.text_toolbar.pin_to(self.mapFromScene(rect).boundingRect())
-        self.text_toolbar.show()
+        toolbar.pin_to(self.mapFromScene(rect).boundingRect())
+        toolbar.show()
+
+    def update_text_toolbar(self):
+        """Show the text buttons over the selected text, or not at all."""
+
+        self.pin_toolbar_to(getattr(self, 'text_toolbar', None),
+                            self.scene.selected_text_items())
+
+    def update_draw_item_toolbar(self):
+        """Show the drawing buttons over the selected drawings."""
+
+        self.pin_toolbar_to(getattr(self, 'draw_item_toolbar', None),
+                            self.scene.selected_draw_items())
+
+    def update_pinned_toolbars(self):
+        """Keep both bars over what they act on.
+
+        Called whenever anything could have moved an item on screen: the
+        selection changing, an item being dragged, zooming, panning, or
+        the window being resized.
+        """
+
+        self.update_text_toolbar()
+        self.update_draw_item_toolbar()
 
     def scrollContentsBy(self, dx, dy):
         super().scrollContentsBy(dx, dy)
-        # Panning moves the text under a bar that would otherwise stay put
-        self.update_text_toolbar()
+        # Panning moves items under bars that would otherwise stay put
+        self.update_pinned_toolbars()
 
     def escape(self):
         """Back to the mouse, with nothing selected.
