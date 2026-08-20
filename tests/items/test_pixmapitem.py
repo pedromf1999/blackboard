@@ -922,3 +922,45 @@ def test_sample_color_at_returns_none_when_transparent(qapp, view):
     item = BeePixmapItem(img, 'foo.png')
     view.scene.addItem(item)
     assert item.sample_color_at(QtCore.QPointF(2, 2)) is None
+
+
+def test_fit_scale_to_grows_a_small_image(view):
+    """A small image arriving on the board should not arrive tiny."""
+
+    img = QtGui.QImage(80, 60, QtGui.QImage.Format.Format_RGB32)
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+
+    scale = item.fit_scale_to(QtCore.QSizeF(600, 400))
+    assert scale > 1
+    # Fits inside the size given, touching it on one side
+    assert item.width * scale <= 600.01
+    assert item.height * scale == pytest.approx(400)
+
+
+def test_fit_scale_to_shrinks_a_large_image(view):
+    img = QtGui.QImage(4000, 3000, QtGui.QImage.Format.Format_RGB32)
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+
+    scale = item.fit_scale_to(QtCore.QSizeF(600, 400))
+    assert scale < 1
+    assert item.height * scale == pytest.approx(400)
+
+
+def test_fit_scale_to_keeps_the_proportions(view):
+    """A tall thin image stays tall and thin."""
+
+    img = QtGui.QImage(300, 2000, QtGui.QImage.Format.Format_RGB32)
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+
+    scale = item.fit_scale_to(QtCore.QSizeF(600, 400))
+    assert item.height * scale == pytest.approx(400)
+    assert item.width * scale == pytest.approx(60)
+
+
+def test_fit_scale_to_leaves_an_empty_image_alone(view):
+    item = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(item)
+    assert item.fit_scale_to(QtCore.QSizeF(600, 400)) == 1

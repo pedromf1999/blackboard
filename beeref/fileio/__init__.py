@@ -61,7 +61,7 @@ def compact_bee(filename, scene, worker=None):
     logger.info('End compact')
 
 
-def load_images(filenames, pos, scene, worker):
+def load_images(filenames, pos, scene, worker=None, fit_size=None):
     """Add images to existing scene."""
 
     errors = []
@@ -77,6 +77,8 @@ def load_images(filenames, pos, scene, worker):
             continue
 
         item = BeePixmapItem(img, filename)
+        if fit_size is not None:
+            item.setScale(item.fit_scale_to(fit_size))
         item.set_pos_center(pos)
         scene.add_item_later({'item': item, 'type': 'pixmap'}, selected=True)
         items.append(item)

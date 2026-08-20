@@ -702,6 +702,18 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         logger.debug(f'Found format {formt} for {self}')
         return formt
 
+    def fit_scale_to(self, size):
+        """The scale that fits this image inside the given size.
+
+        Used when an image arrives on the board, so that a small one
+        does not turn up too small to work with and a large one does
+        not take over the window.
+        """
+
+        if not self.width or not self.height or size.isEmpty():
+            return 1
+        return min(size.width() / self.width, size.height() / self.height)
+
     def pixmap_to_bytes(self, apply_grayscale=False, apply_crop=False):
         """Convert the pixmap data to PNG bytestring."""
         barray = QtCore.QByteArray()

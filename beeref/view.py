@@ -69,6 +69,11 @@ class BeeGraphicsView(MainControlsMixin,
     PAN_MODE = 1
     ZOOM_MODE = 2
 
+    # How much of the window an image takes when it arrives. Images
+    # used to come in at their own pixel size, so a small one landed
+    # too small to see and had to be scaled up by hand every time.
+    NEW_IMAGE_SHARE = 0.5
+
     # Smoothing the wheel zoom: how often a step is taken, how much of
     # what is left each step covers, and how little is worth another
     # step. Dragging to zoom is left alone -- it already follows the
@@ -1423,7 +1428,8 @@ class BeeGraphicsView(MainControlsMixin,
             fileio.load_images,
             filenames,
             self.mapToScene(pos),
-            self.scene)
+            self.scene,
+            fit_size=self.new_image_size())
         self.worker.progress.connect(self.on_items_loaded)
         self.worker.finished.connect(
             partial(self.on_insert_images_finished,
@@ -1504,6 +1510,7 @@ class BeeGraphicsView(MainControlsMixin,
         img = clipboard.image()
         if not img.isNull():
             item = BeePixmapItem(img)
+            item.setScale(item.fit_scale_to(self.new_image_size()))
             self.undo_stack.push(commands.InsertItems(self.scene, [item], pos))
             if len(self.scene.items()) == 1:
                 # This is the first image in the scene
@@ -1663,6 +1670,18 @@ class BeeGraphicsView(MainControlsMixin,
 
         self.pan(self.viewportTransform().map(ref_point) - anchor)
         self.reset_previous_transform()
+
+    def new_image_size(self):
+        """How big an image arriving on the board should be.
+
+        In scene coordinates, so it comes out the same share of the
+        window whatever the board is zoomed to.
+        """
+
+        scale = self.get_scale()
+        return QtCore.QSizeF(
+            self.width() * self.NEW_IMAGE_SHARE / scale,
+            self.height() * self.NEW_IMAGE_SHARE / scale)
 
     def smooth_zoom(self, delta, anchor):
         """Zoom towards the anchor over the next few frames.

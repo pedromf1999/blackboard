@@ -3217,3 +3217,36 @@ def test_pan_does_not_drift_on_whole_pixels(view, imgfilename3x3):
 
     assert hscroll.value() == start + 30
     assert view.pan_remainder.x() == 0
+
+
+def test_new_image_size_is_half_the_window(view):
+    size = view.new_image_size()
+    assert size.width() == pytest.approx(
+        view.width() * view.NEW_IMAGE_SHARE / view.get_scale())
+    assert size.height() == pytest.approx(
+        view.height() * view.NEW_IMAGE_SHARE / view.get_scale())
+
+
+def test_new_image_size_follows_the_zoom(view, imgfilename3x3):
+    """The share of the window is the same however far the board is zoomed."""
+
+    view.scene.addItem(BeePixmapItem(QtGui.QImage(imgfilename3x3)))
+    before = view.new_image_size()
+    view.scale(2, 2)
+    after = view.new_image_size()
+
+    assert after.width() == pytest.approx(before.width() / 2)
+
+
+def test_pasted_image_arrives_at_half_the_window(view):
+    img = QtGui.QImage(80, 60, QtGui.QImage.Format.Format_RGB32)
+    img.fill(QtGui.QColor(100, 100, 100))
+    clipboard = QtWidgets.QApplication.clipboard()
+    clipboard.setImage(img)
+
+    view.on_action_paste()
+
+    items = list(view.scene.items_by_type('pixmap'))
+    assert len(items) == 1
+    # A tiny image is brought up to size rather than pasted tiny
+    assert items[0].scale() > 1
