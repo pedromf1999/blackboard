@@ -19,6 +19,7 @@ import os.path
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
 
+from beeref import fileio
 from beeref.config import BeeSettings
 from beeref.main_controls import MainControlsMixin
 
@@ -32,6 +33,20 @@ class RecentFilesModel(QtCore.QAbstractListModel):
     def __init__(self, files):
         super().__init__()
         self.files = files
+        # Read once, when the list is built, rather than every time a
+        # row is painted: each one opens the file it came from
+        self.thumbnails = {}
+
+    def thumbnail(self, filename):
+        if filename not in self.thumbnails:
+            data = fileio.read_thumbnail(filename)
+            icon = None
+            if data:
+                image = QtGui.QImage()
+                if image.loadFromData(data):
+                    icon = QtGui.QIcon(QtGui.QPixmap.fromImage(image))
+            self.thumbnails[filename] = icon
+        return self.thumbnails[filename]
 
     def rowCount(self, parent):
         return len(self.files)
@@ -39,6 +54,8 @@ class RecentFilesModel(QtCore.QAbstractListModel):
     def data(self, index, role):
         if role == QtCore.Qt.ItemDataRole.DisplayRole:
             return os.path.basename(self.files[index.row()])
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            return self.thumbnail(self.files[index.row()])
         if role == QtCore.Qt.ItemDataRole.FontRole:
             font = QtGui.QFont()
             font.setUnderline(True)
@@ -54,6 +71,8 @@ class RecentFilesView(QtWidgets.QListView):
         self.clicked.connect(self.on_clicked)
         self.setModel(RecentFilesModel(self.files))
         self.setMouseTracking(True)
+        # Room for the picture saved with each board
+        self.setIconSize(QtCore.QSize(160, 100))
 
     def on_clicked(self, index):
         self.view.open_from_file(self.files[index.row()])
@@ -61,6 +80,9 @@ class RecentFilesView(QtWidgets.QListView):
     def update_files(self, files):
         self.files = files
         self.model().files = files
+        # Boards change; the picture of one saved a moment ago is not
+        # the one read when this list was last built
+        self.model().thumbnails.clear()
         self.reset()
 
     def sizeHint(self):

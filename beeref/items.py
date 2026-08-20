@@ -165,7 +165,8 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
     DEFAULT_COLOR = (235, 235, 235, 255)
     DEFAULT_WIDTH = 4
-    # A line thinner than this disappears; thicker than this is a blob
+    # A line thinner than this disappears. The upper limit is a
+    # floor for short drawings; see max_line_width.
     MIN_WIDTH = 0.5
     MAX_WIDTH = 400
     # Length of the arrow head, as a multiple of the line width
@@ -190,11 +191,26 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
     def get_default_name(self):
         return self.NAMES[self.kind]
 
+    def max_line_width(self):
+        """The thickest this drawing may be drawn.
+
+        A fixed number used to be the whole of it, but the thickness is
+        in item coordinates and a stroke is created relative to the
+        zoom it was drawn at: on a board zoomed well out, a line
+        reached the limit while it was still twenty pixels on screen.
+        A line is a blob once it is thicker than it is long, so the
+        drawing's own reach is what decides.
+        """
+
+        reach = self.path.boundingRect()
+        return max(self.MAX_WIDTH, reach.width(), reach.height())
+
     def set_line_width(self, width):
         """Set how thick the line is drawn, in item coordinates."""
 
         self.prepareGeometryChange()
-        self.line_width = min(self.MAX_WIDTH, max(self.MIN_WIDTH, width))
+        self.line_width = min(self.max_line_width(),
+                              max(self.MIN_WIDTH, width))
         self.update()
 
     @classmethod

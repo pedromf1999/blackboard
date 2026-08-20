@@ -74,6 +74,11 @@ class BeeGraphicsView(MainControlsMixin,
     # too small to see and had to be scaled up by hand every time.
     NEW_IMAGE_SHARE = 0.5
 
+    # How wide the picture saved with a board is. Small enough to sit
+    # in the file without being noticed, big enough to recognise a
+    # board by in the recent files list.
+    THUMBNAIL_WIDTH = 320
+
     # Smoothing the wheel zoom: how often a step is taken, how much of
     # what is left each step covers, and how little is worth another
     # step. Dragging to zoom is left alone -- it already follows the
@@ -1229,11 +1234,47 @@ class BeeGraphicsView(MainControlsMixin,
             self.filename = filename
             self.undo_stack.setClean()
 
+    def thumbnail(self):
+        """A picture of the board as it is being looked at right now.
+
+        Saved with the file so that a board can be recognised in the
+        recent files list without opening it.
+        """
+
+        if not self.scene.items():
+            return None
+
+        # The scene as this view frames it, drawn rather than grabbed:
+        # grabbing takes the toolbars and the shortcuts card with it,
+        # and those are not what a board is recognised by
+        shot = QtGui.QImage(self.viewport().size(),
+                            QtGui.QImage.Format.Format_ARGB32)
+        shot.fill(QtGui.QColor(
+            self.settings.valueOrDefault('View/canvas_color')))
+        painter = QtGui.QPainter(shot)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        self.scene.render(
+            painter,
+            QtCore.QRectF(shot.rect()),
+            self.mapToScene(self.viewport().rect()).boundingRect())
+        painter.end()
+
+        image = shot.scaledToWidth(
+            self.THUMBNAIL_WIDTH,
+            Qt.TransformationMode.SmoothTransformation)
+        data = QtCore.QByteArray()
+        buffer = QtCore.QBuffer(data)
+        buffer.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
+        image.save(buffer, 'PNG')
+        buffer.close()
+        return bytes(data)
+
     def do_save(self, filename, create_new):
         if not fileio.is_bee_file(filename):
             filename = f'{filename}{constants.FILE_EXT}'
         self.worker = fileio.ThreadedIO(
-            fileio.save_bee, filename, self.scene, create_new=create_new)
+            fileio.save_bee, filename, self.scene, create_new=create_new,
+            thumbnail=self.thumbnail())
         self.worker.finished.connect(self.on_saving_finished)
         self.progress = widgets.BeeProgressDialog(
             f'Saving {filename}',

@@ -170,3 +170,32 @@ def test_thickening_keeps_the_box_around_the_arrow_head(qapp):
         item.set_line_width(item.line_width * 1.25)
         assert item.bounding_rect_unselected().contains(
             item.arrow_head().boundingRect())
+
+
+def test_thickness_limit_follows_the_drawing_not_the_board(view):
+    """A long line can be thickened further than a short one.
+
+    The limit was a fixed number of scene units, but a stroke is
+    created relative to the zoom it was drawn at -- so on a board
+    zoomed well out it stopped while still thin on screen.
+    """
+
+    short = BeeDrawItem(points=[(0, 0), (100, 0)])
+    long = BeeDrawItem(points=[(0, 0), (8000, 0)])
+    view.scene.addItem(short)
+    view.scene.addItem(long)
+
+    short.set_line_width(100000)
+    long.set_line_width(100000)
+
+    # Short drawings keep the old floor, long ones may go as thick as
+    # they are long -- a line thicker than that is a blob
+    assert short.line_width == BeeDrawItem.MAX_WIDTH
+    assert long.line_width == 8000
+
+
+def test_thickness_still_has_a_lower_limit(view):
+    item = BeeDrawItem(points=[(0, 0), (8000, 0)])
+    view.scene.addItem(item)
+    item.set_line_width(0)
+    assert item.line_width == BeeDrawItem.MIN_WIDTH

@@ -29,6 +29,7 @@ __all__ = [
     'load_bee',
     'save_bee',
     'load_images',
+    'read_thumbnail',
     'ThreadedLoader',
     'BeeFileIOError',
 ]
@@ -43,13 +44,25 @@ def load_bee(filename, scene, worker=None):
     return io.read()
 
 
-def save_bee(filename, scene, create_new=False, worker=None):
+def save_bee(filename, scene, create_new=False, worker=None,
+             thumbnail=None):
     """Save BeeRef native file."""
     logger.info(f'Saving to file {filename}...')
     logger.debug(f'Create new: {create_new}')
-    io = SQLiteIO(filename, scene, create_new, worker=worker)
+    io = SQLiteIO(filename, scene, create_new, worker=worker,
+                  thumbnail=thumbnail)
     io.write()
     logger.info('End save')
+
+
+def read_thumbnail(filename):
+    """The picture saved with a board, or None if it has none."""
+
+    try:
+        return SQLiteIO(filename, None, readonly=True).read_thumbnail()
+    except Exception:
+        logger.debug(f'Could not read thumbnail from {filename}')
+        return None
 
 
 def compact_bee(filename, scene, worker=None):

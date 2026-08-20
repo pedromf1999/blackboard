@@ -44,8 +44,11 @@ META_TABLE = """
     )
 """
 
-# Key used in the table above
+# Keys used in the table above
 META_VERSION_KEY = 'saved_by_version'
+# A picture of the board as it was last looked at, base64 encoded so
+# that it fits a text column and the table needs no change
+META_THUMBNAIL_KEY = 'thumbnail'
 
 
 MIGRATIONS = {

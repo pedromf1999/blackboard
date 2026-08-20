@@ -23,6 +23,7 @@ https://www.sqlite.org/appfileformat.html
 https://www.sqlite.org/sqlar.html
 """
 
+import base64
 import json
 import logging
 import os
@@ -37,7 +38,8 @@ from beeref import constants
 from beeref.items import BeePixmapItem, BeeErrorItem
 from .errors import BeeFileIOError, IMG_LOADING_ERROR_MSG
 from .schema import (SCHEMA, USER_VERSION, MIGRATIONS, APPLICATION_ID,
-                     META_TABLE, META_VERSION_KEY)
+                     META_TABLE, META_VERSION_KEY,
+                     META_THUMBNAIL_KEY)
 
 
 logger = logging.getLogger(__name__)
@@ -91,8 +93,9 @@ def handle_sqlite_errors(func):
 class SQLiteIO:
 
     def __init__(self, filename, scene, create_new=False, readonly=False,
-                 worker=None):
+                 worker=None, thumbnail=None):
         self.scene = scene
+        self.thumbnail = thumbnail
         self.create_new = create_new
         self.filename = filename
         self.readonly = readonly
@@ -200,11 +203,36 @@ class SQLiteIO:
         self.ex('PRAGMA foreign_keys=ON')
 
     def write_blackboard_meta(self):
-        """Record which version of Blackboard is writing this file."""
+        """Record which version wrote this file, and what it looked like."""
 
         self.ex(META_TABLE)
         self.ex('INSERT OR REPLACE INTO blackboard_meta (key, value) '
                 'VALUES (?, ?)', (META_VERSION_KEY, constants.VERSION))
+        if self.thumbnail:
+            self.ex(
+                'INSERT OR REPLACE INTO blackboard_meta (key, value) '
+                'VALUES (?, ?)',
+                (META_THUMBNAIL_KEY,
+                 base64.b64encode(self.thumbnail).decode('ascii')))
+
+    def read_thumbnail(self):
+        """The picture of the board saved with it, or None."""
+
+        table = self.fetchone(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='blackboard_meta'")
+        if not table:
+            return None
+        row = self.fetchone(
+            'SELECT value FROM blackboard_meta WHERE key=?',
+            (META_THUMBNAIL_KEY,))
+        if not row or not row[0]:
+            return None
+        try:
+            return base64.b64decode(row[0])
+        except (ValueError, TypeError):
+            logger.debug(f'Unreadable thumbnail in {self.filename}')
+            return None
 
     def saved_by_version(self):
         """The version that last wrote this file, or None.
