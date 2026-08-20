@@ -26,6 +26,7 @@ from beeref.widgets import (  # noqa: F401
     draw_item_toolbar,
     draw_toolbar,
     layers,
+    loading_overlay,
     settings,
     pinned_toolbar,
     shortcuts_hint,

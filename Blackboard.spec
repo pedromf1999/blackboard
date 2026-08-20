@@ -62,6 +62,8 @@ a = Analysis(
     datas=[
         (join('beeref', 'documentation'), join('beeref', 'documentation')),
         (join('beeref', 'assets', '*.png'), join('beeref', 'assets')),
+        # The wordmark shown while a board is loading
+        (join('beeref', 'assets', 'wordmark.svg'), join('beeref', 'assets')),
         # The colour palette the pickers offer
         (join('beeref', 'assets', '*.hex'), join('beeref', 'assets')),
         (join('beeref', 'assets', 'fonts'), join('beeref', 'assets',

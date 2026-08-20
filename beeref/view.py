@@ -108,6 +108,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.welcome_overlay = widgets.welcome_overlay.WelcomeOverlay(self)
         # Built early: a resize can arrive before the end of setup
         self.shortcuts_hint = widgets.shortcuts_hint.ShortcutsHint(self)
+        self.loading_overlay = (
+            widgets.loading_overlay.LoadingOverlay(self))
         self.layers_handle = widgets.layers.LayersHandle(self, self)
 
         # Set before the actions are built, since the grid toggle acts
@@ -1162,6 +1164,7 @@ class BeeGraphicsView(MainControlsMixin,
         self.scene.add_queued_items()
 
     def on_loading_finished(self, filename, errors):
+        self.loading_overlay.hide()
         if errors:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -1183,6 +1186,9 @@ class BeeGraphicsView(MainControlsMixin,
     def open_from_file(self, filename):
         logger.info(f'Opening file {filename}')
         self.clear_scene()
+        # A board arrives item by item, and the view is looking at
+        # wherever it was left; cover that up until it is whole
+        self.loading_overlay.start()
         self.worker = fileio.ThreadedIO(
             fileio.load_bee, filename, self.scene)
         self.worker.progress.connect(self.on_items_loaded)
@@ -1840,6 +1846,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.recalc_scene_rect()
         self.update_pinned_toolbars()
         self.welcome_overlay.resize(self.size())
+        if self.loading_overlay.isVisible():
+            self.loading_overlay.resize(self.size())
         if self.shortcuts_hint.isVisible():
             self.shortcuts_hint.reposition()
         if self.layers_handle.isVisible():

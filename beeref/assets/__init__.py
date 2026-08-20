@@ -40,6 +40,7 @@ class BeeAssets:
         logger.debug(f'Assets path: {self.PATH}')
 
         self._tool_icons = {}
+        self._wordmarks = {}
         self.palette = self.load_palette()
         self.font_family = self.load_fonts()
         self.logo = QtGui.QIcon(str(self.PATH.joinpath('logo.png')))
@@ -111,6 +112,42 @@ class BeeAssets:
         icon = QtGui.QIcon(QtGui.QPixmap.fromImage(image))
         self._tool_icons[name] = icon
         return icon
+
+    def wordmark(self, width, inverted=False):
+        """The Blackboard wordmark, drawn at the given width.
+
+        The artwork is dark on nothing, meant for a light background.
+        Inverting it gives a version for a dark one: the word turns
+        white and the tile turns pale with a dark B, which is the same
+        lockup rather than a recolouring of it. Returns ``None`` when
+        the artwork cannot be loaded.
+        """
+
+        key = (round(width), inverted)
+        if key in self._wordmarks:
+            return self._wordmarks[key]
+
+        path = self.PATH.joinpath('wordmark.svg')
+        renderer = QtSvg.QSvgRenderer(str(path))
+        if not renderer.isValid():
+            logger.warning(f'Could not load wordmark: {path}')
+            self._wordmarks[key] = None
+            return None
+
+        size = renderer.defaultSize()
+        height = round(width * size.height() / size.width())
+        image = QtGui.QImage(
+            round(width), height, QtGui.QImage.Format.Format_ARGB32)
+        image.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        renderer.render(painter)
+        painter.end()
+        if inverted:
+            image.invertPixels(QtGui.QImage.InvertMode.InvertRgb)
+
+        self._wordmarks[key] = image
+        return image
 
     def load_palette(self):
         """The colours offered by the colour pickers.
