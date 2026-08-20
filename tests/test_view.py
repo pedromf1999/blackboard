@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 import pytest
 
-from beeref import commands, constants, widgets
+from beeref import commands, constants, fileio, widgets
 from beeref.actions import actions
 from beeref.config import logfile_name, settings_events
 from beeref.fileio.sql import SQLiteIO
@@ -3109,3 +3109,32 @@ def test_text_font_action_does_nothing_without_a_selection(view):
     view.scene.deselect_all_items()
     view.on_action_text_font()
     assert view.undo_stack.count() == 0
+
+
+def test_compact_file_asks_where_to_save_when_untitled(view):
+    view.filename = None
+    with patch.object(view, 'on_action_save_as') as save_as:
+        view.on_action_compact_file()
+    save_as.assert_called_once()
+
+
+def test_compact_file_wants_changes_saved_first(view):
+    """Compacting rewrites the file, so it must match what is on screen."""
+
+    view.filename = 'foo.blk'
+    view.undo_stack.resetClean()
+    with patch('PyQt6.QtWidgets.QMessageBox.information') as message, \
+         patch('beeref.fileio.ThreadedIO') as threaded:
+        view.on_action_compact_file()
+    message.assert_called_once()
+    threaded.assert_not_called()
+
+
+def test_compact_file_runs_in_the_background(view):
+    view.filename = 'foo.blk'
+    view.undo_stack.setClean()
+    with patch('beeref.fileio.ThreadedIO') as threaded, \
+         patch('beeref.widgets.BeeProgressDialog'):
+        view.on_action_compact_file()
+    threaded.assert_called_once()
+    assert threaded.call_args.args[0] is fileio.compact_bee

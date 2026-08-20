@@ -410,14 +410,32 @@ class SQLiteIO:
         # per item makes saving a large file needlessly slow.
         self.connection.commit()
 
-        if to_delete:
-            # Reclaim the space the removed items took up. This rewrites
-            # the whole file, so it is only worth doing when something
-            # was actually deleted.
-            logger.debug(f'Vacuuming after deleting {len(to_delete)} items')
-            self.ex('VACUUM')
-            self.connection.commit()
+        # Deleted rows leave free space in the file, which SQLite hands
+        # back out to whatever is written next. Returning it to the disk
+        # means rewriting the file from scratch, and that was done here
+        # on every save that removed anything: deleting one image from a
+        # big board turned a save that took a moment into one that took
+        # the better part of a minute. Compacting is its own command now.
 
+        if self.worker:
+            self.worker.finished.emit(self.filename, [])
+
+    @handle_sqlite_errors
+    def vacuum(self):
+        """Rewrite the file without the space deleted items left behind.
+
+        Slow -- the whole file is written again -- so this is asked for
+        rather than done as part of saving.
+        """
+
+        if self.readonly:
+            raise sqlite3.OperationalError(
+                'Attempt to write to a readonly database')
+        if self.worker:
+            self.worker.begin_processing.emit(0)
+        logger.debug(f'Compacting {self.filename}')
+        self.ex('VACUUM')
+        self.connection.commit()
         if self.worker:
             self.worker.finished.emit(self.filename, [])
 

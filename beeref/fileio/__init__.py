@@ -52,6 +52,15 @@ def save_bee(filename, scene, create_new=False, worker=None):
     logger.info('End save')
 
 
+def compact_bee(filename, scene, worker=None):
+    """Rewrite a file without the free space deletions left in it."""
+
+    logger.info(f'Compacting file {filename}...')
+    io = SQLiteIO(filename, scene, worker=worker)
+    io.vacuum()
+    logger.info('End compact')
+
+
 def load_images(filenames, pos, scene, worker):
     """Add images to existing scene."""
 

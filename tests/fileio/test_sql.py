@@ -542,9 +542,19 @@ def test_sqliteio_write_removes_nonexisting_pixmap_item(tmpfile, view):
     assert io.fetchone('SELECT COUNT(*) from sqlar') == (0,)
 
 
-def test_sqliteio_write_doesnt_vacuum_when_nothing_deleted(tmpfile, view):
-    # Vacuuming rewrites the whole file, which is unbearably slow on
-    # big boards, so it may only happen when it buys us something
+def statements_of(io, action):
+    with patch.object(io, 'ex', wraps=io.ex) as ex_mock:
+        action()
+    return [call.args[0] for call in ex_mock.call_args_list]
+
+
+def test_sqliteio_write_never_vacuums(tmpfile, view):
+    """Vacuuming rewrites the whole file, so saving must not do it.
+
+    It used to happen on any save that removed an item, which made
+    deleting one image from a big board far slower than adding one.
+    """
+
     item = BeeTextItem('foo bar')
     view.scene.addItem(item)
     io = SQLiteIO(tmpfile, view.scene, create_new=True)
@@ -552,24 +562,30 @@ def test_sqliteio_write_doesnt_vacuum_when_nothing_deleted(tmpfile, view):
 
     item.setPos(44, 55)
     io.create_new = False
-    with patch.object(io, 'ex', wraps=io.ex) as ex_mock:
-        io.write()
-    statements = [call.args[0] for call in ex_mock.call_args_list]
-    assert 'VACUUM' not in statements
-
-
-def test_sqliteio_write_vacuums_when_item_deleted(tmpfile, view):
-    item = BeeTextItem('foo bar')
-    view.scene.addItem(item)
-    io = SQLiteIO(tmpfile, view.scene, create_new=True)
-    io.write()
+    assert 'VACUUM' not in statements_of(io, io.write)
 
     view.scene.removeItem(item)
-    io.create_new = False
-    with patch.object(io, 'ex', wraps=io.ex) as ex_mock:
-        io.write()
-    statements = [call.args[0] for call in ex_mock.call_args_list]
-    assert 'VACUUM' in statements
+    assert 'VACUUM' not in statements_of(io, io.write)
+
+
+def test_sqliteio_vacuum_reclaims_the_space(tmpfile, view):
+    """Compacting is asked for, and does give the disk space back."""
+
+    for i in range(5):
+        item = BeePixmapItem(QtGui.QImage(), filename=f'bee{i}.png')
+        view.scene.addItem(item)
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+
+    io = SQLiteIO(tmpfile, view.scene)
+    free_before = io.fetchone('PRAGMA freelist_count')[0]
+    for item in list(view.scene.items_for_save()):
+        if item.parentItem() is None:
+            view.scene.removeItem(item)
+    io.write()
+    assert io.fetchone('PRAGMA freelist_count')[0] >= free_before
+
+    assert 'VACUUM' in statements_of(io, io.vacuum)
+    assert io.fetchone('PRAGMA freelist_count')[0] == 0
 
 
 def test_sqliteio_write_commits_changes(tmpfile, view):

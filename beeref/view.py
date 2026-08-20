@@ -1210,6 +1210,41 @@ class BeeGraphicsView(MainControlsMixin,
             parent=self)
         self.worker.start()
 
+    def on_action_compact_file(self):
+        """Give back the disk space deleted items left behind.
+
+        Saving stopped doing this: it rewrites the whole file, which on
+        a big board takes far longer than the save itself. The space is
+        reused by whatever is added next either way, so this only
+        matters when a board has lost a lot and is not going to gain it
+        back.
+        """
+
+        if not self.filename:
+            self.on_action_save_as()
+            return
+        if not self.undo_stack.isClean():
+            QtWidgets.QMessageBox.information(
+                self,
+                'Save first',
+                'Save your changes before compacting the file.')
+            return
+
+        self.worker = fileio.ThreadedIO(
+            fileio.compact_bee, self.filename, self.scene)
+        self.worker.finished.connect(self.on_compacting_finished)
+        self.progress = widgets.BeeProgressDialog(
+            f'Compacting {self.filename}',
+            worker=self.worker,
+            parent=self)
+        self.worker.start()
+
+    def on_compacting_finished(self, filename, errors):
+        self.progress.deleteLater()
+        if errors:
+            QtWidgets.QMessageBox.warning(
+                self, 'Compacting failed', errors[0])
+
     def on_action_save_as(self):
         self.cancel_active_modes()
         directory = os.path.dirname(self.filename) if self.filename else None

@@ -128,6 +128,11 @@ actions = ActionList([
         group='active_when_items_in_scene',
     ),
     Action(
+        id='compact_file',
+        text='&Compact File',
+        callback='on_action_compact_file',
+    ),
+    Action(
         id='save_as',
         text='Save &As...',
         shortcuts=['Ctrl+Shift+S'],
