@@ -3241,10 +3241,15 @@ def test_new_image_size_follows_the_zoom(view, imgfilename3x3):
 def test_pasted_image_arrives_at_half_the_window(view):
     img = QtGui.QImage(80, 60, QtGui.QImage.Format.Format_RGB32)
     img.fill(QtGui.QColor(100, 100, 100))
-    clipboard = QtWidgets.QApplication.clipboard()
-    clipboard.setImage(img)
 
-    view.on_action_paste()
+    # A stand-in rather than the real clipboard: that one belongs to the
+    # whole machine, and whatever else is running can empty it
+    clipboard = MagicMock()
+    clipboard.image.return_value = img
+    clipboard.mimeData.return_value.data.return_value = QtCore.QByteArray()
+    with patch('PyQt6.QtWidgets.QApplication.clipboard',
+               return_value=clipboard):
+        view.on_action_paste()
 
     items = list(view.scene.items_by_type('pixmap'))
     assert len(items) == 1

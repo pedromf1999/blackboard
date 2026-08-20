@@ -50,6 +50,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.selectionChanged.connect(self.on_selection_change)
         self.changed.connect(self.on_change)
         self.items_to_add = Queue()
+        # Items read before the group they belong to, waiting for it
+        self.items_awaiting_group = []
         self.edit_item = None
         self.crop_item = None
         # The group whose items can currently be edited individually
@@ -65,6 +67,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def clear(self):
         self._clear_ongoing = True
         super().clear()
+        # Nothing from the old board is still waiting for a group
+        self.items_awaiting_group = []
         self.internal_clipboard = []
         self.rubberband_item = RubberbandItem()
         self.multi_select_item = MultiSelectItem()
@@ -851,21 +855,40 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         ``grouped`` is a list of (item, group save id) tuples. Positions
         are stored relative to the group, so they can be kept as they
         are once the item is re-parented.
+
+        Items whose group has not been read yet are kept for the next
+        time round rather than dropped. A file is read in batches while
+        it loads, and every image comes before any group -- so an image
+        inside a group was routinely handed over before the group
+        existed, and used to be abandoned there: out of its group, and
+        far from it, since the position it kept was meant to be read
+        relative to a parent it no longer had.
         """
 
-        if not grouped:
+        self.items_awaiting_group.extend(grouped)
+        if not self.items_awaiting_group:
             return
 
         groups = {item.save_id: item
                   for item in self.items_by_type('group')}
-        for item, parent_group in grouped:
-            group = groups.get(parent_group)
-            if group is None:
-                logger.warning(f'Group {parent_group} not found for {item}')
-                continue
-            pos = item.pos()
-            item.setParentItem(group)
-            item.setPos(pos)
+
+        # A group may itself be waiting for the group it sits in, so keep
+        # going while anything is still being placed
+        waiting = self.items_awaiting_group
+        while True:
+            still_waiting = []
+            for item, parent_group in waiting:
+                group = groups.get(parent_group)
+                if group is None:
+                    still_waiting.append((item, parent_group))
+                    continue
+                pos = item.pos()
+                item.setParentItem(group)
+                item.setPos(pos)
+            if len(still_waiting) == len(waiting):
+                break
+            waiting = still_waiting
+        self.items_awaiting_group = waiting
 
         # Innermost groups first: an outer group's box can only be
         # sized once the groups inside it know their own size

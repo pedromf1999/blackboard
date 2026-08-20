@@ -1807,3 +1807,71 @@ def test_add_queued_items_ignores_unknown_type(view):
     assert len(view.scene.items()) == 1
     item = view.scene.items()[0]
     assert item.toPlainText() == 'Item of unknown type: foo'
+
+
+def queue_image(scene, save_id, parent_group, pos):
+    image = QtGui.QImage(4, 4, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor(200, 60, 60))
+    item = BeePixmapItem(QtGui.QImage())
+    item.setPixmap(QtGui.QPixmap.fromImage(image))
+    scene.add_item_later({
+        'save_id': save_id, 'type': 'pixmap', 'x': pos[0], 'y': pos[1],
+        'z': 0, 'scale': 1, 'rotation': 0, 'flip': 1, 'item': item,
+        'data': {'parent_group': parent_group}})
+    return item
+
+
+def queue_group(scene, save_id, pos, parent_group=None):
+    scene.add_item_later({
+        'save_id': save_id, 'type': 'group', 'x': pos[0], 'y': pos[1],
+        'z': 0, 'scale': 1, 'rotation': 0, 'flip': 1,
+        'data': {'box_color': (10, 20, 30, 200),
+                 'parent_group': parent_group}})
+
+
+def test_item_read_before_its_group_still_joins_it(view):
+    """A file is read in batches, and every image comes before any group.
+
+    An image inside a group was handed over before the group existed
+    and used to be dropped: left out of its group, and far from it,
+    since the position it kept was meant to be read relative to a
+    parent it no longer had.
+    """
+
+    scene = view.scene
+    picture = queue_image(scene, 1, 2, (30, 40))
+    scene.add_queued_items()          # the batch the application drains
+
+    queue_group(scene, 2, (500, 600))
+    scene.add_queued_items()
+
+    assert picture.parentItem() is not None
+    assert picture.parentItem().save_id == 2
+    assert (picture.scenePos().x(), picture.scenePos().y()) == (530, 640)
+
+
+def test_a_group_read_before_the_group_it_sits_in(view):
+    """Groups nest, and the outer one may come last."""
+
+    scene = view.scene
+    picture = queue_image(scene, 1, 2, (10, 10))
+    scene.add_queued_items()
+    queue_group(scene, 2, (100, 100), parent_group=3)
+    scene.add_queued_items()
+    queue_group(scene, 3, (1000, 1000))
+    scene.add_queued_items()
+
+    inner = [g for g in scene.items_by_type('group') if g.save_id == 2][0]
+    assert inner.parentItem().save_id == 3
+    assert picture.parentItem() is inner
+    assert (picture.scenePos().x(), picture.scenePos().y()) == (1110, 1110)
+
+
+def test_a_new_board_does_not_inherit_items_waiting_for_a_group(view):
+    scene = view.scene
+    queue_image(scene, 1, 99, (30, 40))
+    scene.add_queued_items()
+    assert scene.items_awaiting_group
+
+    scene.clear()
+    assert scene.items_awaiting_group == []

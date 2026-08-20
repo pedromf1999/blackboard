@@ -1179,6 +1179,13 @@ class BeeGraphicsView(MainControlsMixin,
         else:
             self.filename = filename
             self.scene.add_queued_items()
+            if self.scene.items_awaiting_group:
+                # Only reachable if a file names a group it does not
+                # contain; the items stay where they are, loose
+                logger.warning(
+                    f'{len(self.scene.items_awaiting_group)} items name a '
+                    'group that is not in this file')
+                self.scene.items_awaiting_group = []
             # Loading adds images before everything else, which reverses
             # items that share a z value; put them back as they were
             self.scene.restack_as_saved()
