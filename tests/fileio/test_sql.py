@@ -994,3 +994,42 @@ def test_sqliteio_resaving_unchanged_board_deletes_nothing(tmpfile, view):
         io.write()
     statements = [call[0][0] for call in ex_mock.call_args_list]
     assert not any('VACUUM' in text for text in statements)
+
+
+def test_sqliteio_roundtrip_table(tmpfile, view):
+    """A table is html inside a note, so the file format is untouched."""
+
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    table = item.insert_table(2, 3)
+    table.cellAt(1, 2).firstCursorPosition().insertText('corner')
+    item.setTextCursor(table.cellAt(0, 0).firstCursorPosition())
+    item.apply_cell_color(QtGui.QColor(60, 140, 200))
+    # Let go of the table before the item that owns it is destroyed
+    del table
+
+    SQLiteIO(tmpfile, view.scene, create_new=True).write()
+    for existing in list(view.scene.items_for_save()):
+        if existing.parentItem() is None:
+            view.scene.removeItem(existing)
+    SQLiteIO(tmpfile, view.scene, readonly=True).read()
+    view.scene.add_queued_items()
+
+    loaded = list(view.scene.items_by_type('text'))[0]
+    # Still an ordinary text item, so older versions can read the file
+    assert loaded.TYPE == 'text'
+    assert len(loaded.tables()) == 1
+    # Read what is needed without keeping the table: it belongs to the
+    # document, and a name for it that outlives the document crashes Qt
+    table = loaded.tables()[0]
+    shape = (table.rows(), table.columns())
+    corner = table.cellAt(1, 2).firstCursorPosition().block().text()
+    widths = loaded.column_widths(table)
+    background = table.cellAt(0, 0).format().toTableCellFormat(
+        ).background().color()
+    del table
+
+    assert shape == (2, 3)
+    assert corner == 'corner'
+    assert widths == [item.TABLE_COLUMN_WIDTH] * 3
+    assert background == QtGui.QColor(60, 140, 200)

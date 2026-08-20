@@ -1410,6 +1410,171 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             return None
         return brush.color()
 
+    # A new table's shape and spacing, in item coordinates. The column
+    # width is a starting point only: dragging a boundary changes it.
+    TABLE_ROWS = 3
+    TABLE_COLUMNS = 3
+    TABLE_COLUMN_WIDTH = 90
+    TABLE_PADDING = 4
+
+    def table_format(self):
+        """The look of a table: thin borders in the text's own colour."""
+
+        fmt = QtGui.QTextTableFormat()
+        fmt.setBorder(1)
+        fmt.setBorderStyle(
+            QtGui.QTextFrameFormat.BorderStyle.BorderStyle_Solid)
+        fmt.setBorderBrush(QtGui.QBrush(self.defaultTextColor()))
+        fmt.setCellPadding(self.TABLE_PADDING)
+        fmt.setCellSpacing(0)
+        return fmt
+
+    def insert_table(self, rows=None, columns=None):
+        """Put a table where the cursor is."""
+
+        rows = rows or self.TABLE_ROWS
+        columns = columns or self.TABLE_COLUMNS
+        fmt = self.table_format()
+        fmt.setColumnWidthConstraints([
+            QtGui.QTextLength(QtGui.QTextLength.Type.FixedLength,
+                              self.TABLE_COLUMN_WIDTH)] * columns)
+        table = self.textCursor().insertTable(rows, columns, fmt)
+        # Leave the cursor in the first cell, ready to type
+        self.setTextCursor(table.cellAt(0, 0).firstCursorPosition())
+        return table
+
+    def tables(self):
+        """Every table in this item, outermost first.
+
+        Only for looking at what a note contains. Use
+        ``current_table`` for the one being worked on.
+        """
+
+        return [frame for frame in self.document().rootFrame().childFrames()
+                if isinstance(frame, QtGui.QTextTable)]
+
+    def current_table(self):
+        """The table the cursor is in, or None.
+
+        Asked of the cursor rather than found by walking the document's
+        frames. This is called on every selection change, and each walk
+        made a fresh handle for every table in the note -- handles onto
+        objects the document owns and destroys without warning.
+        """
+
+        return self.textCursor().currentTable()
+
+    def current_cell(self):
+        table = self.current_table()
+        if table is None:
+            return None
+        return table.cellAt(self.textCursor())
+
+    def insert_table_row(self, below=True):
+        cell = self.current_cell()
+        if cell is None:
+            return
+        row = cell.row() + (1 if below else 0)
+        self.current_table().insertRows(row, 1)
+
+    def insert_table_column(self, right=True):
+        cell = self.current_cell()
+        if cell is None:
+            return
+        table = self.current_table()
+        column = cell.column() + (1 if right else 0)
+        table.insertColumns(column, 1)
+        self.spread_column_widths(table)
+
+    def remove_table_row(self):
+        cell = self.current_cell()
+        if cell is None:
+            return
+        table = self.current_table()
+        if table.rows() <= 1:
+            # The last row is the table; removing it would leave nothing
+            return
+        row, column = cell.row(), cell.column()
+        table.removeRows(row, 1)
+        self.put_cursor_in_cell(table, row, column)
+
+    def remove_table_column(self):
+        cell = self.current_cell()
+        if cell is None:
+            return
+        table = self.current_table()
+        if table.columns() <= 1:
+            return
+        row, column = cell.row(), cell.column()
+        table.removeColumns(column, 1)
+        self.spread_column_widths(table)
+        self.put_cursor_in_cell(table, row, column)
+
+    def put_cursor_in_cell(self, table, row, column):
+        """Keep the cursor in the table after a row or column goes.
+
+        Removing what the cursor was in leaves it outside the table, so
+        the next command would find no table to work on -- two rows
+        could not be removed one after the other.
+        """
+
+        row = min(row, table.rows() - 1)
+        column = min(column, table.columns() - 1)
+        self.setTextCursor(table.cellAt(row, column).firstCursorPosition())
+
+    def spread_column_widths(self, table):
+        """Give every column a width, after their number has changed.
+
+        Qt keeps the old list of widths, which then has the wrong length
+        and leaves the new column sized by whatever it holds.
+        """
+
+        widths = [w.rawValue() for w in
+                  table.format().columnWidthConstraints()]
+        default = widths[0] if widths else self.TABLE_COLUMN_WIDTH
+        widths = (widths + [default] * table.columns())[:table.columns()]
+        self.set_column_widths(table, widths)
+
+    def set_column_widths(self, table, widths):
+        fmt = table.format()
+        fmt.setColumnWidthConstraints([
+            QtGui.QTextLength(QtGui.QTextLength.Type.FixedLength, w)
+            for w in widths])
+        table.setFormat(fmt)
+
+    def column_widths(self, table):
+        return [w.rawValue() for w in table.format().columnWidthConstraints()]
+
+    def apply_cell_color(self, color):
+        """Colour the cells the selection touches, or the one cursor is in."""
+
+        cells = self.selected_cells()
+        for cell in cells:
+            fmt = cell.format().toTableCellFormat()
+            fmt.setBackground(color)
+            cell.setFormat(fmt)
+            # The words in the cell have to stay readable on it
+            charformat = QtGui.QTextCharFormat()
+            charformat.setForeground(self.text_color_over(color))
+            cursor = cell.firstCursorPosition()
+            cursor.setPosition(cell.lastCursorPosition().position(),
+                               QtGui.QTextCursor.MoveMode.KeepAnchor)
+            cursor.mergeCharFormat(charformat)
+
+    def selected_cells(self):
+        """The cells the selection covers, or the single cell cursor is in."""
+
+        table = self.current_table()
+        if table is None:
+            return []
+        cursor = self.textCursor()
+        if cursor.hasComplexSelection():
+            first_row, rows, first_col, cols = cursor.selectedTableCells()
+            return [table.cellAt(first_row + r, first_col + c)
+                    for r in range(rows) for c in range(cols)]
+        cell = table.cellAt(cursor)
+        return [cell] if cell.isValid() else []
+
     def apply_highlight(self, color):
         """Highlight the selection, in a colour the words can be read on."""
 

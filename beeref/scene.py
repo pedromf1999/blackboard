@@ -481,6 +481,22 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         return [item for item in self.selectedItems(user_only=True)
                 if getattr(item, 'TYPE', None) == 'text']
 
+    def item_with_table(self):
+        """The text item whose cursor sits in a table, if any.
+
+        Table commands act on the table being edited, which is not the
+        same thing as the selection: a note can be selected without the
+        cursor being in one of its tables.
+        """
+
+        item = self.edit_item
+        if item is None or getattr(item, 'TYPE', None) != 'text':
+            return None
+        return item if item.current_table() is not None else None
+
+    def has_table_selection(self):
+        return self.item_with_table() is not None
+
     def selected_draw_items(self):
         """The currently selected sketches, lines, curves and arrows."""
 

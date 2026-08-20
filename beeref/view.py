@@ -930,6 +930,71 @@ class BeeGraphicsView(MainControlsMixin,
         self.undo_stack.push(
             commands.ChangeTextFormat(items, new_htmls, old_htmls))
 
+    def on_action_insert_table(self):
+        """Put a table where the text cursor is, or in a new note."""
+
+        item = self.scene.edit_item
+        if item is None or getattr(item, 'TYPE', None) != 'text':
+            # Nothing being written in, so give the table a note to live
+            # in, empty rather than holding the placeholder word
+            self.on_action_insert_text()
+            item = self.scene.edit_item
+            item.textCursor().removeSelectedText()
+        self.change_table(item, lambda: item.insert_table())
+
+    def change_table(self, item, change):
+        """Run a change to a table, recording it as one undoable step."""
+
+        old_html = item.toHtml()
+        change()
+        self.undo_stack.push(commands.ChangeTextFormat(
+            [item], [item.toHtml()], [old_html]))
+
+    def table_command(self, change):
+        """Run a change on whichever table is being edited."""
+
+        item = self.scene.item_with_table()
+        if item is None:
+            return
+        self.change_table(item, change)
+
+    def on_action_table_row_insert(self):
+        self.table_command(
+            lambda: self.scene.item_with_table().insert_table_row())
+
+    def on_action_table_row_remove(self):
+        self.table_command(
+            lambda: self.scene.item_with_table().remove_table_row())
+
+    def on_action_table_column_insert(self):
+        self.table_command(
+            lambda: self.scene.item_with_table().insert_table_column())
+
+    def on_action_table_column_remove(self):
+        self.table_command(
+            lambda: self.scene.item_with_table().remove_table_column())
+
+    def on_action_table_cell_color(self):
+        """Colour the cells the cursor or the selection covers."""
+
+        item = self.scene.item_with_table()
+        if item is None:
+            return
+        old_html = item.toHtml()
+
+        def preview(color):
+            item.apply_cell_color(color)
+
+        color = self.pick_color_live(
+            'Choose Cell Colour', QtGui.QColor(), preview)
+        # As elsewhere, the preview is the result and the original goes
+        # back so the undo command records what was there before
+        new_html = item.toHtml()
+        item.setHtml(old_html)
+        if color is not None:
+            self.undo_stack.push(
+                commands.ChangeTextFormat([item], [new_html], [old_html]))
+
     def on_action_text_highlight_color(self):
         """Ask for a highlight colour and apply it to the selected text.
 
@@ -1382,6 +1447,8 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_single_image_selection())
         self.actiongroup_set_enabled('active_when_text_selection',
                                      self.scene.has_text_selection())
+        self.actiongroup_set_enabled('active_when_table',
+                                     self.scene.has_table_selection())
         self.actiongroup_set_enabled('active_when_sizeable_selection',
                                      self.scene.has_sizeable_selection())
         self.update_pinned_toolbars()

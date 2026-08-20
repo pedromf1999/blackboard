@@ -344,6 +344,42 @@ actions = ActionList([
         group='active_when_sizeable_selection',
     ),
     Action(
+        id='insert_table',
+        text='Insert Ta&ble',
+        shortcuts=['Ctrl+Shift+T'],
+        callback='on_action_insert_table',
+    ),
+    Action(
+        id='table_row_insert',
+        text='Insert &Row Below',
+        callback='on_action_table_row_insert',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_row_remove',
+        text='Delete Ro&w',
+        callback='on_action_table_row_remove',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_column_insert',
+        text='Insert &Column Right',
+        callback='on_action_table_column_insert',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_column_remove',
+        text='Delete Colu&mn',
+        callback='on_action_table_column_remove',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_cell_color',
+        text='Cell Colo&ur...',
+        callback='on_action_table_cell_color',
+        group='active_when_table',
+    ),
+    Action(
         id='text_highlight_color',
         text='&Highlight Colour...',
         callback='on_action_text_highlight_color',

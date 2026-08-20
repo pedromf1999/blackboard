@@ -799,3 +799,92 @@ def test_clicking_outside_ends_the_edit(view):
 
     assert item.edit_mode is False
     assert view.scene.edit_item is None
+
+
+# A QTextTable belongs to its document, and a Python name for one can
+# outlive the C++ object -- when the document is replaced, or simply at
+# teardown. Qt then crashes wherever the collector happens to get to it,
+# which is rarely the test that caused it. These helpers read what is
+# needed and keep no table.
+
+def shape(item):
+    table = item.current_table()
+    return (table.rows(), table.columns())
+
+
+def widths(item):
+    return item.column_widths(item.current_table())
+
+
+def cell_background(item, row, column):
+    return item.current_table().cellAt(row, column).format(
+        ).toTableCellFormat().background().color()
+
+
+def test_insert_table_makes_a_table_with_widths(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table()
+
+    assert shape(item) == (item.TABLE_ROWS, item.TABLE_COLUMNS)
+    assert widths(item) == [item.TABLE_COLUMN_WIDTH] * item.TABLE_COLUMNS
+    # The cursor waits in the first cell, ready to type
+    assert item.current_cell().row() == 0
+    assert item.current_cell().column() == 0
+
+
+def test_insert_table_row_and_column(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 2)
+
+    item.insert_table_row()
+    assert shape(item) == (3, 2)
+    item.insert_table_column()
+    assert shape(item) == (3, 3)
+    # The new column gets a width like the others, rather than being
+    # sized by whatever happens to be typed into it
+    assert widths(item) == [item.TABLE_COLUMN_WIDTH] * 3
+
+
+def test_remove_table_row_keeps_the_cursor_in_the_table(view):
+    """Otherwise a second row could not be removed after the first."""
+
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(3, 3)
+
+    item.remove_table_row()
+    assert item.current_table() is not None
+    item.remove_table_row()
+    assert shape(item) == (1, 3)
+
+
+def test_last_row_and_column_are_kept(view):
+    """Removing them would leave a table that is not there at all."""
+
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(1, 1)
+
+    item.remove_table_row()
+    item.remove_table_column()
+    assert shape(item) == (1, 1)
+
+
+def test_cell_colour_keeps_the_words_readable(view):
+    item = BeeTextItem('')
+    view.scene.addItem(item)
+    item.insert_table(2, 2)
+    item.textCursor().insertText('hello')
+
+    white = QtGui.QColor(255, 255, 255)
+    item.apply_cell_color(white)
+    assert cell_background(item, 0, 0) == white
+
+    # White cell, so the words in it have to be dark
+    cursor = item.current_table().cellAt(0, 0).firstCursorPosition()
+    cursor.movePosition(QtGui.QTextCursor.MoveOperation.Right,
+                        QtGui.QTextCursor.MoveMode.KeepAnchor)
+    assert cursor.charFormat().foreground().color() == item.text_color_over(
+        white)

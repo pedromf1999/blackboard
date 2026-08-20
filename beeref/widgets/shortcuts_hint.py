@@ -36,6 +36,7 @@ class ShortcutsHint(QtWidgets.QWidget):
     SHORTCUTS = (
         ('Ctrl + J', 'Show or hide the layers panel'),
         ('Ctrl + T', 'Add a text note, ready to type'),
+        ('Ctrl + Shift + T', 'Add a table'),
         ('Ctrl + G', 'Group the selected items'),
         ('Ctrl + Shift + G', 'Ungroup'),
         ('Ctrl + F  /  F3', 'Find text, and jump to the next match'),

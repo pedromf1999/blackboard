@@ -155,6 +155,13 @@ menu_structure = [
             MENU_SEPARATOR,
             'text_highlight_color',
             'text_box_color',
+            MENU_SEPARATOR,
+            'insert_table',
+            'table_row_insert',
+            'table_row_remove',
+            'table_column_insert',
+            'table_column_remove',
+            'table_cell_color',
         ],
     },
     {

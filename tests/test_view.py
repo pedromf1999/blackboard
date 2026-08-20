@@ -2973,3 +2973,64 @@ def test_text_bar_goes_away_with_the_selection(view):
     textitem.setSelected(False)
     view.on_selection_changed()
     assert bar.isVisible() is False
+
+
+def test_insert_table_starts_a_note_when_nothing_is_being_edited(view):
+    """Ctrl+Shift+T on the canvas gives the table a note to live in."""
+
+    view.on_action_insert_table()
+
+    item = view.scene.item_with_table()
+    assert item is not None
+    assert item.current_table().rows() == item.TABLE_ROWS
+    # An empty note, not one holding the placeholder word
+    assert item.toPlainText().strip() == ''
+
+
+def test_insert_table_can_be_undone(view):
+    view.on_action_insert_table()
+    assert view.scene.item_with_table() is not None
+
+    view.undo_stack.undo()
+    assert view.scene.item_with_table() is None
+
+    view.undo_stack.redo()
+    assert view.scene.item_with_table() is not None
+
+
+def table_shape(view):
+    """The shape of the table being edited.
+
+    Read and dropped in one go on purpose. Anything that replaces an
+    item's html -- every one of these commands, and undo with them --
+    destroys the document's frames, so a QTextTable held across one is
+    a dangling pointer that crashes Qt whenever it is next collected.
+    """
+
+    table = view.scene.item_with_table().current_table()
+    return table.rows(), table.columns()
+
+
+def test_table_row_and_column_commands_are_undoable(view):
+    view.on_action_insert_table()
+    rows, columns = table_shape(view)
+
+    view.on_action_table_row_insert()
+    view.on_action_table_column_insert()
+    assert table_shape(view) == (rows + 1, columns + 1)
+
+    view.undo_stack.undo()
+    view.undo_stack.undo()
+    assert table_shape(view) == (rows, columns)
+
+
+def test_table_commands_do_nothing_without_a_table(view):
+    """The menu entries are greyed out, but nothing may crash regardless."""
+
+    assert view.scene.item_with_table() is None
+    view.on_action_table_row_insert()
+    view.on_action_table_row_remove()
+    view.on_action_table_column_insert()
+    view.on_action_table_column_remove()
+    view.on_action_table_cell_color()
+    assert view.undo_stack.count() == 0
