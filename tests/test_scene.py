@@ -1875,3 +1875,60 @@ def test_a_new_board_does_not_inherit_items_waiting_for_a_group(view):
 
     scene.clear()
     assert scene.items_awaiting_group == []
+
+
+def group_of_three(view):
+    items = []
+    for y in (0, 60, 120):
+        item = BeeTextItem(f'note at {y}')
+        view.scene.addItem(item)
+        item.setPos(0, y)
+        items.append(item)
+    group = BeeGroupItem(box_color=(10, 20, 30, 200))
+    commands.GroupItems(view.scene, items, group).redo()
+    return items, group
+
+
+def test_the_frame_round_a_multi_selection_counts_as_inside_the_group(view):
+    """Grabbing it to drag is not a click outside the group.
+
+    It belongs to the scene rather than to the group, so dragging
+    several items chosen inside a group used to close the group, throw
+    the selection away and move the whole group instead.
+    """
+
+    items, group = group_of_three(view)
+    view.scene.enter_group(group, items[0])
+    items[0].setSelected(True)
+    items[1].setSelected(True)
+
+    assert view.scene.belongs_to_active_group(
+        view.scene.multi_select_item) is True
+
+
+def test_the_frame_is_outside_when_the_selection_reaches_out_of_the_group(
+        view):
+    """Then dragging it really does involve more than the group."""
+
+    items, group = group_of_three(view)
+    outsider = BeeTextItem('not in the group')
+    view.scene.addItem(outsider)
+    view.scene.enter_group(group, items[0])
+    items[0].setSelected(True)
+    outsider.setSelected(True)
+
+    assert view.scene.belongs_to_active_group(
+        view.scene.multi_select_item) is False
+
+
+def test_a_click_elsewhere_still_closes_the_group(view):
+    items, group = group_of_three(view)
+    loose = BeeTextItem('elsewhere')
+    view.scene.addItem(loose)
+    view.scene.enter_group(group, items[0])
+
+    assert view.scene.belongs_to_active_group(loose) is False
+    assert view.scene.belongs_to_active_group(None) is False
+    # And the group itself, and what is in it, are inside
+    assert view.scene.belongs_to_active_group(group) is True
+    assert view.scene.belongs_to_active_group(items[2]) is True

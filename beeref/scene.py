@@ -181,6 +181,27 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             self.clearSelection()
             item.setSelected(True)
 
+    def belongs_to_active_group(self, item):
+        """Whether clicking this item is a click inside the open group.
+
+        The frame drawn around several selected items belongs to the
+        scene rather than to the group, so grabbing it to drag them
+        looked like a click outside -- the group closed, the selection
+        collapsed to one item, and the group moved instead of the items
+        chosen. It counts as inside while everything selected is in the
+        group.
+        """
+
+        if item is None or self.active_group is None:
+            return False
+        if item is self.active_group or self.active_group.isAncestorOf(item):
+            return True
+        if item is self.multi_select_item:
+            selected = self.selectedItems(user_only=True)
+            return bool(selected) and all(
+                self.active_group.isAncestorOf(other) for other in selected)
+        return False
+
     def exit_group(self):
         """Make the active group behave like a single object again."""
 
@@ -553,10 +574,7 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             if self.active_group is not None:
                 # Clicking outside the active group makes it behave
                 # like a single object again
-                if (item_at_pos is None
-                        or not (item_at_pos is self.active_group
-                                or self.active_group.isAncestorOf(
-                                    item_at_pos))):
+                if not self.belongs_to_active_group(item_at_pos):
                     self.exit_group()
             if item_at_pos:
                 self.active_mode = self.MOVE_MODE
