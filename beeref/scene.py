@@ -240,24 +240,52 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             copies.append(copy)
         self.undo_stack.push(commands.InsertItems(self, copies, position))
 
-    def raise_to_top(self):
+    def stacking_neighbours(self, parent):
+        """The items a given item is stacked against.
+
+        An item inside a group is stacked among that group's items, not
+        against the whole board: Qt compares z values between items
+        that share a parent.
+        """
+
+        if parent is None:
+            return [item for item in self.items_for_save()
+                    if item.parentItem() is None]
+        return parent.bee_children()
+
+    def restack(self, to_top):
+        """Put the selection above or below the items around it.
+
+        Done per parent, so items chosen inside a group go to the top
+        of that group rather than being given a z from the far end of
+        the board. Items chosen together keep their order among
+        themselves.
+        """
+
         self.cancel_active_modes()
-        items = self.selectedItems(user_only=True)
-        z_values = map(lambda i: i.zValue(), items)
-        delta = self.max_z + self.Z_STEP - min(z_values)
-        logger.debug(f'Raise to top, delta: {delta}')
-        for item in items:
-            item.setZValue(item.zValue() + delta)
+        chosen_by_parent = defaultdict(list)
+        for item in self.selectedItems(user_only=True):
+            chosen_by_parent[item.parentItem()].append(item)
+
+        for parent, chosen in chosen_by_parent.items():
+            others = [item for item in self.stacking_neighbours(parent)
+                      if item not in chosen]
+            zs = [item.zValue() for item in chosen]
+            if to_top:
+                edge = max((i.zValue() for i in others), default=0)
+                delta = edge + self.Z_STEP - min(zs)
+            else:
+                edge = min((i.zValue() for i in others), default=0)
+                delta = edge - self.Z_STEP - max(zs)
+            logger.debug(f'Restacking {len(chosen)} items by {delta}')
+            for item in chosen:
+                item.setZValue(item.zValue() + delta)
+
+    def raise_to_top(self):
+        self.restack(to_top=True)
 
     def lower_to_bottom(self):
-        self.cancel_active_modes()
-        items = self.selectedItems(user_only=True)
-        z_values = map(lambda i: i.zValue(), items)
-        delta = self.min_z - self.Z_STEP - max(z_values)
-        logger.debug(f'Lower to bottom, delta: {delta}')
-
-        for item in items:
-            item.setZValue(item.zValue() + delta)
+        self.restack(to_top=False)
 
     def normalize_width_or_height(self, mode):
         """Scale the selected images to have the same width or height, as

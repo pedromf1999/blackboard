@@ -1932,3 +1932,55 @@ def test_a_click_elsewhere_still_closes_the_group(view):
     # And the group itself, and what is in it, are inside
     assert view.scene.belongs_to_active_group(group) is True
     assert view.scene.belongs_to_active_group(items[2]) is True
+
+
+def test_raising_inside_a_group_stacks_against_the_group(view):
+    """An item inside a group is stacked among that group's items.
+
+    Going by the whole board would hand it a z from the far end of it,
+    which says nothing about where it sits among its own neighbours.
+    """
+
+    items, group = group_of_three(view)
+    for n, item in enumerate(items):
+        item.setZValue(n * view.scene.Z_STEP)
+    far_away = BeeTextItem('outside, and high up')
+    view.scene.addItem(far_away)
+    far_away.setZValue(50)
+
+    view.scene.enter_group(group, items[0])
+    items[0].setSelected(True)
+    view.scene.raise_to_top()
+
+    assert items[0].zValue() > items[1].zValue()
+    assert items[0].zValue() > items[2].zValue()
+    # Without taking its z from something it is not stacked against
+    assert items[0].zValue() < far_away.zValue()
+    assert far_away.zValue() == 50
+
+
+def test_lowering_inside_a_group_stacks_against_the_group(view):
+    items, group = group_of_three(view)
+    for n, item in enumerate(items):
+        item.setZValue(n * view.scene.Z_STEP)
+
+    view.scene.enter_group(group, items[2])
+    items[2].setSelected(True)
+    view.scene.lower_to_bottom()
+
+    assert items[2].zValue() < items[0].zValue()
+    assert items[2].zValue() < items[1].zValue()
+
+
+def test_raising_several_keeps_their_order(view):
+    items, group = group_of_three(view)
+    for n, item in enumerate(items):
+        item.setZValue(n * view.scene.Z_STEP)
+
+    view.scene.enter_group(group, items[0])
+    items[0].setSelected(True)
+    items[1].setSelected(True)
+    view.scene.raise_to_top()
+
+    assert items[0].zValue() < items[1].zValue()
+    assert items[0].zValue() > items[2].zValue()

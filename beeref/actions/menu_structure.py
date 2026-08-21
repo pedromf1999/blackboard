@@ -136,6 +136,12 @@ menu_structure = [
             MENU_SEPARATOR,
             'group_box_color',
             'lock_group',
+            MENU_SEPARATOR,
+            # Reachable from the short menus too: an item inside a group
+            # is stacked among that group's items, and right-clicking it
+            # is the natural way to say which should be in front
+            'raise_to_top',
+            'lower_to_bottom',
         ],
     },
     {
@@ -164,6 +170,9 @@ menu_structure = [
             'table_column_insert',
             'table_column_remove',
             'table_cell_color',
+            MENU_SEPARATOR,
+            'raise_to_top',
+            'lower_to_bottom',
         ],
     },
     {
