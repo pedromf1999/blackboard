@@ -8,9 +8,7 @@ Blackboard is a personal fork of `BeeRef <https://github.com/rbreu/beeref>`_ by
 Rebecca Breu, forked at version 0.3.4.dev0 and developed for its author's own
 use. It is published because the licence invites it, not because it is a
 supported product: there is no roadmap, no release schedule, and issues or pull
-requests may go unanswered. If you want a maintained reference viewer, use
-`BeeRef <https://beeref.org>`_ — it is excellent, and everything good here
-started there.
+requests may go unanswered. But i will try to keep it updated as i use it daily.
 
 What it adds to BeeRef
 ----------------------
