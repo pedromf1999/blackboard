@@ -44,10 +44,15 @@ if not errorlevel 1 (
     goto :fail
 )
 
+rem The application is a folder -- the executable plus the libraries it
+rem needs beside it -- rather than one self-unpacking file. Windows Smart
+rem App Control refuses unsigned programs that unpack themselves into a
+rem temporary folder and run from there, which is what a single-file
+rem build does.
 if not exist "%TARGET%" mkdir "%TARGET%"
-copy /y "%SOURCE%" "%EXE%" >nul
+xcopy "%~dp0app" "%TARGET%" /E /I /Y /Q >nul
 if errorlevel 1 (
-    echo ERROR: could not copy the executable to "%TARGET%".
+    echo ERROR: could not copy the application to "%TARGET%".
     goto :fail
 )
 

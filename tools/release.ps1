@@ -112,10 +112,13 @@ Step "Building the executable"
 & $python -m PyInstaller --noconfirm Blackboard.spec
 if ($LASTEXITCODE -ne 0) { Fail "PyInstaller failed" }
 
-$builtExe = "dist\Blackboard-$version.exe"
+# A folder, not a single file: see the note in Blackboard.spec
+$builtDir = "dist\Blackboard-$version"
+$builtExe = "$builtDir\Blackboard.exe"
 if (-not (Test-Path $builtExe)) { Fail "expected $builtExe, but it is not there" }
-$sizeMb = [math]::Round((Get-Item $builtExe).Length / 1MB, 1)
-Write-Host "   $builtExe ($sizeMb MB)"
+$sizeMb = [math]::Round(((Get-ChildItem $builtDir -Recurse -File |
+    Measure-Object Length -Sum).Sum) / 1MB, 1)
+Write-Host "   $builtDir ($sizeMb MB)"
 
 # --- 5. package -------------------------------------------------------------
 
@@ -125,9 +128,10 @@ $staging = "dist\package-$version"
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Path "$staging\app" -Force | Out-Null
 
-# Inside the package the executable has no version in its name: the installer
-# copies it to a fixed path, and a fixed path cannot carry a version.
-Copy-Item $builtExe "$staging\app\Blackboard.exe"
+# Inside the package the application has no version in its name: the
+# installer copies it to a fixed path, and a fixed path cannot carry
+# a version.
+Copy-Item "$builtDir\*" "$staging\app" -Recurse -Force
 Copy-Item 'tools\Install.cmd' "$staging\Install.cmd"
 # ASCII, not utf8: PowerShell 5.1 writes a byte-order mark with utf8, and
 # cmd would read those bytes as part of the version string.

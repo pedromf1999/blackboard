@@ -82,20 +82,22 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Built as a folder rather than a single file. A one-file executable
+# unpacks itself into a temporary directory and runs from there, which
+# is what packers and installers of the unwanted sort do -- and Windows
+# Smart App Control refuses unsigned programs that behave that way. UPX
+# is off for the same reason: a compressed executable is a signal in
+# itself, and it saves nothing worth having here.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
-    name=appname,
+    exclude_binaries=True,
+    name='Blackboard',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,
@@ -103,6 +105,16 @@ exe = EXE(
     entitlements_file=None ,
     version=version_resource,
     icon=join('beeref', 'assets', icon))
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name=appname)
 
 if sys.platform == 'darwin':
     app = BUNDLE(
