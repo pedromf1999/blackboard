@@ -560,6 +560,12 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         return [item for item in self.selectedItems(user_only=True)
                 if getattr(item, 'TYPE', None) == 'draw']
 
+    def selected_groups(self):
+        """The currently selected groups."""
+
+        return [item for item in self.selectedItems(user_only=True)
+                if getattr(item, 'TYPE', None) == 'group']
+
     def has_sizeable_selection(self):
         """Whether anything selected can be made bigger or smaller.
 

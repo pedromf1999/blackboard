@@ -519,7 +519,8 @@ actions = ActionList([
         text='Show &Layers',
         shortcuts=['Ctrl+J'],
         checkable=True,
-        settings='View/show_layers',
+        # Deliberately not remembered: the panel starts out of the way
+        # every time, as a strip, and is opened when it is wanted
         callback='on_action_show_layers',
     ),
     Action(

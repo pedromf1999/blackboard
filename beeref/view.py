@@ -198,6 +198,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_item_toolbar = widgets.draw_item_toolbar.DrawItemToolBar(
             self, self)
         self.draw_item_toolbar.hide()
+        self.group_toolbar = widgets.group_toolbar.GroupToolBar(self, self)
+        self.group_toolbar.hide()
 
         self.apply_palette_to_color_dialogs()
 
@@ -1952,8 +1954,14 @@ class BeeGraphicsView(MainControlsMixin,
         self.pin_toolbar_to(getattr(self, 'draw_item_toolbar', None),
                             self.scene.selected_draw_items())
 
+    def update_group_toolbar(self):
+        """Show the group buttons over the selected groups."""
+
+        self.pin_toolbar_to(getattr(self, 'group_toolbar', None),
+                            self.scene.selected_groups())
+
     def update_pinned_toolbars(self):
-        """Keep both bars over what they act on.
+        """Keep the bars over what they act on.
 
         Called whenever anything could have moved an item on screen: the
         selection changing, an item being dragged, zooming, panning, or
@@ -1962,6 +1970,7 @@ class BeeGraphicsView(MainControlsMixin,
 
         self.update_text_toolbar()
         self.update_draw_item_toolbar()
+        self.update_group_toolbar()
 
     def scrollContentsBy(self, dx, dy):
         super().scrollContentsBy(dx, dy)

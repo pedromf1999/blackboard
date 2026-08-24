@@ -666,3 +666,16 @@ def test_reorder_writes_back_z_values(view):
 
     view.undo_stack.undo()
     assert bottom.zValue() < top.zValue()
+
+
+def test_the_panel_starts_put_away_every_time(view):
+    """Opening it once used to mean it opened on every launch after.
+
+    Its state is deliberately not remembered: the board is what the
+    window is for, and the panel is a strip until it is wanted.
+    """
+
+    from beeref.actions.actions import actions as all_actions
+
+    assert all_actions['show_layers'].settings is None
+    assert all_actions['show_layers'].checked is False
