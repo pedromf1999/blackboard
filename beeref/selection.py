@@ -871,9 +871,12 @@ class SelectableMixin(BaseItemMixin):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
+            # Selecting used to raise the item above everything else,
+            # which meant clicking a picture put it over the note
+            # written on top of it and left it there. Nothing moves in
+            # the stack unless it is asked to: raising is a command of
+            # its own, on the right-click menu and on PgUp.
             self.prepareGeometryChange()
-            if hasattr(self, 'on_selected_change'):
-                self.on_selected_change(value)
         return super().itemChange(change, value)
 
 

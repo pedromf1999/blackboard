@@ -1984,3 +1984,38 @@ def test_raising_several_keeps_their_order(view):
 
     assert items[0].zValue() < items[1].zValue()
     assert items[0].zValue() > items[2].zValue()
+
+
+def test_selecting_does_not_change_the_stacking(view):
+    """Clicking a picture under a note used to put it over the note.
+
+    Nothing moves in the stack unless it is asked to; raising is a
+    command of its own.
+    """
+
+    picture = BeePixmapItem(QtGui.QImage())
+    view.scene.addItem(picture)
+    picture.setZValue(0)
+    note = BeeTextItem('on top')
+    view.scene.addItem(note)
+    note.setZValue(1)
+
+    picture.setSelected(True)
+
+    assert picture.zValue() == 0
+    assert note.zValue() == 1
+    assert note.zValue() > picture.zValue()
+
+
+def test_selecting_several_does_not_change_the_stacking(view):
+    items = []
+    for n in range(3):
+        item = BeeTextItem(f'note {n}')
+        view.scene.addItem(item)
+        item.setZValue(n)
+        items.append(item)
+
+    for item in items:
+        item.setSelected(True)
+
+    assert [item.zValue() for item in items] == [0, 1, 2]

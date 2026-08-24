@@ -105,12 +105,6 @@ class BeeItemMixin(SelectableMixin):
         """
         return [self]
 
-    def on_selected_change(self, value):
-        if (value and self.scene()
-                and not self.scene().has_selection()
-                and not self.scene().active_mode is None):
-            self.bring_to_front()
-
     def get_save_data(self):
         """The item's data for saving, including its group membership."""
 
