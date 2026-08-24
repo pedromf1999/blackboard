@@ -309,3 +309,27 @@ def test_fit_to_children_never_touches_the_items(view):
     gap = contents.left() - group.rect().left()
     assert gap >= group.PADDING
     assert group.rect().contains(contents)
+
+
+def test_a_group_has_no_edge_handles(view):
+    """Stretching a group squashes everything inside it.
+
+    A group is a container rather than a picture: it scales from the
+    corners, which keeps its contents in proportion.
+    """
+
+    from beeref import commands
+
+    items = []
+    for n in range(2):
+        item = BeeTextItem(f'note {n}')
+        view.scene.addItem(item)
+        item.setPos(0, n * 60)
+        items.append(item)
+    group = BeeGroupItem(box_color=(10, 20, 30, 200))
+    commands.GroupItems(view.scene, items, group).redo()
+    group.setSelected(True)
+
+    assert group.get_edge_bounds() == []
+    # The corners are still there to scale by
+    assert len(group.corners) == 4

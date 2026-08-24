@@ -355,6 +355,12 @@ actions = ActionList([
         group='active_when_sizeable_selection',
     ),
     Action(
+        id='text_tool',
+        text='&Write a Note',
+        shortcuts=['T'],
+        callback='on_action_text_tool',
+    ),
+    Action(
         id='insert_table',
         text='Insert Ta&ble',
         shortcuts=['Ctrl+Shift+T'],

@@ -3309,3 +3309,58 @@ def test_the_menus_call_it_a_board_not_a_scene(view):
         text = actions.actions[name].qaction.text()
         assert 'Scene' not in text
         assert 'Board' in text
+
+
+def test_the_text_tool_writes_a_note_where_it_is_clicked(view):
+    """T, then click: no double-clicking, no menu."""
+
+    view.on_action_text_tool()
+    assert view.draw_tool == constants.TEXT_TOOL
+
+    view.write_note_at(QtCore.QPoint(300, 300))
+
+    notes = list(view.scene.items_by_type('text'))
+    assert len(notes) == 1
+    assert notes[0].edit_mode is True
+    # And the tool steps aside, since what follows is typing
+    assert view.draw_tool is None
+
+
+def test_the_text_tool_writes_inside_the_group_clicked(view):
+    items = []
+    for n in range(2):
+        item = BeeTextItem(f'note {n}')
+        view.scene.addItem(item)
+        item.setPos(500, 400 + n * 40)
+        items.append(item)
+    group = BeeGroupItem(box_color=(10, 20, 30, 200))
+    commands.GroupItems(view.scene, items, group).redo()
+    view.scene.deselect_all_items()
+
+    view.on_action_text_tool()
+    centre = view.mapFromScene(group.sceneBoundingRect().center())
+    view.write_note_at(centre)
+
+    assert len(group.bee_children()) == 3
+
+
+def test_the_text_tool_asks_for_no_colour(view):
+    """A note takes its colour from the box it sits in."""
+
+    with patch.object(type(view), 'pick_color_live') as picker:
+        view.on_action_text_tool()
+    picker.assert_not_called()
+
+
+def test_escape_leaves_the_text_tool(view):
+    view.on_action_text_tool()
+    assert view.draw_tool == constants.TEXT_TOOL
+
+    view.escape()
+    assert view.draw_tool is None
+
+
+def test_the_text_tool_has_its_own_cursor(view):
+    view.on_action_text_tool()
+    # A picture of a T, not one of Qt's stock shapes
+    assert view.viewport().cursor().shape() == Qt.CursorShape.BitmapCursor

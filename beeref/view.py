@@ -297,7 +297,10 @@ class BeeGraphicsView(MainControlsMixin,
         else:
             self.cancel_active_modes()
             self.scene.deselect_all_items()
-            self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+            if kind == constants.TEXT_TOOL:
+                self.viewport().setCursor(BeeAssets().cursor_text())
+            else:
+                self.viewport().setCursor(Qt.CursorShape.CrossCursor)
         if hasattr(self, 'draw_toolbar'):
             self.draw_toolbar.update_checked(kind)
 
@@ -312,7 +315,9 @@ class BeeGraphicsView(MainControlsMixin,
         """
 
         self.set_draw_tool(kind)
-        if kind is None:
+        if kind is None or kind == constants.TEXT_TOOL:
+            # Writing has no colour of its own to pick: a note takes it
+            # from the box it sits in
             return
         # Nothing on the board to show the colour on yet, so there is
         # nothing to preview -- the dialog's own swatch is all there is
@@ -320,6 +325,49 @@ class BeeGraphicsView(MainControlsMixin,
             'Choose Drawing Colour', self.draw_color, lambda color: None)
         if color is not None:
             self.draw_color = color
+
+    def on_action_text_tool(self):
+        """Switch to writing notes: T, then click where one goes."""
+
+        self.choose_draw_tool(constants.TEXT_TOOL)
+
+    def write_note_at(self, point):
+        """Put a note where the text tool was clicked, ready to type.
+
+        A note dropped on a group goes inside it, since that is plainly
+        what clicking there means. The tool then steps aside: what
+        follows is typing, and a T-shaped cursor over the words being
+        written would only be in the way.
+        """
+
+        scene_pos = self.mapToScene(point)
+        # What was clicked may be a group, something inside one, or
+        # nothing at all -- the last being the ordinary case of writing
+        # on the board itself
+        item_at = self.scene.itemAt(scene_pos, self.transform())
+        group = None
+        if getattr(item_at, 'TYPE', None) == BeeGroupItem.TYPE:
+            group = item_at
+        else:
+            under = self.get_item_at(point)
+            if under is not None:
+                group = self.scene.get_group_ancestor(under)
+
+        item = BeeTextItem()
+        item.setScale(1 / self.get_scale())
+        self.undo_stack.beginMacro('Write note')
+        self.undo_stack.push(
+            commands.InsertItems(self.scene, [item], scene_pos))
+        if group is not None and not group.locked:
+            self.undo_stack.push(
+                commands.MoveToGroup(self.scene, [item], group))
+        self.undo_stack.endMacro()
+
+        self.set_draw_tool(None)
+        item.enter_edit_mode()
+        cursor = item.textCursor()
+        cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        item.setTextCursor(cursor)
 
     def start_drawing(self, pos):
         """Begin a new drawing at the given scene position."""
@@ -1815,7 +1863,10 @@ class BeeGraphicsView(MainControlsMixin,
             return
 
         if (self.draw_tool and event.button() == Qt.MouseButton.LeftButton):
-            self.start_drawing(self.mapToScene(event.pos()))
+            if self.draw_tool == constants.TEXT_TOOL:
+                self.write_note_at(event.pos())
+            else:
+                self.start_drawing(self.mapToScene(event.pos()))
             event.accept()
             return
 

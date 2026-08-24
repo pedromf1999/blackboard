@@ -19,6 +19,7 @@ import logging
 
 from PyQt6 import QtCore, QtWidgets
 
+from beeref import constants
 from beeref.assets import BeeAssets
 from beeref.items import BeeDrawItem
 
@@ -36,6 +37,7 @@ class DrawToolBar(QtWidgets.QWidget):
     # The tools, in the order they appear
     TOOLS = (
         (None, 'select', 'Select and move items'),
+        (constants.TEXT_TOOL, 'text', 'Write a note (T)'),
         (BeeDrawItem.SKETCH, 'sketch', 'Sketch freehand'),
         (BeeDrawItem.LINE, 'line', 'Draw a straight line'),
         (BeeDrawItem.SPLINE, 'spline', 'Draw a curve'),

@@ -459,6 +459,17 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         shorter = min(rect.width(), rect.height())
         return max(self.PADDING, shorter * self.PADDING_FRACTION)
 
+    def get_edge_bounds(self):
+        """Groups scale from the corners only, never from an edge.
+
+        Dragging an edge stretches an item out of proportion, which on
+        a group squashes everything inside it. A group is a container
+        rather than a picture: there is nothing of its own to distort,
+        only other people's work.
+        """
+
+        return []
+
     def fit_to_children(self):
         """Grow the box so that it contains all its items, with padding."""
 

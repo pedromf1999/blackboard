@@ -199,3 +199,21 @@ def test_thickness_still_has_a_lower_limit(view):
     view.scene.addItem(item)
     item.set_line_width(0)
     assert item.line_width == BeeDrawItem.MIN_WIDTH
+
+
+def test_the_drawing_bar_changes_the_thickness(view):
+    """The same pair of icons as the text bar, on the line instead."""
+
+    item = BeeDrawItem(points=[(0, 0), (400, 0)])
+    view.scene.addItem(item)
+    item.setSelected(True)
+    view.update_pinned_toolbars()
+    bar = view.draw_item_toolbar
+
+    before = item.line_width
+    bar.thicker.click()
+    assert item.line_width > before
+
+    bar.thinner.click()
+    bar.thinner.click()
+    assert item.line_width < before

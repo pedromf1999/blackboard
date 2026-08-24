@@ -164,6 +164,7 @@ menu_structure = [
             'text_highlight_color',
             'text_box_color',
             MENU_SEPARATOR,
+            'text_tool',
             'insert_table',
             'table_row_insert',
             'table_row_remove',

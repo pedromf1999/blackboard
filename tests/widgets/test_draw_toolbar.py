@@ -171,3 +171,15 @@ def test_drawing_bar_follows_the_drawing(view):
     assert view.draw_item_toolbar.pos() != before
     assert abs(view.draw_item_toolbar.geometry().center().x()
                - on_view.center().x()) <= 2
+
+
+def test_the_bar_offers_the_text_tool_beside_the_arrow(view):
+    from beeref import constants
+
+    from beeref.widgets.draw_toolbar import DrawToolBar
+
+    tools = [kind for kind, icon, tooltip in DrawToolBar.TOOLS]
+    assert tools[0] is None, 'the arrow comes first'
+    assert tools[1] == constants.TEXT_TOOL, 'then writing, beside it'
+    assert view.draw_toolbar.buttons[constants.TEXT_TOOL].icon().isNull() \
+        is False

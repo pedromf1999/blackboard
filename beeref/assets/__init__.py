@@ -189,6 +189,15 @@ class BeeAssets:
         logger.debug(f'Loaded {len(colors)} palette colours')
         return colors
 
+    def cursor_text(self):
+        """A T-shaped cursor, for when clicking writes a note."""
+
+        if not hasattr(self, '_cursor_text'):
+            icon = self.tool_icon('text')
+            pixmap = icon.pixmap(QtCore.QSize(24, 24))
+            self._cursor_text = QtGui.QCursor(pixmap, 12, 2)
+        return self._cursor_text
+
     def cursor_from_image(self, filename, hotspot):
         app = QtWidgets.QApplication.instance()
         scaling = app.primaryScreen().devicePixelRatio()
