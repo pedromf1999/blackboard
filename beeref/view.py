@@ -1957,8 +1957,11 @@ class BeeGraphicsView(MainControlsMixin,
     def update_group_toolbar(self):
         """Show the group buttons over the selected groups."""
 
-        self.pin_toolbar_to(getattr(self, 'group_toolbar', None),
-                            self.scene.selected_groups())
+        toolbar = getattr(self, 'group_toolbar', None)
+        groups = self.scene.selected_groups()
+        if toolbar is not None and groups:
+            toolbar.update_lock(groups[0].locked)
+        self.pin_toolbar_to(toolbar, groups)
 
     def update_pinned_toolbars(self):
         """Keep the bars over what they act on.
