@@ -3255,3 +3255,48 @@ def test_pasted_image_arrives_at_half_the_window(view):
     assert len(items) == 1
     # A tiny image is brought up to size rather than pasted tiny
     assert items[0].scale() > 1
+
+
+def test_choosing_a_drawing_tool_asks_for_the_colour(view):
+    """The colour is picked for the line about to be drawn."""
+
+    chosen = QtGui.QColor(20, 200, 120)
+    with patch.object(type(view), 'pick_color_live',
+                      return_value=chosen) as picker:
+        view.choose_draw_tool(BeeDrawItem.SKETCH)
+
+    picker.assert_called_once()
+    assert view.draw_tool == BeeDrawItem.SKETCH
+    assert view.draw_color == chosen
+
+    # And that is what the next stroke is drawn in
+    view.start_drawing(QtCore.QPointF(0, 0))
+    view.continue_drawing(QtCore.QPointF(50, 50))
+    assert view.drawing_item.color == chosen
+
+
+def test_cancelling_keeps_the_tool_and_the_colour(view):
+    before = QtGui.QColor(view.draw_color)
+    with patch.object(type(view), 'pick_color_live', return_value=None):
+        view.choose_draw_tool(BeeDrawItem.LINE)
+
+    assert view.draw_tool == BeeDrawItem.LINE
+    assert view.draw_color == before
+
+
+def test_going_back_to_the_arrow_asks_nothing(view):
+    with patch.object(type(view), 'pick_color_live') as picker:
+        view.choose_draw_tool(None)
+
+    picker.assert_not_called()
+    assert view.draw_tool is None
+
+
+def test_the_toolbar_buttons_ask_for_the_colour(view):
+    """The bar is the way a tool is picked, so the ask belongs there."""
+
+    button = view.draw_toolbar.buttons[BeeDrawItem.SKETCH]
+    with patch.object(type(view), 'choose_draw_tool') as chooser:
+        button.click()
+
+    chooser.assert_called_once_with(BeeDrawItem.SKETCH)
