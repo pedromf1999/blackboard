@@ -113,7 +113,8 @@ class WelcomeOverlay(MainControlsMixin, QtWidgets.QWidget):
     """Some basic info to be displayed when the scene is empty."""
 
     txt = """<p>Paste or drop images here.</p>
-             <p>Right-click for more options.</p>"""
+             <p>Right-click for more options.</p>
+             <p><b>Ctrl+T to start typing on a new board</b></p>"""
 
     def __init__(self, parent):
         super().__init__(parent)

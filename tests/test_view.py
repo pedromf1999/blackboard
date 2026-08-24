@@ -3300,3 +3300,12 @@ def test_the_toolbar_buttons_ask_for_the_colour(view):
         button.click()
 
     chooser.assert_called_once_with(BeeDrawItem.SKETCH)
+
+
+def test_the_menus_call_it_a_board_not_a_scene(view):
+    """Scene is Qt's word for it, not one anybody using this would use."""
+
+    for name in ('export_scene', 'new_scene', 'fit_scene'):
+        text = actions.actions[name].qaction.text()
+        assert 'Scene' not in text
+        assert 'Board' in text

@@ -141,7 +141,7 @@ actions = ActionList([
     ),
     Action(
         id='export_scene',
-        text='E&xport Scene...',
+        text='E&xport Board...',
         shortcuts=['Ctrl+Shift+E'],
         callback='on_action_export_scene',
         group='active_when_items_in_scene',
@@ -438,13 +438,13 @@ actions = ActionList([
     ),
     Action(
         id='new_scene',
-        text='&New Scene',
+        text='&New Board',
         shortcuts=['Ctrl+N'],
         callback='on_action_new_scene',
     ),
     Action(
         id='fit_scene',
-        text='&Fit Scene',
+        text='&Fit Board',
         shortcuts=['1'],
         callback='on_action_fit_scene',
     ),

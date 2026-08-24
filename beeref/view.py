@@ -1369,7 +1369,7 @@ class BeeGraphicsView(MainControlsMixin,
         directory = os.path.dirname(self.filename) if self.filename else None
         filename, formatstr = QtWidgets.QFileDialog.getSaveFileName(
             parent=self,
-            caption='Export Scene to Image',
+            caption='Export Board to Image',
             directory=directory,
             filter=';;'.join(('Image Files (*.png *.jpg *.jpeg *.svg)',
                               'PNG (*.png)',

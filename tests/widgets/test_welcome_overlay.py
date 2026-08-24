@@ -87,3 +87,13 @@ def test_mouse_press_when_move_window_active(mouse_event_mock, qapp):
     overlay.mousePressEvent(MagicMock())
     assert overlay.movewin_active is False
     mouse_event_mock.assert_not_called()
+
+
+def test_says_how_to_start_typing(view):
+    """An empty board gives no clue that a note can be made."""
+
+    from beeref.widgets.welcome_overlay import WelcomeOverlay
+
+    assert 'Ctrl+T' in WelcomeOverlay.txt
+    # Emphasised, being the one thing to do rather than a note in passing
+    assert '<b>Ctrl+T to start typing on a new board</b>' in WelcomeOverlay.txt

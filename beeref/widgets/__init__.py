@@ -164,7 +164,7 @@ class SceneToPixmapExporterDialog(QtWidgets.QDialog):
                 Qt.AspectRatioMode.KeepAspectRatio)
 
         self.ignore_change = False
-        self.setWindowTitle('Export Scene to Image')
+        self.setWindowTitle('Export Board to Image')
         self.setWindowModality(Qt.WindowModality.WindowModal)
         layout = QtWidgets.QGridLayout()
         self.setLayout(layout)
