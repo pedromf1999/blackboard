@@ -328,3 +328,83 @@ def which_side(line, item):
     if abs(point.y() - rect.top()) < 0.6:
         return 'top'
     return 'bottom'
+
+
+def over(line, item):
+    """Whether the line passes through the item, ends not counting.
+
+    An end sits exactly on the edge, so the point itself is always
+    touching; only what goes through the middle matters.
+    """
+
+    inner = item.sceneBoundingRect().adjusted(0.5, 0.5, -0.5, -0.5)
+    start = line.mapToScene(line.points[0])
+    end = line.mapToScene(line.points[-1])
+    return any(inner.contains(QtCore.QPointF(
+        start.x() + (end.x() - start.x()) * step / 100,
+        start.y() + (end.y() - start.y()) * step / 100))
+        for step in range(1, 100))
+
+
+def joined_notes(view):
+    """Two notes with a line held by both of them."""
+
+    one = BeeTextItem('Text 1')
+    view.scene.addItem(one)
+    one.setPos(300, 100)
+    two = BeeTextItem('Text 2')
+    view.scene.addItem(two)
+    two.setPos(300, 500)
+    first, second = one.sceneBoundingRect(), two.sceneBoundingRect()
+
+    view.set_draw_tool(BeeDrawItem.LINE)
+    view.start_drawing(
+        QtCore.QPointF(first.center().x(), first.bottom() + 5))
+    view.continue_drawing(
+        QtCore.QPointF(second.center().x(), second.top() - 5))
+    view.finish_drawing()
+    line = [d for d in view.scene.items_by_type('draw')][0]
+    return line, one, two
+
+
+def test_both_ends_can_hold_a_note(view):
+    line, one, two = joined_notes(view)
+    assert sorted(line.ends) == ['end', 'start']
+    assert on_edge(line, one, index=0)
+    assert on_edge(line, two, index=-1)
+
+
+def test_moving_one_note_past_the_other_moves_both_ends(view):
+    """Dragging Text 2 above Text 1 must not draw the line over Text 1.
+
+    Each end used to look at where the line's other end happened to be,
+    and that other end was itself about to be worked out -- so whichever
+    was done first decided from where the other one used to be, and the
+    line was left lying across the words.
+    """
+
+    line, one, two = joined_notes(view)
+    assert over(line, one) is False
+
+    two.setPos(QtCore.QPointF(300, 30))
+
+    assert over(line, one) is False, 'the line lies across Text 1'
+    assert over(line, two) is False
+    # The end on Text 1 has gone round to the top, where Text 2 now is
+    assert on_edge(line, one, index=0)
+    assert on_edge(line, two, index=-1)
+
+
+def test_the_ends_stay_touching_whichever_way_it_is_moved(view):
+    import math
+
+    line, one, two = joined_notes(view)
+    centre = one.sceneBoundingRect().center()
+    for angle in range(0, 360, 30):
+        radians = math.radians(angle)
+        two.setPos(QtCore.QPointF(centre.x() + 260 * math.cos(radians),
+                                  centre.y() + 260 * math.sin(radians)))
+        assert on_edge(line, one, index=0), f'left Text 1 at {angle}'
+        assert on_edge(line, two, index=-1), f'left Text 2 at {angle}'
+        assert over(line, one) is False, f'crossed Text 1 at {angle}'
+        assert over(line, two) is False, f'crossed Text 2 at {angle}'

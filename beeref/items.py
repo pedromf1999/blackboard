@@ -396,6 +396,21 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         return QtCore.QPointF(centre.x() + dx * step,
                               centre.y() + dy * step)
 
+    def approach_from(self, which, rect):
+        """Where this end should look towards to find its side.
+
+        When the other end holds something too, that item's middle is
+        what counts, not the line's own far point: the far point is
+        itself being worked out, and using it means whichever end is
+        recalculated first decides from where the other one used to be.
+        """
+
+        other = 'end' if which == 'start' else 'start'
+        held = self.ends.get(other)
+        if held is not None and held['item'].scene() is not None:
+            return held['item'].sceneBoundingRect().center()
+        return self.approach_point(which, rect)
+
     def approach_point(self, which, rect):
         """Where the line comes from, as seen by one of its ends.
 
@@ -435,7 +450,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
                 self.detach_end(which)
                 continue
             rect = target.sceneBoundingRect()
-            approach = self.approach_point(which, rect)
+            approach = self.approach_from(which, rect)
             if approach is None:
                 continue
             wanted = self.mapFromScene(
