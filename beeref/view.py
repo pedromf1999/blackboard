@@ -297,10 +297,7 @@ class BeeGraphicsView(MainControlsMixin,
         else:
             self.cancel_active_modes()
             self.scene.deselect_all_items()
-            if kind == constants.TEXT_TOOL:
-                self.viewport().setCursor(BeeAssets().cursor_text())
-            else:
-                self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+            self.viewport().setCursor(self.tool_cursor())
         if hasattr(self, 'draw_toolbar'):
             self.draw_toolbar.update_checked(kind)
 
@@ -1683,13 +1680,36 @@ class BeeGraphicsView(MainControlsMixin,
                 getattr(item, 'locked', False))
         self.viewport().repaint()
 
+    def tool_cursor(self):
+        """The cursor the tool in use wants, or None for the plain arrow."""
+
+        if self.draw_tool is None:
+            return None
+        if self.draw_tool == constants.TEXT_TOOL:
+            return BeeAssets().cursor_text()
+        return Qt.CursorShape.CrossCursor
+
     def on_cursor_changed(self, cursor):
-        if self.active_mode is None:
+        """An item under the mouse asks for a cursor of its own.
+
+        Ignored while a tool is in use. Items ask as the mouse passes
+        over them, which took the T away from the text tool -- and the
+        cross from the drawing tools -- without anything having been
+        put away.
+        """
+
+        if self.active_mode is None and self.draw_tool is None:
             self.viewport().setCursor(cursor)
 
     def on_cursor_cleared(self):
-        if self.active_mode is None:
+        if self.active_mode is not None:
+            return
+        tool = self.tool_cursor()
+        if tool is None:
             self.viewport().unsetCursor()
+        else:
+            # Back to the tool's own cursor, not to the arrow
+            self.viewport().setCursor(tool)
 
     def recalc_scene_rect(self):
         """Resize the scene rectangle so that it is always one view width

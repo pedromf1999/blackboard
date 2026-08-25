@@ -3364,3 +3364,39 @@ def test_the_text_tool_has_its_own_cursor(view):
     view.on_action_text_tool()
     # A picture of a T, not one of Qt's stock shapes
     assert view.viewport().cursor().shape() == Qt.CursorShape.BitmapCursor
+
+
+def test_the_tool_cursor_survives_items_asking_for_their_own(view):
+    """Items ask for a cursor as the mouse passes over them.
+
+    That took the T away from the text tool without anything having
+    been put away, leaving the plain arrow behind.
+    """
+
+    view.on_action_text_tool()
+    assert view.viewport().cursor().shape() == Qt.CursorShape.BitmapCursor
+
+    view.on_cursor_changed(Qt.CursorShape.SizeFDiagCursor)
+    assert view.viewport().cursor().shape() == Qt.CursorShape.BitmapCursor
+
+    view.on_cursor_cleared()
+    assert view.viewport().cursor().shape() == Qt.CursorShape.BitmapCursor
+
+
+def test_the_drawing_cursor_survives_the_same(view):
+    view.set_draw_tool(BeeDrawItem.SKETCH)
+    assert view.viewport().cursor().shape() == Qt.CursorShape.CrossCursor
+
+    view.on_cursor_changed(Qt.CursorShape.SizeFDiagCursor)
+    view.on_cursor_cleared()
+    assert view.viewport().cursor().shape() == Qt.CursorShape.CrossCursor
+
+
+def test_without_a_tool_items_still_choose_the_cursor(view):
+    view.set_draw_tool(None)
+
+    view.on_cursor_changed(Qt.CursorShape.SizeFDiagCursor)
+    assert view.viewport().cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+    view.on_cursor_cleared()
+    assert view.viewport().cursor().shape() == Qt.CursorShape.ArrowCursor
