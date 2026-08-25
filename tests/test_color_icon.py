@@ -65,3 +65,28 @@ def test_the_highlighter_keeps_its_own_icon(view):
 
     assert colours_in(view.text_toolbar.highlight.icon()) != colours_in(
         view.text_toolbar.box_color.icon())
+
+
+def filled_share(icon):
+    """How much of its square an icon's drawing actually covers."""
+
+    image = icon.pixmap(QtCore.QSize(64, 64)).toImage()
+    drawn = [(x, y) for x in range(image.width())
+             for y in range(image.height())
+             if image.pixelColor(x, y).alpha() > 20]
+    xs = [x for x, _ in drawn]
+    ys = [y for _, y in drawn]
+    return (max(max(xs) - min(xs), max(ys) - min(ys)) + 1) / image.width()
+
+
+def test_the_lock_icons_are_drawn_as_big_as_their_neighbours(qapp):
+    """They came with wide margins baked in and looked shrunken.
+
+    Nothing scales an icon down; the drawing simply sat in the middle of
+    its square with room to spare, so the fix is in the artwork and this
+    is what would let it come back.
+    """
+
+    reference = filled_share(BeeAssets().tool_icon('ungroup'))
+    for name in ('lock', 'unlock'):
+        assert filled_share(BeeAssets().tool_icon(name)) > reference - 0.1
