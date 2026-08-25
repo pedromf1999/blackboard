@@ -3400,3 +3400,76 @@ def test_without_a_tool_items_still_choose_the_cursor(view):
 
     view.on_cursor_cleared()
     assert view.viewport().cursor().shape() == Qt.CursorShape.ArrowCursor
+
+
+def notes_and_a_group(view):
+    loose = BeeTextItem('a loose note')
+    view.scene.addItem(loose)
+    loose.setPos(50, 50)
+    inside = BeeTextItem('inside the group')
+    view.scene.addItem(inside)
+    inside.setPos(400, 300)
+    other = BeeTextItem('also inside')
+    view.scene.addItem(other)
+    other.setPos(400, 380)
+    group = BeeGroupItem(box_color=(10, 20, 30, 200))
+    commands.GroupItems(view.scene, [inside, other], group).redo()
+    view.scene.deselect_all_items()
+    return loose, inside, group
+
+
+def click_on(view, item):
+    return view.mapFromScene(item.sceneBoundingRect().center())
+
+
+def test_the_text_tool_opens_a_note_already_there(view):
+    """Clicking a note writes in it rather than putting another on top."""
+
+    loose, inside, group = notes_and_a_group(view)
+    before = len(list(view.scene.items_by_type('text')))
+
+    view.on_action_text_tool()
+    view.write_note_at(click_on(view, loose))
+
+    assert len(list(view.scene.items_by_type('text'))) == before
+    assert loose.edit_mode is True
+    assert view.draw_tool is None
+
+
+def test_the_text_tool_reaches_a_note_inside_a_group(view):
+    """Without opening the group first or double-clicking anything."""
+
+    loose, inside, group = notes_and_a_group(view)
+    before = len(list(view.scene.items_by_type('text')))
+
+    view.on_action_text_tool()
+    view.write_note_at(click_on(view, inside))
+
+    assert len(list(view.scene.items_by_type('text'))) == before
+    assert inside.edit_mode is True
+    # The group has to be open for its contents to be reachable
+    assert view.scene.active_group is group
+
+
+def test_the_text_tool_leaves_a_locked_group_alone(view):
+    """A locked group keeps its contents to itself."""
+
+    loose, inside, group = notes_and_a_group(view)
+    group.locked = True
+    before = len(list(view.scene.items_by_type('text')))
+
+    view.on_action_text_tool()
+    view.write_note_at(click_on(view, inside))
+
+    assert inside.edit_mode is False
+    assert len(list(view.scene.items_by_type('text'))) == before + 1
+
+
+def test_the_text_tool_still_makes_one_on_bare_board(view):
+    loose, inside, group = notes_and_a_group(view)
+    before = len(list(view.scene.items_by_type('text')))
+
+    view.on_action_text_tool()
+    view.write_note_at(QtCore.QPoint(750, 620))
+
+    assert len(list(view.scene.items_by_type('text'))) == before + 1

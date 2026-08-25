@@ -329,29 +329,31 @@ class BeeGraphicsView(MainControlsMixin,
         self.choose_draw_tool(constants.TEXT_TOOL)
 
     def write_note_at(self, point):
-        """Put a note where the text tool was clicked, ready to type.
+        """Write where the text tool was clicked.
 
-        A note dropped on a group goes inside it, since that is plainly
-        what clicking there means. The tool then steps aside: what
-        follows is typing, and a T-shaped cursor over the words being
-        written would only be in the way.
+        A note already there is opened for writing, wherever it lives:
+        that is the point of the tool, reaching a note inside a group
+        without opening the group or double-clicking anything. Only
+        where there is no note does it make one, and a note made on a
+        group goes inside it.
+
+        Either way the tool then steps aside: what follows is typing,
+        and a T over the words being written would only be in the way.
         """
 
         scene_pos = self.mapToScene(point)
-        # What was clicked may be a group, something inside one, or
-        # nothing at all -- the last being the ordinary case of writing
-        # on the board itself
-        item_at = self.scene.itemAt(scene_pos, self.transform())
-        group = None
-        if getattr(item_at, 'TYPE', None) == BeeGroupItem.TYPE:
-            group = item_at
-        else:
-            under = self.get_item_at(point)
-            if under is not None:
-                group = self.scene.get_group_ancestor(under)
+        existing = self.get_text_item_at(point)
+        if existing is not None:
+            group = self.scene.get_group_ancestor(existing)
+            if group is None or not group.locked:
+                self.edit_note(existing, scene_pos, group)
+                return
+            # A locked group keeps its contents to itself, so this
+            # falls through and writes a new note on the board
 
         item = BeeTextItem()
         item.setScale(1 / self.get_scale())
+        group = self.group_to_write_in(point, scene_pos)
         self.undo_stack.beginMacro('Write note')
         self.undo_stack.push(
             commands.InsertItems(self.scene, [item], scene_pos))
@@ -365,6 +367,28 @@ class BeeGraphicsView(MainControlsMixin,
         cursor = item.textCursor()
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
         item.setTextCursor(cursor)
+
+    def group_to_write_in(self, point, scene_pos):
+        """The group a new note clicked here should go into, if any."""
+
+        item_at = self.scene.itemAt(scene_pos, self.transform())
+        if getattr(item_at, 'TYPE', None) == BeeGroupItem.TYPE:
+            return item_at
+        under = self.get_item_at(point)
+        if under is not None:
+            return self.scene.get_group_ancestor(under)
+        return None
+
+    def edit_note(self, item, scene_pos, group):
+        """Open a note that is already there, at the word clicked on."""
+
+        if group is not None:
+            # Its contents have to be reachable before one can be edited
+            self.scene.enter_group(group, item)
+        self.set_draw_tool(None)
+        item.setSelected(True)
+        item.enter_edit_mode()
+        item.put_cursor_at(item.mapFromScene(scene_pos))
 
     def start_drawing(self, pos):
         """Begin a new drawing at the given scene position."""
