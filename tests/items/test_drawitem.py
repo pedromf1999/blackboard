@@ -217,3 +217,45 @@ def test_the_drawing_bar_changes_the_thickness(view):
     bar.thinner.click()
     bar.thinner.click()
     assert item.line_width < before
+
+
+def test_an_arrows_box_grows_with_the_arrow_not_faster(view):
+    """Every side used to be given a whole head-length.
+
+    The head can point any way, so allowing for it all round looked
+    like the safe thing; it grew the box four times faster than the
+    arrow, and a line 400 long at sixty thick came out in a box 880
+    wide.
+    """
+
+    line = BeeDrawItem(points=[(0, 0), (400, 0)], kind=BeeDrawItem.SKETCH)
+    arrow = BeeDrawItem(points=[(0, 0), (400, 0)], kind=BeeDrawItem.ARROW)
+    view.scene.addItem(line)
+    view.scene.addItem(arrow)
+
+    for item in (line, arrow):
+        item.set_line_width(60)
+
+    # An arrow head is drawn back from the end of the line, not beyond
+    # it, so along the line the two come to the same width
+    assert arrow.bounding_rect_unselected().width() == (
+        line.bounding_rect_unselected().width())
+
+
+def test_an_arrows_box_still_holds_its_head(view):
+    """Whichever way the head points, and however thick it is."""
+
+    import math
+
+    for angle in range(0, 360, 30):
+        radians = math.radians(angle)
+        item = BeeDrawItem(
+            points=[(0, 0),
+                    (200 * math.cos(radians), 200 * math.sin(radians))],
+            kind=BeeDrawItem.ARROW)
+        view.scene.addItem(item)
+        for width in (4, 20, 60):
+            item.set_line_width(width)
+            head = item.arrow_head().boundingRect()
+            box = item.bounding_rect_unselected()
+            assert box.contains(head), f'head escaped at {angle} deg'

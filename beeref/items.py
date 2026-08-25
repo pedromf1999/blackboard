@@ -265,18 +265,22 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
     def bounding_rect_unselected(self):
         # A stroke reaches half its width beyond the path it follows,
-        # round caps included. Only the kinds with an arrow head need
-        # more than that: using the arrow head's size for every kind
-        # made the box around a sketch four times wider than the line
-        # inside it, and grow four times faster when thickened.
+        # round caps included. An arrow head is drawn separately from
+        # that path, so where there is one its own outline is taken in
+        # as well.
+        #
+        # Allowing every side a whole head-length instead -- the head
+        # can point any way, so it looked like the safe thing -- grew
+        # the box four times faster than the arrow: a line 400 long at
+        # sixty thick came out in a box 880 by 480.
         margin = self.line_width / 2
-        if self.kind in (self.ARROW, self.SPLINE_ARROW):
-            # An arrow head is drawn a whole head-length beyond the end
-            # of the path, and on a curve it can point back the way it
-            # came, so the full size is the only safe allowance
-            margin = self.line_width * self.ARROW_SIZE
-        return self.path.boundingRect().adjusted(
+        rect = self.path.boundingRect().adjusted(
             -margin, -margin, margin, margin)
+        head = self.arrow_head()
+        if head is not None:
+            rect = rect.united(head.boundingRect().adjusted(
+                -margin, -margin, margin, margin))
+        return rect
 
     def boundingRect(self):
         if not self.has_selection_outline():
