@@ -472,7 +472,7 @@ class BeeGraphicsView(MainControlsMixin,
     def snap_ends(self, item, start, end):
         """Fasten either end of a new drawing to whatever it landed on.
 
-        Only notes and groups are worth holding on to: they are the
+        Notes, groups and images can all be held on to: they are the
         things a line is drawn between. The end is pulled to the
         nearest point on the item's edge, so it meets the box rather
         than stopping short of it or burying itself inside.
@@ -486,13 +486,18 @@ class BeeGraphicsView(MainControlsMixin,
             self.scene.uses_attachments = True
         item.follow_attachments()
 
+    # What a line can take hold of: the things a line is drawn between.
+    # Not other drawings -- a line held by a line has nothing to meet
+    # the edge of, and joining two of them says nothing.
+    SNAP_TYPES = ('text', 'group', 'pixmap')
+
     def snap_target_at(self, scene_pos):
-        """The note or group near enough to this point to catch an end."""
+        """The item near enough to this point to catch an end."""
 
         best = None
         best_distance = None
         for target in self.scene.items():
-            if getattr(target, 'TYPE', None) not in ('text', 'group'):
+            if getattr(target, 'TYPE', None) not in self.SNAP_TYPES:
                 continue
             rect = target.attach_rect()
             distance = 0 if rect.contains(scene_pos) else min(

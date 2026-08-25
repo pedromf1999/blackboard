@@ -4,7 +4,8 @@ from PyQt6 import QtCore
 
 from beeref import commands
 from beeref.fileio.sql import SQLiteIO
-from beeref.items import BeeDrawItem, BeeGroupItem, BeeTextItem
+from beeref.items import (
+    BeeDrawItem, BeeGroupItem, BeePixmapItem, BeeTextItem)
 
 
 def draw_to(view, scene_pos, kind=BeeDrawItem.LINE):
@@ -452,3 +453,70 @@ def test_the_box_a_line_holds_is_the_one_that_is_drawn(view):
     assert note.attach_rect().width() < note.sceneBoundingRect().width()
     assert note.attach_rect() == note.mapToScene(
         note.bounding_rect_unselected()).boundingRect()
+
+
+def an_image(view, pos=(400, 300), size=(160, 120)):
+    from PyQt6 import QtGui
+
+    image = QtGui.QImage(size[0], size[1],
+                         QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor(180, 60, 60))
+    item = BeePixmapItem(image)
+    view.scene.addItem(item)
+    item.setPos(*pos)
+    return item
+
+
+def test_an_image_can_hold_an_end_too(view):
+    """The same as a note or a group: it is a thing lines point at."""
+
+    picture = an_image(view)
+    rect = picture.attach_rect()
+    line = draw_to(view, QtCore.QPointF(rect.left() - 8, rect.center().y()))
+
+    assert 'end' in line.ends
+    assert on_edge(line, picture)
+    assert over(line, picture) is False
+
+
+def test_the_end_follows_an_image_around(view):
+    import math
+
+    picture = an_image(view)
+    rect = picture.attach_rect()
+    line = draw_to(view, QtCore.QPointF(rect.left() - 8, rect.center().y()))
+    free = line.mapToScene(line.points[0])
+
+    for angle in range(0, 360, 30):
+        radians = math.radians(angle)
+        picture.setPos(QtCore.QPointF(free.x() + 400 * math.cos(radians),
+                                      free.y() + 400 * math.sin(radians)))
+        if picture.attach_rect().contains(free):
+            # The line starts inside the picture; nothing can be drawn
+            # between them without crossing it
+            continue
+        assert on_edge(line, picture), f'left the edge at {angle}'
+        assert over(line, picture) is False, f'crossed it at {angle}'
+
+
+def test_the_end_follows_an_image_being_scaled(view):
+    picture = an_image(view)
+    rect = picture.attach_rect()
+    line = draw_to(view, QtCore.QPointF(rect.left() - 8, rect.center().y()))
+
+    picture.setScale(2)
+
+    assert on_edge(line, picture)
+    assert over(line, picture) is False
+
+
+def test_a_line_cannot_take_hold_of_another_line(view):
+    """Holding a line says nothing: there is no edge to meet."""
+
+    from beeref.view import BeeGraphicsView
+
+    assert 'draw' not in BeeGraphicsView.SNAP_TYPES
+
+    first = a_line(view, points=((0, 0), (200, 0)), pos=(400, 300))
+    end = first.mapToScene(first.points[-1])
+    assert view.snap_target_at(end) is None
