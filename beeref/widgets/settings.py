@@ -22,6 +22,7 @@ from PyQt6.QtCore import Qt
 from beeref import constants
 from beeref.config import BeeSettings, settings_events
 from beeref.utils import qcolor_to_hex
+from beeref.widgets.color_dialog import simplify_color_dialog
 
 
 logger = logging.getLogger(__name__)
@@ -159,9 +160,12 @@ class ColorGroup(GroupBase):
         self.button.setText(value)
 
     def on_button_clicked(self, *args, **kwargs):
-        color = QtWidgets.QColorDialog.getColor(
-            QtGui.QColor(self.value), self,
-            f'Choose {self.TITLE.rstrip(":")}')
+        # Built rather than asked for through getColor(), which keeps
+        # its dialog to itself and so cannot be simplified
+        dialog = QtWidgets.QColorDialog(QtGui.QColor(self.value), self)
+        dialog.setWindowTitle(f'Choose {self.TITLE.rstrip(":")}')
+        simplify_color_dialog(dialog)
+        color = dialog.currentColor() if dialog.exec() else QtGui.QColor()
         if color.isValid():
             self.set_value(qcolor_to_hex(color))
             self.on_value_changed(self.value)

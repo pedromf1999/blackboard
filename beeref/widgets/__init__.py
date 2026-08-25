@@ -22,6 +22,7 @@ from PyQt6.QtCore import Qt
 from beeref import constants, commands
 from beeref.config import logfile_name
 from beeref.widgets import (  # noqa: F401
+    color_dialog,
     controls,
     draw_item_toolbar,
     draw_toolbar,

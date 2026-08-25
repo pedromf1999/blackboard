@@ -138,18 +138,18 @@ def test_canvas_color_sets_title_when_edited(settings, view):
     assert widget.title() == 'Canvas Colour: ✎'
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
+@patch('PyQt6.QtWidgets.QColorDialog.currentColor',
        return_value=QtGui.QColor('#ff0000'))
-def test_canvas_color_saves_change(color_mock, settings, view):
+@patch('PyQt6.QtWidgets.QColorDialog.exec', return_value=1)
+def test_canvas_color_saves_change(exec_mock, color_mock, settings, view):
     widget = CanvasColorWidget()
     widget.on_button_clicked()
     assert settings.valueOrDefault('View/canvas_color') == '#ff0000'
     assert widget.title() == 'Canvas Colour: ✎'
 
 
-@patch('PyQt6.QtWidgets.QColorDialog.getColor',
-       return_value=QtGui.QColor())
-def test_canvas_color_ignores_cancelled_dialog(color_mock, settings, view):
+@patch('PyQt6.QtWidgets.QColorDialog.exec', return_value=0)
+def test_canvas_color_ignores_cancelled_dialog(exec_mock, settings, view):
     widget = CanvasColorWidget()
     widget.on_button_clicked()
     assert settings.value_changed('View/canvas_color') is False
