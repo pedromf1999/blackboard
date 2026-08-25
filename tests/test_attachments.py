@@ -134,3 +134,66 @@ def test_a_board_with_nothing_fastened_says_so(view):
     a_note(view)
     draw_to(view, QtCore.QPointF(800, 600))
     assert view.scene.uses_attachments is False
+
+
+def test_a_dot_shows_where_an_end_would_catch(view):
+    """Drawing towards a note has to say that letting go would fasten."""
+
+    note = a_note(view)
+    rect = note.sceneBoundingRect()
+
+    view.set_draw_tool(BeeDrawItem.LINE)
+    view.start_drawing(QtCore.QPointF(50, 50))
+    assert view.snap_preview is None
+
+    view.continue_drawing(QtCore.QPointF(150, 150))
+    assert view.snap_preview is None, 'nothing to catch on out here'
+
+    view.continue_drawing(
+        QtCore.QPointF(rect.left() - 8, rect.center().y()))
+    assert view.snap_preview is not None
+    # On the edge, where the end would end up
+    assert (round(view.snap_preview.x()),
+            round(view.snap_preview.y())) == left_middle(note)
+
+
+def test_the_dot_goes_away_when_the_line_is_finished(view):
+    note = a_note(view)
+    rect = note.sceneBoundingRect()
+
+    view.set_draw_tool(BeeDrawItem.LINE)
+    view.start_drawing(QtCore.QPointF(50, 50))
+    view.continue_drawing(
+        QtCore.QPointF(rect.left() - 8, rect.center().y()))
+    assert view.snap_preview is not None
+
+    view.finish_drawing()
+    assert view.snap_preview is None
+
+
+def test_the_dot_is_painted(view):
+    """Not just remembered: it has to reach the screen."""
+
+    from PyQt6 import QtGui
+
+    note = a_note(view)
+    rect = note.sceneBoundingRect()
+    view.set_draw_tool(BeeDrawItem.LINE)
+    view.start_drawing(QtCore.QPointF(rect.left() - 120, rect.center().y()))
+
+    def painted():
+        image = QtGui.QImage(view.viewport().size(),
+                             QtGui.QImage.Format.Format_ARGB32)
+        image.fill(QtGui.QColor(0, 0, 0))
+        painter = QtGui.QPainter(image)
+        view.drawForeground(painter, QtCore.QRectF(view.sceneRect()))
+        painter.end()
+        return any(image.pixelColor(x, y) != QtGui.QColor(0, 0, 0)
+                   for x in range(0, image.width(), 3)
+                   for y in range(0, image.height(), 3))
+
+    assert painted() is False, 'nothing to show yet'
+
+    view.continue_drawing(
+        QtCore.QPointF(rect.left() - 8, rect.center().y()))
+    assert painted() is True

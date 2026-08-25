@@ -145,6 +145,9 @@ class BeeGraphicsView(MainControlsMixin,
         # in one jump is what makes zooming feel steppy
         self.pending_zoom = 0
         self.zoom_anchor = None
+        # Where a line being drawn would fasten itself, if it were let
+        # go now; see show_snap_preview
+        self.snap_preview = None
         # What a pan could not spend, kept for the next one
         self.pan_remainder = QtCore.QPointF(0, 0)
         self.zoom_timer = QtCore.QTimer(self)
@@ -411,6 +414,21 @@ class BeeGraphicsView(MainControlsMixin,
         self.drawing_points.append(pos)
         self.drawing_item.set_points(
             [[p.x(), p.y()] for p in self.drawing_points])
+        self.show_snap_preview(pos)
+
+    def show_snap_preview(self, pos):
+        """Mark the spot this end would catch on, if it would catch.
+
+        Drawn while the line is being drawn, so it is clear that
+        letting go here fastens it -- and to what.
+        """
+
+        target = self.snap_target_at(pos)
+        preview = (None if target is None
+                   else self.nearest_edge_point(target, pos))
+        if preview != self.snap_preview:
+            self.snap_preview = preview
+            self.viewport().update()
 
     def finish_drawing(self):
         """Turn the drawing into a real item, or drop it if it's a dot."""
@@ -419,6 +437,8 @@ class BeeGraphicsView(MainControlsMixin,
         points = self.drawing_points
         self.drawing_item = None
         self.drawing_points = []
+        self.snap_preview = None
+        self.viewport().update()
         self.scene.removeItem(item)
 
         if len(points) < 2:
@@ -542,6 +562,26 @@ class BeeGraphicsView(MainControlsMixin,
         while step * zoom > self.GRID_MAX_SPACING:
             step /= next(factors)
         return step
+
+    # How big the mark showing where a line would fasten is drawn, on
+    # screen rather than on the board, so it stays the same at any zoom.
+    SNAP_MARKER_SIZE = 7
+
+    def drawForeground(self, painter, rect):
+        """The dot showing where a line being drawn would fasten."""
+
+        super().drawForeground(painter, rect)
+        if self.snap_preview is None:
+            return
+        radius = self.SNAP_MARKER_SIZE / self.get_scale()
+        color = QtGui.QColor(*constants.COLORS['Scene:Selection'])
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pen = QtGui.QPen(color)
+        pen.setWidthF(radius / 3)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(
+            color.red(), color.green(), color.blue(), 110)))
+        painter.drawEllipse(self.snap_preview, radius, radius)
 
     def drawBackground(self, painter, rect):
         """Draws the canvas background, and the grid on top of it.
