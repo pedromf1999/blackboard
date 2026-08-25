@@ -408,3 +408,47 @@ def test_the_ends_stay_touching_whichever_way_it_is_moved(view):
         assert on_edge(line, two, index=-1), f'left Text 2 at {angle}'
         assert over(line, one) is False, f'crossed Text 1 at {angle}'
         assert over(line, two) is False, f'crossed Text 2 at {angle}'
+
+
+def gap_to_box(line, item, index):
+    """How far the line's end is from the box as it is drawn."""
+
+    from PyQt6 import QtWidgets
+
+    point = line.mapToScene(line.points[index])
+    drawn = item.mapToScene(
+        QtWidgets.QGraphicsTextItem.boundingRect(item)).boundingRect()
+    x = min(max(point.x(), drawn.left()), drawn.right())
+    y = min(max(point.y(), drawn.top()), drawn.bottom())
+    return round(((point.x() - x) ** 2 + (point.y() - y) ** 2) ** 0.5, 2)
+
+
+def test_the_end_touches_the_box_even_when_it_is_selected(view):
+    """Selecting a note used to push the line twenty pixels away.
+
+    The end was put on sceneBoundingRect, which grows by the room the
+    selection handles need -- so the line stopped short of the box it
+    was supposed to be joined to, and by different amounts on
+    different sides.
+    """
+
+    line, one, two = joined_notes(view)
+    assert gap_to_box(line, one, 0) == 0
+    assert gap_to_box(line, two, -1) == 0
+
+    one.setSelected(True)
+    two.setSelected(True)
+
+    assert gap_to_box(line, one, 0) == 0
+    assert gap_to_box(line, two, -1) == 0
+
+
+def test_the_box_a_line_holds_is_the_one_that_is_drawn(view):
+    """Not the larger one that leaves room for the handles."""
+
+    note = a_note(view)
+    note.setSelected(True)
+
+    assert note.attach_rect().width() < note.sceneBoundingRect().width()
+    assert note.attach_rect() == note.mapToScene(
+        note.bounding_rect_unselected()).boundingRect()

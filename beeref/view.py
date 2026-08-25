@@ -494,7 +494,7 @@ class BeeGraphicsView(MainControlsMixin,
         for target in self.scene.items():
             if getattr(target, 'TYPE', None) not in ('text', 'group'):
                 continue
-            rect = target.sceneBoundingRect()
+            rect = target.attach_rect()
             distance = 0 if rect.contains(scene_pos) else min(
                 abs(scene_pos.x() - rect.left()),
                 abs(scene_pos.x() - rect.right()),
@@ -513,7 +513,7 @@ class BeeGraphicsView(MainControlsMixin,
     def nearest_edge_point(target, scene_pos):
         """The closest point on the item's edge, in scene coordinates."""
 
-        rect = target.sceneBoundingRect()
+        rect = target.attach_rect()
         x = min(max(scene_pos.x(), rect.left()), rect.right())
         y = min(max(scene_pos.y(), rect.top()), rect.bottom())
         # Push out to whichever side is nearest, so it sits on the edge

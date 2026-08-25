@@ -408,7 +408,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         other = 'end' if which == 'start' else 'start'
         held = self.ends.get(other)
         if held is not None and held['item'].scene() is not None:
-            return held['item'].sceneBoundingRect().center()
+            return held['item'].attach_rect().center()
         return self.approach_point(which, rect)
 
     def approach_point(self, which, rect):
@@ -449,7 +449,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
                 # Whatever it held has gone; the line stays where it is
                 self.detach_end(which)
                 continue
-            rect = target.sceneBoundingRect()
+            rect = target.attach_rect()
             approach = self.approach_from(which, rect)
             if approach is None:
                 continue

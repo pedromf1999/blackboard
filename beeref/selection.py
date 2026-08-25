@@ -181,6 +181,17 @@ class BaseItemMixin:
     def bounding_rect_unselected(self):
         return super().boundingRect()
 
+    def attach_rect(self):
+        """The box as it is drawn, in scene coordinates.
+
+        Not ``sceneBoundingRect``: that grows by the room the selection
+        handles need, so a line joined to a note stopped twenty pixels
+        short of it as soon as the note was selected.
+        """
+
+        return self.mapToScene(
+            self.bounding_rect_unselected()).boundingRect()
+
     @property
     def width(self):
         return self.bounding_rect_unselected().width()
