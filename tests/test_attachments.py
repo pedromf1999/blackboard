@@ -29,9 +29,31 @@ def tip(line):
     return (round(point.x()), round(point.y()))
 
 
-def left_middle(item):
+def on_edge(line, item, index=-1):
+    """Whether the line's end sits on the item's edge."""
+
     rect = item.sceneBoundingRect()
-    return (round(rect.left()), round(rect.center().y()))
+    point = line.mapToScene(line.points[index])
+    return (abs(point.x() - rect.left()) < 0.6
+            or abs(point.x() - rect.right()) < 0.6
+            or abs(point.y() - rect.top()) < 0.6
+            or abs(point.y() - rect.bottom()) < 0.6)
+
+
+def crosses(line, item):
+    """Whether the line lies across the item it is joined to."""
+
+    rect = item.sceneBoundingRect()
+    start = line.mapToScene(line.points[0])
+    end = line.mapToScene(line.points[-1])
+    for step in range(1, 100):
+        along = step / 100
+        point = QtCore.QPointF(
+            start.x() + (end.x() - start.x()) * along,
+            start.y() + (end.y() - start.y()) * along)
+        if rect.contains(point):
+            return True
+    return False
 
 
 def test_an_end_dropped_near_a_note_catches_on_it(view):
@@ -42,7 +64,8 @@ def test_an_end_dropped_near_a_note_catches_on_it(view):
     assert 'end' in line.ends
     assert 'start' not in line.ends, 'the far end was over nothing'
     # Pulled onto the edge rather than left short of it
-    assert tip(line) == left_middle(note)
+    assert on_edge(line, note)
+    assert crosses(line, note) is False
 
 
 def test_an_end_dropped_in_open_space_catches_nothing(view):
@@ -59,7 +82,7 @@ def test_the_line_follows_the_note(view):
 
     note.setPos(note.pos() + QtCore.QPointF(150, 90))
 
-    assert tip(line) == left_middle(note)
+    assert on_edge(line, note)
     assert tip(line) != start_before
     # The other end stays where it was put
     assert round(line.mapToScene(line.points[0]).x()) == 50
@@ -72,7 +95,8 @@ def test_the_line_follows_the_note_being_scaled(view):
 
     note.setScale(3)
 
-    assert tip(line) == left_middle(note)
+    assert on_edge(line, note)
+    assert crosses(line, note) is False
 
 
 def test_a_group_can_hold_an_end_too(view):
@@ -91,7 +115,8 @@ def test_a_group_can_hold_an_end_too(view):
     assert 'end' in line.ends
 
     group.setPos(group.pos() + QtCore.QPointF(-120, 40))
-    assert tip(line) == left_middle(group)
+    assert on_edge(line, group)
+    assert crosses(line, group) is False
 
 
 def test_losing_the_note_leaves_the_line_where_it_is(view):
@@ -125,7 +150,7 @@ def test_attachments_survive_the_file(view, tmpdir):
     assert 'end' in line.ends
 
     loaded_note.setPos(loaded_note.pos() + QtCore.QPointF(200, 100))
-    assert tip(line) == left_middle(loaded_note)
+    assert on_edge(line, loaded_note)
 
 
 def test_a_board_with_nothing_fastened_says_so(view):
@@ -153,8 +178,8 @@ def test_a_dot_shows_where_an_end_would_catch(view):
         QtCore.QPointF(rect.left() - 8, rect.center().y()))
     assert view.snap_preview is not None
     # On the edge, where the end would end up
-    assert (round(view.snap_preview.x()),
-            round(view.snap_preview.y())) == left_middle(note)
+    rect = note.sceneBoundingRect()
+    assert abs(view.snap_preview.x() - rect.left()) < 0.6
 
 
 def test_the_dot_goes_away_when_the_line_is_finished(view):
@@ -245,7 +270,7 @@ def test_an_end_dragged_onto_a_note_takes_hold_of_it(view):
     view.snap_end(line, 'end', near)
 
     assert 'end' in line.ends
-    assert tip_of(line, -1) == left_middle(note)
+    assert on_edge(line, note)
 
 
 def test_hovering_an_end_marks_it(view):
@@ -263,3 +288,43 @@ def test_hovering_an_end_marks_it(view):
 def tip_of(line, index):
     point = line.mapToScene(line.points[index])
     return (round(point.x()), round(point.y()))
+
+
+def test_the_end_travels_round_the_box_as_it_moves(view):
+    """A line joined to a note must never lie across it.
+
+    The end slides round to the side the line comes from, instead of
+    staying on the side it was first dropped on and being crossed over
+    when the note goes past.
+    """
+
+    import math
+
+    note = a_note(view, pos=(400, 300))
+    rect = note.sceneBoundingRect()
+    line = draw_to(view, QtCore.QPointF(rect.left() - 6, rect.center().y()))
+    free = line.mapToScene(line.points[0])
+
+    seen = set()
+    for angle in range(0, 360, 20):
+        radians = math.radians(angle)
+        note.setPos(QtCore.QPointF(free.x() + 250 * math.cos(radians) - 15,
+                                   free.y() + 250 * math.sin(radians) - 12))
+        assert crosses(line, note) is False, f'crossed at {angle} degrees'
+        assert on_edge(line, note), f'left the edge at {angle} degrees'
+        seen.add(which_side(line, note))
+
+    # It really does go round, rather than clinging to one side
+    assert len(seen) >= 3
+
+
+def which_side(line, item):
+    rect = item.sceneBoundingRect()
+    point = line.mapToScene(line.points[-1])
+    if abs(point.x() - rect.left()) < 0.6:
+        return 'left'
+    if abs(point.x() - rect.right()) < 0.6:
+        return 'right'
+    if abs(point.y() - rect.top()) < 0.6:
+        return 'top'
+    return 'bottom'

@@ -360,17 +360,58 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         self.path = self.build_path()
         self.update()
 
-    def attach_end(self, which, item, scene_pos):
+    def attach_end(self, which, item, scene_pos=None):
         """Fasten one end of this drawing to a note or a group.
 
-        ``which`` is 'start' or 'end'. The spot is remembered in the
-        other item's own coordinates, so it stays put on the edge while
-        that item is moved, scaled or rotated.
+        ``which`` is 'start' or 'end'. Only what it holds is
+        remembered: where on the edge it meets is worked out from
+        where the line comes from, every time either of them moves.
         """
 
-        self.ends[which] = {'item': item,
-                            'pos': item.mapFromScene(scene_pos)}
+        self.ends[which] = {'item': item}
         logger.debug(f'Attached {which} of {self} to {item}')
+
+    @staticmethod
+    def edge_point_towards(rect, point):
+        """Where a line from the middle of the box towards ``point``
+        crosses the box's edge.
+
+        This is what keeps a line from lying across the thing it is
+        joined to: the end always meets the side the line comes from.
+        """
+
+        centre = rect.center()
+        dx = point.x() - centre.x()
+        dy = point.y() - centre.y()
+        half_width = rect.width() / 2
+        half_height = rect.height() / 2
+        if (not dx and not dy) or not half_width or not half_height:
+            return centre
+        steps = []
+        if dx:
+            steps.append(half_width / abs(dx))
+        if dy:
+            steps.append(half_height / abs(dy))
+        step = min(steps)
+        return QtCore.QPointF(centre.x() + dx * step,
+                              centre.y() + dy * step)
+
+    def approach_point(self, which, rect):
+        """Where the line comes from, as seen by one of its ends.
+
+        The nearest point along the line that is outside the box, so a
+        curve doubling back inside it does not decide the direction.
+        """
+
+        order = (range(1, len(self.points)) if which == 'start'
+                 else range(len(self.points) - 2, -1, -1))
+        far = None
+        for index in order:
+            scene_point = self.mapToScene(self.points[index])
+            far = scene_point
+            if not rect.contains(scene_point):
+                return scene_point
+        return far
 
     def detach_end(self, which):
         self.ends.pop(which, None)
@@ -393,7 +434,12 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
                 # Whatever it held has gone; the line stays where it is
                 self.detach_end(which)
                 continue
-            wanted = self.mapFromScene(target.mapToScene(end['pos']))
+            rect = target.sceneBoundingRect()
+            approach = self.approach_point(which, rect)
+            if approach is None:
+                continue
+            wanted = self.mapFromScene(
+                self.edge_point_towards(rect, approach))
             if wanted != self.points[index]:
                 self.points[index] = wanted
                 moved = True
@@ -463,8 +509,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         ends = {}
         for which, end in self.ends.items():
             if end['item'].save_id is not None:
-                ends[which] = {'item': end['item'].save_id,
-                               'x': end['pos'].x(), 'y': end['pos'].y()}
+                ends[which] = {'item': end['item'].save_id}
         if ends:
             data['ends'] = ends
         return data

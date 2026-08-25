@@ -919,9 +919,9 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 if target is None:
                     still[which] = end
                     continue
-                drawing.ends[which] = {
-                    'item': target,
-                    'pos': QtCore.QPointF(end['x'], end['y'])}
+                # Older files also carry the spot on the edge; it is
+                # worked out from the line's direction now
+                drawing.ends[which] = {'item': target}
                 self.uses_attachments = True
             drawing.pending_ends = still
             drawing.follow_attachments()

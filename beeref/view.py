@@ -440,8 +440,7 @@ class BeeGraphicsView(MainControlsMixin,
         target = self.snap_target_at(scene_pos)
         if target is None or target is item:
             return
-        item.attach_end(which, target, self.nearest_edge_point(
-            target, scene_pos))
+        item.attach_end(which, target)
         self.scene.uses_attachments = True
         item.follow_attachments()
 
@@ -483,8 +482,7 @@ class BeeGraphicsView(MainControlsMixin,
             target = self.snap_target_at(scene_pos)
             if target is None:
                 continue
-            on_edge = self.nearest_edge_point(target, scene_pos)
-            item.attach_end(which, target, on_edge)
+            item.attach_end(which, target)
             self.scene.uses_attachments = True
         item.follow_attachments()
 
