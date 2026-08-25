@@ -230,9 +230,13 @@ class SelectableMixin(BaseItemMixin):
 
     def init_selectable(self):
         self.setAcceptHoverEvents(True)
+        flags = QtWidgets.QGraphicsItem.GraphicsItemFlag
         self.setFlags(
-            QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsMovable
-            | QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+            flags.ItemIsMovable
+            | flags.ItemIsSelectable
+            # Without this Qt never says an item has moved, and a line
+            # fastened to it would be left behind
+            | flags.ItemSendsGeometryChanges)
 
         self.viewport_scale = 1
         self.active_mode = None
@@ -869,7 +873,16 @@ class SelectableMixin(BaseItemMixin):
     def on_view_scale_change(self):
         self.prepareGeometryChange()
 
+    GEOMETRY_CHANGES = (
+        QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged,
+        QGraphicsItem.GraphicsItemChange.ItemTransformHasChanged,
+        QGraphicsItem.GraphicsItemChange.ItemScaleHasChanged,
+        QGraphicsItem.GraphicsItemChange.ItemRotationHasChanged)
+
     def itemChange(self, change, value):
+        if change in self.GEOMETRY_CHANGES and self.scene():
+            # A line fastened to this item has to come along
+            self.scene().follow_moved_item(self)
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
             # Selecting used to raise the item above everything else,
             # which meant clicking a picture put it over the note

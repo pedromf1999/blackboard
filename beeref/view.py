@@ -432,7 +432,64 @@ class BeeGraphicsView(MainControlsMixin,
         item.set_points([[p.x() - origin.x(), p.y() - origin.y()]
                          for p in points])
         item.setPos(origin)
+        self.snap_ends(item, points[0], points[-1])
         self.undo_stack.push(commands.InsertItems(self.scene, [item]))
+
+    def snap_ends(self, item, start, end):
+        """Fasten either end of a new drawing to whatever it landed on.
+
+        Only notes and groups are worth holding on to: they are the
+        things a line is drawn between. The end is pulled to the
+        nearest point on the item's edge, so it meets the box rather
+        than stopping short of it or burying itself inside.
+        """
+
+        for which, scene_pos in (('start', start), ('end', end)):
+            target = self.snap_target_at(scene_pos)
+            if target is None:
+                continue
+            on_edge = self.nearest_edge_point(target, scene_pos)
+            item.attach_end(which, target, on_edge)
+            self.scene.uses_attachments = True
+        item.follow_attachments()
+
+    def snap_target_at(self, scene_pos):
+        """The note or group near enough to this point to catch an end."""
+
+        best = None
+        best_distance = None
+        for target in self.scene.items():
+            if getattr(target, 'TYPE', None) not in ('text', 'group'):
+                continue
+            rect = target.sceneBoundingRect()
+            distance = 0 if rect.contains(scene_pos) else min(
+                abs(scene_pos.x() - rect.left()),
+                abs(scene_pos.x() - rect.right()),
+                abs(scene_pos.y() - rect.top()),
+                abs(scene_pos.y() - rect.bottom()))
+            if not rect.adjusted(
+                    -BeeDrawItem.SNAP_DISTANCE, -BeeDrawItem.SNAP_DISTANCE,
+                    BeeDrawItem.SNAP_DISTANCE,
+                    BeeDrawItem.SNAP_DISTANCE).contains(scene_pos):
+                continue
+            if best_distance is None or distance < best_distance:
+                best, best_distance = target, distance
+        return best
+
+    @staticmethod
+    def nearest_edge_point(target, scene_pos):
+        """The closest point on the item's edge, in scene coordinates."""
+
+        rect = target.sceneBoundingRect()
+        x = min(max(scene_pos.x(), rect.left()), rect.right())
+        y = min(max(scene_pos.y(), rect.top()), rect.bottom())
+        # Push out to whichever side is nearest, so it sits on the edge
+        # rather than floating inside the box
+        gaps = ((x - rect.left(), QtCore.QPointF(rect.left(), y)),
+                (rect.right() - x, QtCore.QPointF(rect.right(), y)),
+                (y - rect.top(), QtCore.QPointF(x, rect.top())),
+                (rect.bottom() - y, QtCore.QPointF(x, rect.bottom())))
+        return min(gaps, key=lambda gap: gap[0])[1]
 
     def on_action_draw_color(self):
         """Set the colour for new drawings, and for any selected ones."""

@@ -52,6 +52,9 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.items_to_add = Queue()
         # Items read before the group they belong to, waiting for it
         self.items_awaiting_group = []
+        # Whether any line is fastened to anything; see
+        # follow_moved_item
+        self.uses_attachments = False
         self.edit_item = None
         self.crop_item = None
         # The group whose items can currently be edited individually
@@ -560,6 +563,26 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         return [item for item in self.selectedItems(user_only=True)
                 if getattr(item, 'TYPE', None) == 'draw']
 
+    def follow_moved_item(self, item):
+        """Drag along any line whose end is fastened to this item.
+
+        Called whenever an item moves, scales or turns. Groups carry
+        their contents, so a line held by something inside a group has
+        to follow the group as well.
+        """
+
+        if self._clear_ongoing or not self.uses_attachments:
+            # Every item reports every move it makes, so a board with
+            # nothing fastened must not pay for looking
+            return
+        for drawing in self.items_by_type('draw'):
+            if not drawing.ends:
+                continue
+            held = drawing.attached_items()
+            if any(target is item or item.isAncestorOf(target)
+                   for target in held):
+                drawing.follow_attachments()
+
     def selected_groups(self):
         """The currently selected groups."""
 
@@ -872,6 +895,36 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 grouped.append((item, parent_group))
 
         self.restore_groups(grouped)
+        self.restore_attachments()
+
+    def restore_attachments(self):
+        """Fasten loaded lines back to the items they were fastened to.
+
+        Like the items waiting for their group, a line whose target has
+        not been read yet keeps waiting rather than being quietly
+        loosened: everything with an image comes before everything
+        without one, so a line often arrives first.
+        """
+
+        waiting = [item for item in self.items_by_type('draw')
+                   if getattr(item, 'pending_ends', None)]
+        if not waiting:
+            return
+        by_id = {item.save_id: item for item in self.items_for_save()
+                 if item.save_id is not None}
+        for drawing in waiting:
+            still = {}
+            for which, end in drawing.pending_ends.items():
+                target = by_id.get(end['item'])
+                if target is None:
+                    still[which] = end
+                    continue
+                drawing.ends[which] = {
+                    'item': target,
+                    'pos': QtCore.QPointF(end['x'], end['y'])}
+                self.uses_attachments = True
+            drawing.pending_ends = still
+            drawing.follow_attachments()
 
     def restack_as_saved(self):
         """Put items that share a z value back in the order they were in.

@@ -167,7 +167,7 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
     ARROW_SIZE = 4
 
     def __init__(self, points=None, kind=SKETCH, color=None,
-                 width=None, **kwargs):
+                 width=None, ends=None, **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
@@ -176,6 +176,9 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         self.kind = kind if kind in self.KINDS else self.SKETCH
         self.color = QtGui.QColor(*(color or self.DEFAULT_COLOR))
         self.line_width = width or self.DEFAULT_WIDTH
+        # Ends fastened to other items; see attach_end
+        self.ends = {}
+        self.pending_ends = ends or {}
         self.set_points(points or [])
         logger.debug(f'Initialized {self}')
 
@@ -315,11 +318,66 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
         self.paint_selectable(painter, option, widget)
 
+    # How close to an item an end has to be dropped to catch on it.
+    SNAP_DISTANCE = 24
+
+    def attach_end(self, which, item, scene_pos):
+        """Fasten one end of this drawing to a note or a group.
+
+        ``which`` is 'start' or 'end'. The spot is remembered in the
+        other item's own coordinates, so it stays put on the edge while
+        that item is moved, scaled or rotated.
+        """
+
+        self.ends[which] = {'item': item,
+                            'pos': item.mapFromScene(scene_pos)}
+        logger.debug(f'Attached {which} of {self} to {item}')
+
+    def detach_end(self, which):
+        self.ends.pop(which, None)
+
+    def attached_items(self):
+        return [end['item'] for end in self.ends.values()]
+
+    def follow_attachments(self):
+        """Move the fastened ends to where the items they hold have gone."""
+
+        if not self.ends or len(self.points) < 2:
+            return
+        moved = False
+        for which, index in (('start', 0), ('end', -1)):
+            end = self.ends.get(which)
+            if end is None:
+                continue
+            target = end['item']
+            if target.scene() is None:
+                # Whatever it held has gone; the line stays where it is
+                self.detach_end(which)
+                continue
+            wanted = self.mapFromScene(target.mapToScene(end['pos']))
+            if wanted != self.points[index]:
+                self.points[index] = wanted
+                moved = True
+        if moved:
+            self.prepareGeometryChange()
+            self.path = self.build_path()
+            self.update()
+
     def get_extra_save_data(self):
-        return {'kind': self.kind,
+        data = {'kind': self.kind,
                 'color': self.color.getRgb(),
                 'width': self.line_width,
                 'points': [[p.x(), p.y()] for p in self.points]}
+        # Fastened ends, named by the save id of what they hold. An
+        # older version ignores this and the line simply stays put.
+        ends = {}
+        for which, end in self.ends.items():
+            if end['item'].save_id is not None:
+                ends[which] = {'item': end['item'].save_id,
+                               'x': end['pos'].x(), 'y': end['pos'].y()}
+        if ends:
+            data['ends'] = ends
+        return data
 
     def create_copy(self):
         item = BeeDrawItem(
