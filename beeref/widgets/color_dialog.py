@@ -43,12 +43,12 @@ def simplify_color_dialog(dialog):
                 if isinstance(child, QtWidgets.QWidget)]
 
     # The swatch grids are what their labels point at. The first is the
-    # basic colours, which is the one worth keeping.
+    # basic colours, which is the one worth keeping -- the grid itself,
+    # not the label: with nothing else left to tell it apart from, a row
+    # of colours needs no heading saying it is a row of colours.
     labelled = [child for child in children
                 if isinstance(child, QtWidgets.QLabel) and child.buddy()]
-    keep = set()
-    if labelled:
-        keep = {labelled[0], labelled[0].buddy()}
+    keep = {labelled[0].buddy()} if labelled else set()
 
     screen_button = None
     for child in children:

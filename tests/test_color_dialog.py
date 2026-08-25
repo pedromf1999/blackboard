@@ -32,8 +32,9 @@ def test_only_the_swatches_and_the_eyedropper_are_left(qapp):
     simplify_color_dialog(dialog)
 
     showing = [child for child in parts(dialog) if not child.isHidden()]
-    # The grid, its label, the eyedropper and the OK/Cancel box
-    assert len(showing) == 4
+    # The grid, the eyedropper and the OK/Cancel box, and no headings
+    assert len(showing) == 3
+    assert [c for c in showing if isinstance(c, QtWidgets.QLabel)] == []
     assert any(isinstance(c, QtWidgets.QDialogButtonBox) for c in showing)
     assert screen_button(dialog) in showing
 
