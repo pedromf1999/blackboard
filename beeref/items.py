@@ -321,6 +321,45 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
     # How close to an item an end has to be dropped to catch on it.
     SNAP_DISTANCE = 24
 
+    # How close to an end the cursor has to be to take hold of it, in
+    # screen pixels so it does not change with the zoom.
+    END_GRIP = 10
+    END_MODE = 10
+
+    def end_at(self, pos):
+        """Which end the cursor is on, if any: 'start', 'end' or None."""
+
+        if len(self.points) < 2 or not self.has_selection_handles():
+            return None
+        grip = self.fixed_length_for_viewport(self.END_GRIP)
+        for which, index in (('start', 0), ('end', -1)):
+            gap = pos - self.points[index]
+            if gap.x() ** 2 + gap.y() ** 2 <= grip ** 2:
+                return which
+        return None
+
+    def end_index(self, which):
+        return 0 if which == 'start' else -1
+
+    def show_end_marker(self, which):
+        """Mark the end under the cursor, the way snapping does."""
+
+        view = self.scene().views()[0] if self.scene() else None
+        if view is None:
+            return
+        point = (None if which is None
+                 else self.mapToScene(self.points[self.end_index(which)]))
+        view.show_marker(point)
+
+    def move_end_to(self, which, scene_pos):
+        """Put one end of the line where the cursor is."""
+
+        index = self.end_index(which)
+        self.prepareGeometryChange()
+        self.points[index] = self.mapFromScene(scene_pos)
+        self.path = self.build_path()
+        self.update()
+
     def attach_end(self, which, item, scene_pos):
         """Fasten one end of this drawing to a note or a group.
 
@@ -362,6 +401,57 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
             self.prepareGeometryChange()
             self.path = self.build_path()
             self.update()
+
+    def hoverMoveEvent(self, event):
+        which = self.end_at(event.pos())
+        self.show_end_marker(which)
+        if which is not None:
+            self.set_cursor(Qt.CursorShape.SizeAllCursor)
+            return
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.show_end_marker(None)
+        super().hoverLeaveEvent(event)
+
+    def mousePressEvent(self, event):
+        which = (self.end_at(event.pos())
+                 if event.button() == Qt.MouseButton.LeftButton else None)
+        if which is not None:
+            self.active_mode = self.END_MODE
+            self.dragged_end = which
+            self.end_orig_points = [QtCore.QPointF(p) for p in self.points]
+            self.end_orig_ends = dict(self.ends)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.active_mode == self.END_MODE:
+            self.move_end_to(self.dragged_end, event.scenePos())
+            view = self.scene().views()[0] if self.scene() else None
+            if view is not None:
+                view.show_snap_preview(event.scenePos())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.active_mode == self.END_MODE:
+            self.active_mode = None
+            view = self.scene().views()[0] if self.scene() else None
+            self.detach_end(self.dragged_end)
+            if view is not None:
+                view.snap_end(self, self.dragged_end, event.scenePos())
+                view.show_marker(None)
+            points = [[p.x(), p.y()] for p in self.points]
+            if points != [[p.x(), p.y()] for p in self.end_orig_points]:
+                self.scene().undo_stack.push(commands.ChangeDrawPoints(
+                    self, points, self.end_orig_points, self.ends,
+                    self.end_orig_ends))
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def get_extra_save_data(self):
         data = {'kind': self.kind,

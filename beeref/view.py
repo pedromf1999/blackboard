@@ -419,16 +419,31 @@ class BeeGraphicsView(MainControlsMixin,
     def show_snap_preview(self, pos):
         """Mark the spot this end would catch on, if it would catch.
 
-        Drawn while the line is being drawn, so it is clear that
-        letting go here fastens it -- and to what.
+        Drawn while a line is being drawn or an end dragged, so it is
+        clear that letting go here fastens it -- and to what.
         """
 
         target = self.snap_target_at(pos)
-        preview = (None if target is None
-                   else self.nearest_edge_point(target, pos))
-        if preview != self.snap_preview:
-            self.snap_preview = preview
+        self.show_marker(
+            None if target is None else self.nearest_edge_point(target, pos))
+
+    def show_marker(self, point):
+        """Put the round mark at a point on the board, or take it away."""
+
+        if point != self.snap_preview:
+            self.snap_preview = point
             self.viewport().update()
+
+    def snap_end(self, item, which, scene_pos):
+        """Fasten one end of an existing drawing, if it landed on something."""
+
+        target = self.snap_target_at(scene_pos)
+        if target is None or target is item:
+            return
+        item.attach_end(which, target, self.nearest_edge_point(
+            target, scene_pos))
+        self.scene.uses_attachments = True
+        item.follow_attachments()
 
     def finish_drawing(self):
         """Turn the drawing into a real item, or drop it if it's a dot."""

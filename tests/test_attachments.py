@@ -197,3 +197,69 @@ def test_the_dot_is_painted(view):
     view.continue_drawing(
         QtCore.QPointF(rect.left() - 8, rect.center().y()))
     assert painted() is True
+
+
+def a_line(view, points=((0, 0), (200, 0)), pos=(100, 100)):
+    line = BeeDrawItem(points=list(points), kind=BeeDrawItem.LINE)
+    view.scene.addItem(line)
+    line.setPos(*pos)
+    line.setSelected(True)
+    return line
+
+
+def test_the_ends_can_be_taken_hold_of(view):
+    line = a_line(view)
+
+    assert line.end_at(QtCore.QPointF(0, 0)) == 'start'
+    assert line.end_at(QtCore.QPointF(200, 0)) == 'end'
+    assert line.end_at(QtCore.QPointF(100, 0)) is None, 'the middle is not'
+
+
+def test_an_unselected_line_offers_no_ends(view):
+    """Its ends are only there to be grabbed once it is picked out."""
+
+    line = a_line(view)
+    line.setSelected(False)
+    assert line.end_at(QtCore.QPointF(0, 0)) is None
+
+
+def test_dragging_an_end_moves_only_that_end(view):
+    line = a_line(view)
+    start_before = tip_of(line, 0)
+
+    line.move_end_to('end', QtCore.QPointF(400, 250))
+
+    assert tip_of(line, -1) == (400, 250)
+    assert tip_of(line, 0) == start_before
+    # The line as a whole stays where it is
+    assert (round(line.pos().x()), round(line.pos().y())) == (100, 100)
+
+
+def test_an_end_dragged_onto_a_note_takes_hold_of_it(view):
+    line = a_line(view)
+    note = a_note(view, pos=(600, 400))
+    rect = note.sceneBoundingRect()
+    near = QtCore.QPointF(rect.left() - 6, rect.center().y())
+
+    line.move_end_to('end', near)
+    view.snap_end(line, 'end', near)
+
+    assert 'end' in line.ends
+    assert tip_of(line, -1) == left_middle(note)
+
+
+def test_hovering_an_end_marks_it(view):
+    line = a_line(view)
+
+    line.show_end_marker('end')
+    assert view.snap_preview is not None
+    assert (round(view.snap_preview.x()),
+            round(view.snap_preview.y())) == tip_of(line, -1)
+
+    line.show_end_marker(None)
+    assert view.snap_preview is None
+
+
+def tip_of(line, index):
+    point = line.mapToScene(line.points[index])
+    return (round(point.x()), round(point.y()))

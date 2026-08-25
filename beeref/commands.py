@@ -684,6 +684,33 @@ class ChangeTextWidth(QtGui.QUndoCommand):
             item.set_wrap_width(width)
 
 
+class ChangeDrawPoints(QtGui.QUndoCommand):
+    """Move one end of a line, arrow or curve.
+
+    The fastenings go with it: dragging an end off a note loosens it,
+    and dropping it on another takes hold of that one instead.
+    """
+
+    def __init__(self, item, points, old_points, ends, old_ends):
+        super().__init__('Move line end')
+        self.item = item
+        self.points = points
+        self.old_points = [[p.x(), p.y()] for p in old_points]
+        self.ends = dict(ends)
+        self.old_ends = dict(old_ends)
+
+    def apply(self, points, ends):
+        self.item.set_points(points)
+        self.item.ends = dict(ends)
+        self.item.follow_attachments()
+
+    def redo(self):
+        self.apply(self.points, self.ends)
+
+    def undo(self):
+        self.apply(self.old_points, self.old_ends)
+
+
 class ChangeTextBoxColor(QtGui.QUndoCommand):
     """Change the colour of the box drawn behind text items."""
 
