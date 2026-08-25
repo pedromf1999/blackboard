@@ -304,32 +304,10 @@ class BeeGraphicsView(MainControlsMixin,
         if hasattr(self, 'draw_toolbar'):
             self.draw_toolbar.update_checked(kind)
 
-    def choose_draw_tool(self, kind):
-        """Pick a drawing tool, and the colour to draw with.
-
-        The colour is asked for here so it is chosen for the line about
-        to be drawn, rather than drawn first and corrected afterwards.
-        The tool is set before the dialog opens, so the cursor and the
-        toolbar already show what is about to happen; cancelling keeps
-        the colour that was in use.
-        """
-
-        self.set_draw_tool(kind)
-        if kind is None or kind == constants.TEXT_TOOL:
-            # Writing has no colour of its own to pick: a note takes it
-            # from the box it sits in
-            return
-        # Nothing on the board to show the colour on yet, so there is
-        # nothing to preview -- the dialog's own swatch is all there is
-        color = self.pick_color_live(
-            'Choose Drawing Colour', self.draw_color, lambda color: None)
-        if color is not None:
-            self.draw_color = color
-
     def on_action_text_tool(self):
         """Switch to writing notes: T, then click where one goes."""
 
-        self.choose_draw_tool(constants.TEXT_TOOL)
+        self.set_draw_tool(constants.TEXT_TOOL)
 
     def write_note_at(self, point):
         """Write where the text tool was clicked.

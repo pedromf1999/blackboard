@@ -63,7 +63,7 @@ class DrawToolBar(QtWidgets.QWidget):
             button.setIconSize(QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
             button.setIcon(BeeAssets().tool_icon(icon))
             button.clicked.connect(
-                lambda checked, kind=kind: self.view.choose_draw_tool(kind))
+                lambda checked, kind=kind: self.view.set_draw_tool(kind))
             layout.addWidget(button)
             self.buttons[kind] = button
 

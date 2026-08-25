@@ -3257,49 +3257,24 @@ def test_pasted_image_arrives_at_half_the_window(view):
     assert items[0].scale() > 1
 
 
-def test_choosing_a_drawing_tool_asks_for_the_colour(view):
-    """The colour is picked for the line about to be drawn."""
+def test_picking_a_drawing_tool_asks_nothing(view):
+    """Picking a tool used to open the colour dialog every time.
 
-    chosen = QtGui.QColor(20, 200, 120)
-    with patch.object(type(view), 'pick_color_live',
-                      return_value=chosen) as picker:
-        view.choose_draw_tool(BeeDrawItem.SKETCH)
+    The colour is set from the bar that follows a selected drawing, or
+    before drawing from the same command, rather than being asked for
+    on the way to every stroke.
+    """
 
-    picker.assert_called_once()
-    assert view.draw_tool == BeeDrawItem.SKETCH
-    assert view.draw_color == chosen
-
-    # And that is what the next stroke is drawn in
-    view.start_drawing(QtCore.QPointF(0, 0))
-    view.continue_drawing(QtCore.QPointF(50, 50))
-    assert view.drawing_item.color == chosen
-
-
-def test_cancelling_keeps_the_tool_and_the_colour(view):
-    before = QtGui.QColor(view.draw_color)
-    with patch.object(type(view), 'pick_color_live', return_value=None):
-        view.choose_draw_tool(BeeDrawItem.LINE)
-
-    assert view.draw_tool == BeeDrawItem.LINE
-    assert view.draw_color == before
-
-
-def test_going_back_to_the_arrow_asks_nothing(view):
     with patch.object(type(view), 'pick_color_live') as picker:
-        view.choose_draw_tool(None)
+        view.draw_toolbar.buttons[BeeDrawItem.SKETCH].click()
 
     picker.assert_not_called()
-    assert view.draw_tool is None
+    assert view.draw_tool == BeeDrawItem.SKETCH
 
-
-def test_the_toolbar_buttons_ask_for_the_colour(view):
-    """The bar is the way a tool is picked, so the ask belongs there."""
-
-    button = view.draw_toolbar.buttons[BeeDrawItem.SKETCH]
-    with patch.object(type(view), 'choose_draw_tool') as chooser:
-        button.click()
-
-    chooser.assert_called_once_with(BeeDrawItem.SKETCH)
+    # And the stroke is drawn in the colour already in use
+    view.start_drawing(QtCore.QPointF(0, 0))
+    view.continue_drawing(QtCore.QPointF(50, 50))
+    assert view.drawing_item.color == view.draw_color
 
 
 def test_the_menus_call_it_a_board_not_a_scene(view):
@@ -3342,14 +3317,6 @@ def test_the_text_tool_writes_inside_the_group_clicked(view):
     view.write_note_at(centre)
 
     assert len(group.bee_children()) == 3
-
-
-def test_the_text_tool_asks_for_no_colour(view):
-    """A note takes its colour from the box it sits in."""
-
-    with patch.object(type(view), 'pick_color_live') as picker:
-        view.on_action_text_tool()
-    picker.assert_not_called()
 
 
 def test_escape_leaves_the_text_tool(view):
