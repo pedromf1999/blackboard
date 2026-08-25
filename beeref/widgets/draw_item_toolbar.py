@@ -35,7 +35,8 @@ class DrawItemToolBar(PinnedToolBar):
         super().__init__(parent, view)
 
         self.color = self.add_button(
-            'box_color', 'Drawing colour', view.on_action_draw_color)
+            'color', 'Drawing colour', view.on_action_draw_color,
+            keep_colors=True)
         # The same buttons as the text bar: one pair of icons makes
         # whatever is selected bigger or smaller, letters or line
         self.thinner = self.add_button(

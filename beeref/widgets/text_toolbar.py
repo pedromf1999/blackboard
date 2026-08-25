@@ -52,6 +52,7 @@ class TextToolBar(PinnedToolBar):
             'highlight', 'Highlight colour',
             view.on_action_text_highlight_color)
         self.box_color = self.add_button(
-            'box_color', 'Box colour', view.on_action_text_box_color)
+            'color', 'Box colour', view.on_action_text_box_color,
+            keep_colors=True)
 
         self.adjustSize()

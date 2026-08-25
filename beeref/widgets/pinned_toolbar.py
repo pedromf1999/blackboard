@@ -52,10 +52,14 @@ class PinnedToolBar(QtWidgets.QWidget):
         self.layout.setSpacing(4)
         self.setLayout(self.layout)
 
-    def add_button(self, icon, tooltip, callback, repeat=False):
+    def add_button(self, icon, tooltip, callback, repeat=False,
+                   keep_colors=False):
         button = QtWidgets.QToolButton(self)
         button.setToolTip(tooltip)
-        button.setIcon(BeeAssets().tool_icon(icon))
+        # The colour icon is coloured on purpose; the rest are line art
+        # repainted to suit a dark interface
+        button.setIcon(BeeAssets().color_icon(icon) if keep_colors
+                       else BeeAssets().tool_icon(icon))
         button.setIconSize(QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)

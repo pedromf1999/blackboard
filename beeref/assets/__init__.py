@@ -88,8 +88,22 @@ class BeeAssets:
         used as they are.
         """
 
-        if name in self._tool_icons:
-            return self._tool_icons[name]
+        return self.load_icon(name, recolor=True)
+
+    def color_icon(self, name):
+        """An icon drawn as it was made, colours and all.
+
+        Most icons here are black line art and are repainted to suit a
+        dark interface. One that is coloured on purpose must not be:
+        repainting it would flatten it to a single shape.
+        """
+
+        return self.load_icon(name, recolor=False)
+
+    def load_icon(self, name, recolor):
+        key = (name, recolor)
+        if key in self._tool_icons:
+            return self._tool_icons[key]
 
         path = self.PATH.joinpath('icons', f'{name}.svg')
         image = QtGui.QImage(
@@ -101,16 +115,17 @@ class BeeAssets:
         renderer = QtSvg.QSvgRenderer(str(path))
         if renderer.isValid():
             renderer.render(painter)
-            # Keep the shape, replace the colour
-            painter.setCompositionMode(
-                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-            painter.fillRect(image.rect(), QtGui.QColor(*self.ICON_COLOR))
+            if recolor:
+                # Keep the shape, replace the colour
+                painter.setCompositionMode(
+                    QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+                painter.fillRect(image.rect(), QtGui.QColor(*self.ICON_COLOR))
         else:
             logger.warning(f'Could not load icon: {path}')
         painter.end()
 
         icon = QtGui.QIcon(QtGui.QPixmap.fromImage(image))
-        self._tool_icons[name] = icon
+        self._tool_icons[key] = icon
         return icon
 
     # Where the icon ends and the word begins, as a fraction of the
