@@ -367,6 +367,12 @@ actions = ActionList([
         callback='on_action_insert_table',
     ),
     Action(
+        id='table_row_insert_above',
+        text='Insert Row &Above',
+        callback='on_action_table_row_insert_above',
+        group='active_when_table',
+    ),
+    Action(
         id='table_row_insert',
         text='Insert &Row Below',
         callback='on_action_table_row_insert',
@@ -388,6 +394,18 @@ actions = ActionList([
         id='table_column_remove',
         text='Delete Colu&mn',
         callback='on_action_table_column_remove',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_header_top',
+        text='&Top Header',
+        callback='on_action_table_header_top',
+        group='active_when_table',
+    ),
+    Action(
+        id='table_header_left',
+        text='&Left Header',
+        callback='on_action_table_header_left',
         group='active_when_table',
     ),
     Action(

@@ -1784,6 +1784,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+        self.cursor_may_have_moved()
 
     def selected_range(self):
         """The selected text, or all of it when nothing is selected."""
@@ -1983,6 +1984,97 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def column_widths(self, table):
         return [w.rawValue() for w in table.format().columnWidthConstraints()]
 
+    # How far a header cell's background moves from the box towards the
+    # text colour. Enough to read as a heading, not so much that it
+    # fights with a cell coloured on purpose.
+    HEADER_TINT = 0.18
+
+    def header_shade(self):
+        """The background a header row or column is given.
+
+        Worked out from the box the note is drawn on, so a header looks
+        right on a black board and on a coloured note alike.
+        """
+
+        tint = QtGui.QColor(self.defaultTextColor())
+        tint.setAlphaF(self.HEADER_TINT)
+        return blend_over(tint, self.visible_box_color())
+
+    def header_cells(self, table, index, column=False):
+        """One row of cells, or one column of them."""
+
+        if column:
+            return [table.cellAt(row, index) for row in range(table.rows())]
+        return [table.cellAt(index, col) for col in range(table.columns())]
+
+    def shared_background(self, cells):
+        """The one background these cells share, or None if they differ."""
+
+        shades = set()
+        for cell in cells:
+            brush = cell.format().background()
+            shades.add(None if brush.style() == Qt.BrushStyle.NoBrush
+                       else brush.color().rgba())
+        return shades.pop() if len(shades) == 1 else None
+
+    def has_header(self, table, column=False):
+        """Whether the first row -- or column -- is set apart as a header.
+
+        Read off the shading rather than kept in a flag. The shading is
+        what makes a header look like one, and unlike a flag of our own
+        it survives being written to a file and read back.
+        """
+
+        shade = self.shared_background(self.header_cells(table, 0, column))
+        if shade is None:
+            return False
+        neighbours = table.columns() if column else table.rows()
+        if neighbours < 2:
+            # Nothing to stand out from, so the shading is the header
+            return True
+        return shade != self.shared_background(
+            self.header_cells(table, 1, column))
+
+    def set_header(self, table, on, column=False):
+        """Shade the first row -- or the first column -- or clear it.
+
+        The shading is the whole of it. Bold was the obvious companion,
+        but Qt keeps no formatting in a cell with nothing in it, so the
+        header cells still empty would come back from a file unbold
+        while the filled ones stayed bold.
+        """
+
+        shade = self.header_shade()
+        # The corner cell belongs to both headers. Asked now, before
+        # anything is cleared, because clearing it is what would make
+        # the other header stop counting as one.
+        corner_stays = not on and self.has_header(table, not column)
+
+        for cell in self.header_cells(table, 0, column):
+            fmt = cell.format().toTableCellFormat()
+            fmt.setBackground(QtGui.QBrush(shade) if on else QtGui.QBrush())
+            cell.setFormat(fmt)
+        if corner_stays:
+            corner = table.cellAt(0, 0)
+            fmt = corner.format().toTableCellFormat()
+            fmt.setBackground(QtGui.QBrush(shade))
+            corner.setFormat(fmt)
+        if not column:
+            # Qt's own idea of a header row. It changes nothing on
+            # screen, but it is the right thing to record and it is
+            # what a table carries into other programs.
+            fmt = table.format()
+            fmt.setHeaderRowCount(1 if on else 0)
+            table.setFormat(fmt)
+
+    def toggle_header(self, column=False):
+        """Turn the header of the table being edited on or off."""
+
+        table = self.current_table()
+        if table is None:
+            return
+        self.set_header(table, not self.has_header(table, column), column)
+
     def apply_cell_color(self, color):
         """Colour the cells the selection touches, or the one cursor is in."""
 
@@ -2109,6 +2201,19 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.setFocus()
         self.scene().edit_item = self
 
+    def cursor_may_have_moved(self):
+        """Keep the table commands in step with the cell being written in.
+
+        Called after the events that move the cursor. The document's own
+        ``cursorPositionChanged`` looked like the obvious signal for
+        this, but it does not fire when the cursor is only moved -- which
+        is exactly the case that matters here.
+        """
+
+        scene = self.scene()
+        if scene is not None and self.edit_mode:
+            scene.text_cursor_moved()
+
     def exit_edit_mode(self, commit=True):
         logger.debug(f'Exiting edit mode on {self}')
         self.edit_mode = False
@@ -2142,6 +2247,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             event.accept()
             return
         super().keyPressEvent(event)
+        self.cursor_may_have_moved()
 
     def add_to_mimedata(self, mimedata):
         mimedata.setText(self.toPlainText())

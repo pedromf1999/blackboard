@@ -73,15 +73,18 @@ class PinnedToolBar(QtWidgets.QWidget):
         self.layout.addWidget(button)
         return button
 
-    def pin_to(self, rect):
+    def pin_to(self, rect, avoid=None):
         """Sit just above the given rectangle of the viewport.
 
         When there is no room above -- the item is near the top of the
         window -- the bar goes underneath instead, and it never leaves
-        the visible area.
+        the visible area. A bar to ``avoid`` is treated as part of the
+        rectangle, so this one stacks above it rather than over it.
         """
 
         self.adjustSize()
+        if avoid is not None and avoid.isVisible():
+            rect = rect.united(avoid.geometry())
         size = self.size()
         area = self.parentWidget().rect()
 

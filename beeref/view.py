@@ -203,6 +203,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_item_toolbar.hide()
         self.group_toolbar = widgets.group_toolbar.GroupToolBar(self, self)
         self.group_toolbar.hide()
+        self.table_toolbar = widgets.table_toolbar.TableToolBar(self, self)
+        self.table_toolbar.hide()
 
         self.apply_palette_to_color_dialogs()
 
@@ -1197,6 +1199,10 @@ class BeeGraphicsView(MainControlsMixin,
         change()
         self.undo_stack.push(commands.ChangeTextFormat(
             [item], [item.toHtml()], [old_html]))
+        # A table that has just appeared, grown or shrunk changes what
+        # the buttons and the menu should offer
+        self.update_table_actions()
+        self.update_table_toolbar()
 
     def table_command(self, change):
         """Run a change on whichever table is being edited."""
@@ -1210,6 +1216,11 @@ class BeeGraphicsView(MainControlsMixin,
         self.table_command(
             lambda: self.scene.item_with_table().insert_table_row())
 
+    def on_action_table_row_insert_above(self):
+        self.table_command(
+            lambda: self.scene.item_with_table().insert_table_row(
+                below=False))
+
     def on_action_table_row_remove(self):
         self.table_command(
             lambda: self.scene.item_with_table().remove_table_row())
@@ -1221,6 +1232,18 @@ class BeeGraphicsView(MainControlsMixin,
     def on_action_table_column_remove(self):
         self.table_command(
             lambda: self.scene.item_with_table().remove_table_column())
+
+    def on_action_table_header_top(self):
+        """Set the first row apart as a heading, or put it back."""
+
+        self.table_command(
+            lambda: self.scene.item_with_table().toggle_header())
+
+    def on_action_table_header_left(self):
+        """The same for the first column."""
+
+        self.table_command(
+            lambda: self.scene.item_with_table().toggle_header(column=True))
 
     def on_action_table_cell_color(self):
         """Colour the cells the cursor or the selection covers."""
@@ -2116,8 +2139,12 @@ class BeeGraphicsView(MainControlsMixin,
         if self.layers_handle.isVisible():
             self.layers_handle.reposition()
 
-    def pin_toolbar_to(self, toolbar, items):
-        """Put a bar over the given items, or hide it if there are none."""
+    def pin_toolbar_to(self, toolbar, items, avoid=None):
+        """Put a bar over the given items, or hide it if there are none.
+
+        A bar given something to ``avoid`` goes above that bar as well,
+        so two of them stack instead of covering each other.
+        """
 
         if toolbar is None:
             return
@@ -2127,7 +2154,7 @@ class BeeGraphicsView(MainControlsMixin,
         rect = items[0].sceneBoundingRect()
         for item in items[1:]:
             rect = rect.united(item.sceneBoundingRect())
-        toolbar.pin_to(self.mapFromScene(rect).boundingRect())
+        toolbar.pin_to(self.mapFromScene(rect).boundingRect(), avoid=avoid)
         toolbar.show()
 
     def update_text_toolbar(self):
@@ -2151,6 +2178,25 @@ class BeeGraphicsView(MainControlsMixin,
             toolbar.update_lock(groups[0].locked)
         self.pin_toolbar_to(toolbar, groups)
 
+    def update_table_toolbar(self):
+        """Show the table buttons while the cursor is inside a table.
+
+        Placed above the text bar rather than on top of it: a note
+        holding a table has both, and they would otherwise land in the
+        same spot.
+        """
+
+        toolbar = getattr(self, 'table_toolbar', None)
+        item = self.scene.item_with_table()
+        if toolbar is None:
+            return
+        if item is None:
+            toolbar.hide()
+            return
+        toolbar.update_headers(item)
+        self.pin_toolbar_to(toolbar, [item],
+                            avoid=getattr(self, 'text_toolbar', None))
+
     def update_pinned_toolbars(self):
         """Keep the bars over what they act on.
 
@@ -2162,6 +2208,7 @@ class BeeGraphicsView(MainControlsMixin,
         self.update_text_toolbar()
         self.update_draw_item_toolbar()
         self.update_group_toolbar()
+        self.update_table_toolbar()
 
     def scrollContentsBy(self, dx, dy):
         super().scrollContentsBy(dx, dy)

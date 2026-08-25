@@ -85,6 +85,7 @@ menu_structure = [
         'items': [
             'insert_images',
             'insert_text',
+            'insert_table',
         ],
     },
     {
@@ -166,10 +167,13 @@ menu_structure = [
             MENU_SEPARATOR,
             'text_tool',
             'insert_table',
+            'table_row_insert_above',
             'table_row_insert',
             'table_row_remove',
             'table_column_insert',
             'table_column_remove',
+            'table_header_top',
+            'table_header_left',
             'table_cell_color',
             MENU_SEPARATOR,
             'raise_to_top',

@@ -31,6 +31,7 @@ from beeref.widgets import (  # noqa: F401
     settings,
     pinned_toolbar,
     shortcuts_hint,
+    table_toolbar,
     text_toolbar,
     welcome_overlay,
     color_gamut,

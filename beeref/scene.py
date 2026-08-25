@@ -557,6 +557,18 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def has_table_selection(self):
         return self.item_with_table() is not None
 
+    def text_cursor_moved(self):
+        """The cursor moved inside a note being written in.
+
+        Moving from one cell to the next, or out of a table altogether,
+        changes which table commands apply, so the menu and the bar of
+        table buttons both have to be told.
+        """
+
+        for view in self.views():
+            view.update_table_actions()
+            view.update_table_toolbar()
+
     def selected_draw_items(self):
         """The currently selected sketches, lines, curves and arrows."""
 

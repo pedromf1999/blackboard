@@ -67,6 +67,18 @@ class DrawToolBar(QtWidgets.QWidget):
             layout.addWidget(button)
             self.buttons[kind] = button
 
+        # Inserting a table is a one-off rather than a tool to work in,
+        # so this button does not stay pressed like the others
+        self.insert_table = QtWidgets.QToolButton(self)
+        self.insert_table.setToolTip('Insert a table (Ctrl+Shift+T)')
+        self.insert_table.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self.insert_table.setIconSize(
+            QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
+        self.insert_table.setIcon(BeeAssets().tool_icon('table'))
+        self.insert_table.clicked.connect(self.view.on_action_insert_table)
+        layout.addSpacing(6)
+        layout.addWidget(self.insert_table)
+
         # The colour lives on the bar that follows a selected drawing,
         # where it is next to the line it recolours
         self.setLayout(layout)
