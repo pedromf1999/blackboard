@@ -79,6 +79,30 @@ class BeeItemMixin(SelectableMixin):
     # back to a description of their contents when this isn't set.
     name = None
 
+    def even_stroke(self, painter):
+        """Move the painter to a space whose axes scale alike.
+
+        Dragging an edge stretches an item, and a stretch is a scale
+        that differs by axis, so everything the item paints is stretched
+        with it -- a line included. A circle pulled three times wider
+        came out with a line three times thicker down its sides than
+        across its top.
+
+        Undoing the stretch on the painter and putting it on the
+        geometry instead leaves the shape distorted, which is what was
+        asked for, and the line even, which is what a line should be.
+        Returns the factors the geometry has to be scaled by, or None
+        when there is nothing to correct -- in which case the painter is
+        untouched and must not be restored.
+        """
+
+        across, down = self.stretch
+        if across <= 0 or down <= 0 or abs(across - down) < 1e-9:
+            return None
+        painter.save()
+        painter.scale(1 / across, 1 / down)
+        return across, down
+
     def get_display_name(self):
         """The name to show for this item in the layers panel."""
 
@@ -300,19 +324,26 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         path.closeSubpath()
         return path
 
-    def arrow_head(self):
-        """The arrow head at the end, as a triangle."""
+    def arrow_head(self, path=None):
+        """The arrow head at the end, as a triangle.
+
+        Built against a given path when there is one, so that a
+        stretched arrow gets a head that sits on the line as drawn
+        while keeping its own proportions.
+        """
 
         if self.kind not in (self.ARROW, self.SPLINE_ARROW):
             return None
         if len(self.points) < 2:
             return None
 
-        end = self.points[-1]
+        path = self.path if path is None else path
+        if path.isEmpty():
+            return None
+        end = path.pointAtPercent(1)
         # Point the head along the last bit of the line
-        percent = self.path.percentAtLength(
-            max(self.path.length() - 1, 0))
-        angle = math.radians(self.path.angleAtPercent(percent))
+        percent = path.percentAtLength(max(path.length() - 1, 0))
+        angle = math.radians(path.angleAtPercent(percent))
         size = self.line_width * self.ARROW_SIZE
         direction = QtCore.QPointF(math.cos(angle), -math.sin(angle))
         across = QtCore.QPointF(-direction.y(), direction.x())
@@ -358,20 +389,28 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         return stroker.createStroke(self.path)
 
     def paint(self, painter, option, widget):
+        # A stretched drawing keeps an even line; see even_stroke
+        stretch = self.even_stroke(painter)
+        path = self.path
+        if stretch is not None:
+            path = QtGui.QTransform.fromScale(*stretch).map(path)
+
         pen = QtGui.QPen(self.color)
         pen.setWidthF(self.line_width)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
         painter.setBrush(QtGui.QBrush())
-        painter.drawPath(self.path)
+        painter.drawPath(path)
 
-        head = self.arrow_head()
+        head = self.arrow_head(path)
         if head is not None:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QtGui.QBrush(self.color))
             painter.drawPolygon(head)
 
+        if stretch is not None:
+            painter.restore()
         self.paint_selectable(painter, option, widget)
 
     # How close to an item an end has to be dropped to catch on it.
@@ -1597,12 +1636,20 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
         if not self.outline_width:
             return
+        # A stretched picture keeps an even contour; see even_stroke
+        stretch = self.even_stroke(painter)
+        rect = self.crop
+        if stretch is not None:
+            rect = QtGui.QTransform.fromScale(*stretch).mapRect(rect)
+
         pen = QtGui.QPen(self.outline_color)
         pen.setWidthF(self.outline_width)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         painter.setPen(pen)
         painter.setBrush(QtGui.QBrush())
-        painter.drawRect(self.crop)
+        painter.drawRect(rect)
+        if stretch is not None:
+            painter.restore()
 
     def enter_crop_mode(self):
         logger.debug(f'Entering crop mode on {self}')
