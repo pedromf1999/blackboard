@@ -216,3 +216,122 @@ def test_the_command_says_so_when_nothing_is_a_group(view):
     with patch('beeref.widgets.BeeNotification') as notification:
         view.on_action_group_title()
     assert notification.called
+
+
+def test_a_title_is_centred_unless_told_otherwise(view):
+    """What titles did before there was a choice."""
+
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    assert group.title_align == BeeGroupItem.TITLE_CENTER
+
+
+def test_a_title_can_sit_on_the_left(view):
+    from PyQt6.QtCore import Qt
+
+    group = group_with_image(view)
+    group.title_align = BeeGroupItem.TITLE_LEFT
+    assert group.title_alignment() & Qt.AlignmentFlag.AlignLeft
+    assert group.title_alignment() & Qt.AlignmentFlag.AlignVCenter
+
+
+def test_a_nonsense_alignment_falls_back_to_centred(view):
+    group = BeeGroupItem(title='x', title_align='sideways')
+    assert group.title_align == BeeGroupItem.TITLE_CENTER
+
+
+def test_the_alignment_is_saved_and_read_back(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.title_align = BeeGroupItem.TITLE_LEFT
+
+    clone = BeeGroupItem.create_from_data(data=group.get_extra_save_data())
+    assert clone.title_align == BeeGroupItem.TITLE_LEFT
+
+
+def test_a_board_written_before_alignment_existed_is_centred(view):
+    group = BeeGroupItem.create_from_data(
+        data={'box_color': (1, 2, 3, 255), 'title': 'Lid Latch'})
+    assert group.title_align == BeeGroupItem.TITLE_CENTER
+
+
+def test_a_copied_group_keeps_its_alignment(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.title_align = BeeGroupItem.TITLE_LEFT
+    assert group.create_copy().title_align == BeeGroupItem.TITLE_LEFT
+
+
+def test_the_alignment_can_be_undone(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    view.undo_stack.push(commands.ChangeGroupTitle(
+        [group], 'Lid Latch', None, BeeGroupItem.TITLE_LEFT))
+    assert group.title_align == BeeGroupItem.TITLE_LEFT
+
+    view.undo_stack.undo()
+    assert group.title_align == BeeGroupItem.TITLE_CENTER
+
+
+def test_the_board_shows_a_colour_while_it_is_being_picked(view):
+    """Judging a colour against the dialog's own swatch is no judgement."""
+
+    group = group_with_image(view)
+    seen = []
+
+    def answer(self):
+        self.edit.setText('Lid Latch')
+        self.header_color = QtGui.QColor('#e8a33d')
+        self.show_preview()
+        seen.append((group.title, QtGui.QColor(group.header_color)))
+        return True
+
+    with patch.object(GroupTitleDialog, 'exec', answer):
+        view.on_action_group_title()
+
+    # The band was on the board, words and all, before OK was pressed
+    assert seen == [('Lid Latch', QtGui.QColor('#e8a33d'))]
+
+
+def test_what_is_recorded_is_what_was_there_before_the_preview(view):
+    group = group_with_image(view)
+
+    def answer(self):
+        self.edit.setText('Lid Latch')
+        self.header_color = QtGui.QColor('#e8a33d')
+        self.show_preview()
+        return True
+
+    with patch.object(GroupTitleDialog, 'exec', answer):
+        view.on_action_group_title()
+    assert group.title == 'Lid Latch'
+
+    view.undo_stack.undo()
+    assert group.title == ''
+    assert group.header_color is None
+
+
+def test_a_cancelled_dialog_takes_the_preview_back_off(view):
+    group = group_with_image(view)
+
+    def answer(self):
+        self.edit.setText('Lid Latch')
+        self.header_color = QtGui.QColor('#e8a33d')
+        self.show_preview()
+        return False
+
+    with patch.object(GroupTitleDialog, 'exec', answer):
+        view.on_action_group_title()
+
+    assert group.title == ''
+    assert group.header_color is None
+
+
+def test_dropping_out_of_the_colour_dialog_keeps_the_colour_it_had(view):
+    """Cancelling a colour must not leave the preview behind."""
+
+    dialog = GroupTitleDialog(None, title='Lid Latch',
+                              header_color=QtGui.QColor('#112233'))
+    with patch('PyQt6.QtWidgets.QColorDialog.exec', return_value=0):
+        dialog.on_pick_color()
+    assert dialog.header_color == QtGui.QColor('#112233')

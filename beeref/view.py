@@ -1027,15 +1027,34 @@ class BeeGraphicsView(MainControlsMixin,
             widgets.BeeNotification(self, 'No group selected')
             return
         first = groups[0]
+        originals = [(group.title, group.header_color, group.title_align)
+                     for group in groups]
+
+        def preview(title, color, align):
+            for group in groups:
+                group.header_color = color
+                group.title_align = align
+                group.title = title
+
         dialog = widgets.group_title.GroupTitleDialog(
             self, title=first.title, header_color=first.header_color,
-            box_color=first.box_color)
+            box_color=first.box_color, align=first.title_align,
+            preview=preview)
         self.move_dialog_beside_selection(dialog)
-        if not dialog.exec():
+        accepted = dialog.exec()
+
+        # The originals go back whichever way the dialog went: the undo
+        # command records what it finds when it is built, and that has
+        # to be what was there before the preview
+        for group, (title, color, align) in zip(groups, originals):
+            group.header_color = color
+            group.title_align = align
+            group.title = title
+        if not accepted:
             return
-        title, color = dialog.get_answer()
+        title, color, align = dialog.get_answer()
         self.undo_stack.push(
-            commands.ChangeGroupTitle(groups, title, color))
+            commands.ChangeGroupTitle(groups, title, color, align))
         self.update_group_toolbar()
 
     def on_action_group_box_color(self):

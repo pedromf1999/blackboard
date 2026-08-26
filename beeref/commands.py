@@ -692,23 +692,28 @@ class ChangeGroupTitle(QtGui.QUndoCommand):
     dialog offers the words and their colour side by side.
     """
 
-    def __init__(self, groups, title, header_color):
+    def __init__(self, groups, title, header_color, align=None):
         super().__init__('Change group title')
         self.groups = list(groups)
         self.title = title
         self.header_color = header_color
-        self.old = [(group.title, group.header_color)
+        self.align = align
+        self.old = [(group.title, group.header_color, group.title_align)
                     for group in self.groups]
 
     def redo(self):
         for group in self.groups:
             group.header_color = self.header_color
+            if self.align is not None:
+                group.title_align = self.align
+            # Last, because setting it re-measures the box
             group.title = self.title
             group.touch()
 
     def undo(self):
-        for group, (title, color) in zip(self.groups, self.old):
+        for group, (title, color, align) in zip(self.groups, self.old):
             group.header_color = color
+            group.title_align = align
             group.title = title
             group.touch()
 

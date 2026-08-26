@@ -583,9 +583,14 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # Room above and below the letters, as a fraction of their size
     TITLE_PADDING_FRACTION = 0.35
 
+    # Where the title sits in its band
+    TITLE_CENTER = 'center'
+    TITLE_LEFT = 'left'
+    TITLE_ALIGNMENTS = (TITLE_CENTER, TITLE_LEFT)
+
     def __init__(self, box_color=None, locked=False,
                  created=None, modified=None, title=None,
-                 header_color=None, **kwargs):
+                 header_color=None, title_align=None, **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
@@ -600,6 +605,10 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         # following it when the group is recoloured
         self.header_color = (QtGui.QColor(*header_color)
                              if header_color else None)
+        # Centred is what titles did before there was a choice, so a
+        # board written then opens looking the way it did
+        self.title_align = (title_align if title_align in
+                            self.TITLE_ALIGNMENTS else self.TITLE_CENTER)
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
@@ -683,6 +692,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
                 'created': self.created,
                 'modified': self.modified,
                 'title': self.title,
+                'title_align': self.title_align,
                 'header_color': (self.header_color.getRgb()
                                  if self.header_color else None)}
 
@@ -767,6 +777,14 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     def header_height(self):
         return self.header_height_for(self.rect().width())
 
+    def title_alignment(self):
+        """Where the title sits in its band, as Qt wants it."""
+
+        if self.title_align == self.TITLE_LEFT:
+            return (Qt.AlignmentFlag.AlignLeft
+                    | Qt.AlignmentFlag.AlignVCenter)
+        return Qt.AlignmentFlag.AlignCenter
+
     def header_rect(self):
         """The band across the top of the box."""
 
@@ -809,7 +827,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         room = band.adjusted(inset, 0, -inset, 0)
         metrics = QtGui.QFontMetricsF(self.title_font())
         painter.drawText(
-            room, int(Qt.AlignmentFlag.AlignCenter),
+            room, int(self.title_alignment()),
             metrics.elidedText(self.title, Qt.TextElideMode.ElideRight,
                                room.width()))
         painter.restore()
@@ -890,6 +908,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             box_color=self.box_color.getRgb(),
             locked=self.locked,
             title=self.title,
+            title_align=self.title_align,
             header_color=(self.header_color.getRgb()
                           if self.header_color else None))
         item.setPos(self.pos())

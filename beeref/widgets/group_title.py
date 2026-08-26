@@ -35,11 +35,17 @@ class GroupTitleDialog(QtWidgets.QDialog):
     same dialog puts one on and removes it.
     """
 
-    def __init__(self, parent, title='', header_color=None, box_color=None):
+    ALIGNMENTS = (('center', 'Centred'), ('left', 'Left'))
+
+    def __init__(self, parent, title='', header_color=None, box_color=None,
+                 align='center', preview=None):
         super().__init__(parent)
         self.setWindowTitle('Group Title')
         self.header_color = header_color
         self.box_color = box_color or QtGui.QColor(60, 60, 60)
+        # Shows a choice on the board while it is being made; see
+        # on_pick_color for why the title goes with the colour
+        self.preview = preview
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(QtWidgets.QLabel(
@@ -53,6 +59,18 @@ class GroupTitleDialog(QtWidgets.QDialog):
         self.color_button.clicked.connect(self.on_pick_color)
         layout.addWidget(self.color_button)
         self.update_color_button()
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel('Align:'))
+        self.alignment_buttons = {}
+        for value, label in self.ALIGNMENTS:
+            button = QtWidgets.QRadioButton(label)
+            button.setChecked(value == align)
+            button.toggled.connect(self.show_preview)
+            self.alignment_buttons[value] = button
+            row.addWidget(button)
+        row.addStretch()
+        layout.addLayout(row)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
@@ -77,15 +95,44 @@ class GroupTitleDialog(QtWidgets.QDialog):
             f'background-color: {color.name()};'
             f' color: {readable_grey(color).name()};')
 
+    def alignment(self):
+        for value, button in self.alignment_buttons.items():
+            if button.isChecked():
+                return value
+        return 'center'
+
+    def show_preview(self, *args):
+        """Put the choice so far on the board.
+
+        The title goes along with the colour rather than the colour on
+        its own: a band is only visible once there are words in it, so
+        choosing a colour for a title not yet applied would show
+        nothing at all.
+        """
+
+        if self.preview is not None:
+            self.preview(self.edit.text().strip(), self.header_color,
+                         self.alignment())
+
     def on_pick_color(self):
         dialog = QtWidgets.QColorDialog(self.shown_color(), self)
         dialog.setWindowTitle('Choose Band Colour')
         simplify_color_dialog(dialog)
+        was = self.header_color
+
+        def picking(color):
+            self.header_color = color
+            self.show_preview()
+
+        dialog.currentColorChanged.connect(picking)
         if dialog.exec() and dialog.currentColor().isValid():
             self.header_color = dialog.currentColor()
-            self.update_color_button()
+        else:
+            self.header_color = was
+        self.update_color_button()
+        self.show_preview()
 
     def get_answer(self):
-        """The title and the band colour, as the dialog was left."""
+        """The title, the band colour and the alignment, as left."""
 
-        return self.edit.text().strip(), self.header_color
+        return self.edit.text().strip(), self.header_color, self.alignment()
