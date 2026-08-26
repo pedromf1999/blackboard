@@ -16,6 +16,7 @@
 from functools import partial
 from itertools import cycle
 import logging
+import math
 import os
 import os.path
 
@@ -415,11 +416,14 @@ class BeeGraphicsView(MainControlsMixin,
         self.scene.addItem(self.drawing_item)
         self.drawing_item.bring_to_front()
 
-    def continue_drawing(self, pos):
+    def continue_drawing(self, pos, proportional=False):
         if self.draw_tool in BeeDrawItem.SHAPES:
             # A shape is the box between where the drag began and where
             # it is now; the wandering in between is not part of it
-            self.drawing_points = [self.drawing_points[0], pos]
+            start = self.drawing_points[0]
+            if proportional:
+                pos = self.square_corner(start, pos)
+            self.drawing_points = [start, pos]
         else:
             self.drawing_points.append(pos)
         self.drawing_item.set_points(
@@ -427,6 +431,25 @@ class BeeGraphicsView(MainControlsMixin,
         if self.draw_tool not in BeeDrawItem.SHAPES:
             # Nothing on a shape to fasten, so nothing to promise
             self.show_snap_preview(pos)
+
+    @staticmethod
+    def square_corner(start, pos):
+        """The corner that makes the drag box square.
+
+        Shapes fill the box they are dragged in, which is what lets one
+        be drawn as an oval or an oblong. Holding Shift squares the box
+        instead, so a circle comes out round and a hexagon regular.
+
+        The side is the longer of the two the drag covered, so the shape
+        reaches as far as the hand went rather than stopping short.
+        """
+
+        across = pos.x() - start.x()
+        down = pos.y() - start.y()
+        side = max(abs(across), abs(down))
+        return QtCore.QPointF(
+            start.x() + math.copysign(side, across or 1),
+            start.y() + math.copysign(side, down or 1))
 
     def show_snap_preview(self, pos):
         """Mark the spot this end would catch on, if it would catch.
@@ -2314,7 +2337,10 @@ class BeeGraphicsView(MainControlsMixin,
 
     def mouseMoveEvent(self, event):
         if self.drawing_item is not None:
-            self.continue_drawing(self.mapToScene(event.pos()))
+            self.continue_drawing(
+                self.mapToScene(event.pos()),
+                proportional=bool(event.modifiers()
+                                  & Qt.KeyboardModifier.ShiftModifier))
             event.accept()
             return
 

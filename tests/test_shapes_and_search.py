@@ -256,3 +256,63 @@ def test_a_match_with_no_measurable_word_still_goes_to_the_note(view):
         with patch.object(view, 'centerOn') as centered:
             view.find_next_text_match()
     assert centered.call_args[0][0] == item.sceneBoundingRect().center()
+
+
+def drag_held(view, kind, start, end, proportional):
+    """Draw a shape with or without Shift held down."""
+
+    view.set_draw_tool(kind)
+    view.start_drawing(QtCore.QPointF(*start))
+    view.continue_drawing(QtCore.QPointF(*end), proportional=proportional)
+    view.finish_drawing()
+    return list(view.scene.items_by_type('draw'))[-1]
+
+
+def test_shift_squares_the_box(view):
+    """A circle comes out round, not oval."""
+
+    item = drag_held(view, BeeDrawItem.CIRCLE, (0, 0), (200, 60),
+                     proportional=True)
+    rect = item.shape_rect()
+    assert rect.width() == rect.height() == 200
+
+
+def test_without_shift_the_box_is_what_was_dragged(view):
+    item = drag_held(view, BeeDrawItem.CIRCLE, (0, 0), (200, 60),
+                     proportional=False)
+    rect = item.shape_rect()
+    assert (rect.width(), rect.height()) == (200, 60)
+
+
+def test_the_square_reaches_as_far_as_the_hand_went(view):
+    """The longer of the two, so the shape does not stop short."""
+
+    assert view.square_corner(QtCore.QPointF(0, 0),
+                              QtCore.QPointF(30, 90)) == QtCore.QPointF(90, 90)
+
+
+def test_shift_keeps_the_direction_dragged(view):
+    corner = view.square_corner(QtCore.QPointF(100, 100),
+                                QtCore.QPointF(20, 60))
+    assert corner == QtCore.QPointF(20, 20)
+
+    corner = view.square_corner(QtCore.QPointF(100, 100),
+                                QtCore.QPointF(180, 60))
+    assert corner == QtCore.QPointF(180, 20)
+
+
+def test_a_drag_straight_along_one_axis_still_squares(view):
+    corner = view.square_corner(QtCore.QPointF(0, 0), QtCore.QPointF(80, 0))
+    assert corner == QtCore.QPointF(80, 80)
+
+
+def test_shift_does_nothing_to_a_sketch(view):
+    """It has no box to square, and every point of it is the drawing."""
+
+    view.set_draw_tool(BeeDrawItem.SKETCH)
+    view.start_drawing(QtCore.QPointF(0, 0))
+    for point in ((10, 40), (20, 90)):
+        view.continue_drawing(QtCore.QPointF(*point), proportional=True)
+    view.finish_drawing()
+    item = list(view.scene.items_by_type('draw'))[-1]
+    assert len(item.points) == 3
