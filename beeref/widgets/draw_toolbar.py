@@ -43,6 +43,11 @@ class DrawToolBar(QtWidgets.QWidget):
         (BeeDrawItem.SPLINE, 'spline', 'Draw a curve'),
         (BeeDrawItem.ARROW, 'arrow', 'Draw a straight arrow'),
         (BeeDrawItem.SPLINE_ARROW, 'spline_arrow', 'Draw a curved arrow'),
+        (BeeDrawItem.CIRCLE, 'shape_circle', 'Draw a circle'),
+        (BeeDrawItem.SQUARE, 'shape_square', 'Draw a square'),
+        (BeeDrawItem.TRIANGLE, 'shape_triangle', 'Draw a triangle'),
+        (BeeDrawItem.PENTAGON, 'shape_pentagon', 'Draw a pentagon'),
+        (BeeDrawItem.HEXAGON, 'shape_hexagon', 'Draw a hexagon'),
     )
 
     def __init__(self, parent, view):
@@ -67,8 +72,19 @@ class DrawToolBar(QtWidgets.QWidget):
             layout.addWidget(button)
             self.buttons[kind] = button
 
-        # Inserting a table is a one-off rather than a tool to work in,
-        # so this button does not stay pressed like the others
+        # Neither of these is a tool to work in, so they do not stay
+        # pressed the way the tools above do
+        self.find_text = QtWidgets.QToolButton(self)
+        self.find_text.setToolTip(
+            'Find text (Ctrl+F), then F3 to cycle through')
+        self.find_text.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self.find_text.setIconSize(
+            QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
+        self.find_text.setIcon(BeeAssets().tool_icon('search'))
+        self.find_text.clicked.connect(self.view.on_action_find_text)
+        layout.addSpacing(6)
+        layout.addWidget(self.find_text)
+
         self.insert_table = QtWidgets.QToolButton(self)
         self.insert_table.setToolTip('Insert a table (Ctrl+Shift+T)')
         self.insert_table.setFixedSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
@@ -76,7 +92,6 @@ class DrawToolBar(QtWidgets.QWidget):
             QtCore.QSize(self.ICON_SIZE, self.ICON_SIZE))
         self.insert_table.setIcon(BeeAssets().tool_icon('table'))
         self.insert_table.clicked.connect(self.view.on_action_insert_table)
-        layout.addSpacing(6)
         layout.addWidget(self.insert_table)
 
         # The colour lives on the bar that follows a selected drawing,

@@ -416,10 +416,17 @@ class BeeGraphicsView(MainControlsMixin,
         self.drawing_item.bring_to_front()
 
     def continue_drawing(self, pos):
-        self.drawing_points.append(pos)
+        if self.draw_tool in BeeDrawItem.SHAPES:
+            # A shape is the box between where the drag began and where
+            # it is now; the wandering in between is not part of it
+            self.drawing_points = [self.drawing_points[0], pos]
+        else:
+            self.drawing_points.append(pos)
         self.drawing_item.set_points(
             [[p.x(), p.y()] for p in self.drawing_points])
-        self.show_snap_preview(pos)
+        if self.draw_tool not in BeeDrawItem.SHAPES:
+            # Nothing on a shape to fasten, so nothing to promise
+            self.show_snap_preview(pos)
 
     def show_snap_preview(self, pos):
         """Mark the spot this end would catch on, if it would catch.
@@ -471,7 +478,10 @@ class BeeGraphicsView(MainControlsMixin,
         item.set_points([[p.x() - origin.x(), p.y() - origin.y()]
                          for p in points])
         item.setPos(origin)
-        self.snap_ends(item, points[0], points[-1])
+        if item.kind not in BeeDrawItem.SHAPES:
+            # A shape has corners, not ends, and fastening a corner to
+            # a note would pull the shape out of square
+            self.snap_ends(item, points[0], points[-1])
         self.undo_stack.push(commands.InsertItems(self.scene, [item]))
 
     def snap_ends(self, item, start, end):
@@ -1173,12 +1183,16 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_action_find_text(self):
         query, ok = QtWidgets.QInputDialog.getText(
-            self, 'Find Text', 'Find:', text=self.text_search_query)
+            self, 'Find Text', 'Find:' + chr(10) + 'F3 to cycle through',
+            text=self.text_search_query)
         if not ok or not query:
             return
         self.text_search_query = query
         self.text_search_index = -1
         self.find_next_text_match()
+
+    # How much of the window's width a found word is brought up to
+    MATCH_SHARE = 0.3
 
     def on_action_find_next(self):
         if self.text_search_query:
@@ -1213,11 +1227,63 @@ class BeeGraphicsView(MainControlsMixin,
         logger.debug(f'Text search match {self.text_search_index}: {item}')
         self.scene.deselect_all_items()
         item.setSelected(True)
-        self.centerOn(item.sceneBoundingRect().center())
+        self.zoom_to_match(item)
         widgets.BeeNotification(
             self,
             f'Match {self.text_search_index + 1} of {len(matches)}'
-            f' for "{self.text_search_query}"')
+            f' for "{self.text_search_query}" -- F3 to cycle through')
+
+    def zoom_to_match(self, item):
+        """Go to the word itself, not merely to the note holding it.
+
+        Centring on the note left a word on a large board still too
+        small to read. This brings the word up to about a third of the
+        window, which is close enough to read and far enough out to
+        keep some of what surrounds it.
+        """
+
+        word = self.word_rect(item, self.text_search_query)
+        if word is None or word.isEmpty():
+            self.centerOn(item.sceneBoundingRect().center())
+            return
+
+        view = self.viewport().rect()
+        if view.isEmpty():
+            return
+        width = word.width() / self.MATCH_SHARE
+        # Given the viewport's own proportions, so fitting the box puts
+        # the word at exactly that share of the width
+        height = width * view.height() / view.width()
+        box = QtCore.QRectF(0, 0, width, height)
+        box.moveCenter(word.center())
+        self.fit_rect(box)
+
+    def word_rect(self, item, query):
+        """Where the first match sits on the board, in scene coordinates."""
+
+        text = item.toPlainText()
+        start = text.lower().find(query.lower())
+        if start < 0:
+            return None
+        cursor = QtGui.QTextCursor(item.document())
+        cursor.setPosition(start)
+        block = cursor.block()
+        layout = block.layout()
+        if layout is None:
+            return None
+        offset = start - block.position()
+        line = layout.lineForTextPosition(offset)
+        if not line.isValid():
+            return None
+        left = line.cursorToX(offset)[0]
+        right = line.cursorToX(min(offset + len(query),
+                                   block.length() - 1))[0]
+        origin = item.document().documentLayout().blockBoundingRect(
+            block).topLeft()
+        rect = QtCore.QRectF(origin.x() + min(left, right),
+                             origin.y() + line.y(),
+                             abs(right - left), line.height())
+        return item.mapToScene(rect).boundingRect()
 
     def on_action_text_bold(self):
         """Toggle bold on the selected words, or the whole text."""

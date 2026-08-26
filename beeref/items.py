@@ -147,7 +147,17 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
     SPLINE = 'spline'
     ARROW = 'arrow'
     SPLINE_ARROW = 'spline_arrow'
-    KINDS = (SKETCH, LINE, SPLINE, ARROW, SPLINE_ARROW)
+    CIRCLE = 'circle'
+    SQUARE = 'square'
+    TRIANGLE = 'triangle'
+    PENTAGON = 'pentagon'
+    HEXAGON = 'hexagon'
+    # Drawn by dragging out a box rather than by following the hand,
+    # and closed, so they have no ends to fasten to anything
+    SHAPES = (CIRCLE, SQUARE, TRIANGLE, PENTAGON, HEXAGON)
+    # How many sides each of them has; a circle has none
+    SHAPE_SIDES = {TRIANGLE: 3, SQUARE: 4, PENTAGON: 5, HEXAGON: 6}
+    KINDS = (SKETCH, LINE, SPLINE, ARROW, SPLINE_ARROW) + SHAPES
 
     NAMES = {
         SKETCH: 'Sketch',
@@ -155,6 +165,11 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         SPLINE: 'Curve',
         ARROW: 'Arrow',
         SPLINE_ARROW: 'Curved Arrow',
+        CIRCLE: 'Circle',
+        SQUARE: 'Square',
+        TRIANGLE: 'Triangle',
+        PENTAGON: 'Pentagon',
+        HEXAGON: 'Hexagon',
     }
 
     DEFAULT_COLOR = (235, 235, 235, 255)
@@ -227,6 +242,8 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         path = QtGui.QPainterPath()
         if not self.points:
             return path
+        if self.kind in self.SHAPES:
+            return self.build_shape_path()
 
         path.moveTo(self.points[0])
         if self.kind == self.SKETCH:
@@ -242,6 +259,45 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
             middle = self.points[len(self.points) // 2]
             control = middle * 2 - (start + end) / 2
             path.quadTo(control, end)
+        return path
+
+    def shape_rect(self):
+        """The box a shape was dragged out in."""
+
+        return QtCore.QRectF(self.points[0], self.points[-1]).normalized()
+
+    def build_shape_path(self):
+        """A closed shape drawn inside the box that was dragged.
+
+        Inscribed in the box rather than held square, so a wide box
+        gives a wide shape: forcing them regular would leave no way to
+        draw an oval or an oblong at all.
+        """
+
+        path = QtGui.QPainterPath()
+        rect = self.shape_rect()
+        if self.kind == self.CIRCLE:
+            path.addEllipse(rect)
+            return path
+
+        sides = self.SHAPE_SIDES[self.kind]
+        if sides == 4:
+            # A square drawn as a polygon would stand on a corner
+            path.addRect(rect)
+            return path
+
+        center = rect.center()
+        across, down = rect.width() / 2, rect.height() / 2
+        for i in range(sides):
+            # Starting at the top, so a triangle points upwards
+            angle = math.radians(-90 + i * 360 / sides)
+            point = QtCore.QPointF(center.x() + across * math.cos(angle),
+                                   center.y() + down * math.sin(angle))
+            if i == 0:
+                path.moveTo(point)
+            else:
+                path.lineTo(point)
+        path.closeSubpath()
         return path
 
     def arrow_head(self):
@@ -330,6 +386,11 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         """Which end the cursor is on, if any: 'start', 'end' or None."""
 
         if len(self.points) < 2 or not self.has_selection_handles():
+            return None
+        if self.kind in self.SHAPES:
+            # A shape is closed. Its two points are opposite corners of
+            # the box it was drawn in, and dragging one about would
+            # bend the shape rather than move an end of it.
             return None
         grip = self.fixed_length_for_viewport(self.END_GRIP)
         for which, index in (('start', 0), ('end', -1)):

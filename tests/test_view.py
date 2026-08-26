@@ -1593,14 +1593,14 @@ def test_get_text_search_matches_ordered_top_to_bottom(view):
     assert view.get_text_search_matches() == [item2, item1]
 
 
-def test_find_next_text_match_selects_and_centres(view):
+def test_find_next_text_match_selects_and_goes_to_it(view):
     item1, item2 = add_text_items(view, 'find me', 'other')
     view.text_search_query = 'find me'
-    with patch.object(view, 'centerOn') as center_mock:
+    with patch.object(view, 'fit_rect') as fit_mock:
         view.find_next_text_match()
     assert item1.isSelected() is True
     assert item2.isSelected() is False
-    center_mock.assert_called_once()
+    fit_mock.assert_called_once()
 
 
 def test_find_next_text_match_cycles(view):
