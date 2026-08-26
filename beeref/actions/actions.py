@@ -579,6 +579,15 @@ actions = ActionList([
         callback='on_action_show_layers',
     ),
     Action(
+        id='show_legend',
+        text='Show Le&gend',
+        shortcuts=['Ctrl+L'],
+        checkable=True,
+        # Like the layers panel: out of the way every time, opened when
+        # it is wanted
+        callback='on_action_show_legend',
+    ),
+    Action(
         id='show_grid',
         text='Show &Grid',
         checkable=True,

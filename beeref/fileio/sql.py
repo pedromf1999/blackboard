@@ -39,7 +39,7 @@ from beeref.items import BeePixmapItem, BeeErrorItem
 from .errors import BeeFileIOError, IMG_LOADING_ERROR_MSG
 from .schema import (SCHEMA, USER_VERSION, MIGRATIONS, APPLICATION_ID,
                      META_TABLE, META_VERSION_KEY,
-                     META_THUMBNAIL_KEY)
+                     META_THUMBNAIL_KEY, META_LEGEND_KEY)
 
 
 logger = logging.getLogger(__name__)
@@ -93,9 +93,10 @@ def handle_sqlite_errors(func):
 class SQLiteIO:
 
     def __init__(self, filename, scene, create_new=False, readonly=False,
-                 worker=None, thumbnail=None):
+                 worker=None, thumbnail=None, legend=None):
         self.scene = scene
         self.thumbnail = thumbnail
+        self.legend = legend
         self.create_new = create_new
         self.filename = filename
         self.readonly = readonly
@@ -214,6 +215,13 @@ class SQLiteIO:
                 'VALUES (?, ?)',
                 (META_THUMBNAIL_KEY,
                  base64.b64encode(self.thumbnail).decode('ascii')))
+        # Written even when empty, so that clearing the legend of a
+        # board that had one is saved rather than silently ignored
+        if self.legend is not None:
+            self.ex(
+                'INSERT OR REPLACE INTO blackboard_meta (key, value) '
+                'VALUES (?, ?)',
+                (META_LEGEND_KEY, json.dumps(self.legend)))
 
     def read_thumbnail(self):
         """The picture of the board saved with it, or None."""
@@ -233,6 +241,30 @@ class SQLiteIO:
         except (ValueError, TypeError):
             logger.debug(f'Unreadable thumbnail in {self.filename}')
             return None
+
+    def read_legend(self):
+        """The legend saved with the board, or an empty one."""
+
+        table = self.fetchone(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='blackboard_meta'")
+        if not table:
+            return []
+        row = self.fetchone(
+            'SELECT value FROM blackboard_meta WHERE key=?',
+            (META_LEGEND_KEY,))
+        if not row or not row[0]:
+            return []
+        try:
+            rows = json.loads(row[0])
+        except ValueError:
+            logger.debug(f'Unreadable legend in {self.filename}')
+            return []
+        if not isinstance(rows, list):
+            return []
+        return [{'color': tuple(entry.get('color') or (255, 255, 255, 255)),
+                 'text': str(entry.get('text', ''))}
+                for entry in rows if isinstance(entry, dict)]
 
     def saved_by_version(self):
         """The version that last wrote this file, or None.
@@ -335,6 +367,7 @@ class SQLiteIO:
     @handle_sqlite_errors
     def read(self):
         self.warn_if_written_by_newer()
+        self.scene.set_legend(self.read_legend())
         if self.worker:
             self.worker.begin_processing.emit(self.count_rows())
 

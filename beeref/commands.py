@@ -685,6 +685,27 @@ class ChangeOutline(QtGui.QUndoCommand):
             item.set_outline_width(width)
 
 
+class ChangeLegend(QtGui.QUndoCommand):
+    """Add, remove, reword or recolour a line of the board's legend.
+
+    One command for all of them: each is simply a new list of lines.
+    It goes on the undo stack like anything else, which is also what
+    marks the board as having unsaved changes.
+    """
+
+    def __init__(self, scene, rows):
+        super().__init__('Change legend')
+        self.scene = scene
+        self.rows = [dict(row) for row in rows]
+        self.old_rows = [dict(row) for row in scene.legend]
+
+    def redo(self):
+        self.scene.set_legend(self.rows)
+
+    def undo(self):
+        self.scene.set_legend(self.old_rows)
+
+
 class ChangeGroupTitle(QtGui.QUndoCommand):
     """Set a group's title and the colour of the band it sits in.
 

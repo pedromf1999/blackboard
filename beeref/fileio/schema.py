@@ -49,6 +49,10 @@ META_VERSION_KEY = 'saved_by_version'
 # A picture of the board as it was last looked at, base64 encoded so
 # that it fits a text column and the table needs no change
 META_THUMBNAIL_KEY = 'thumbnail'
+# The board's legend: a colour and a word for each line,
+# as JSON, since it belongs to the board and not to any
+# one item on it
+META_LEGEND_KEY = 'legend'
 
 
 MIGRATIONS = {

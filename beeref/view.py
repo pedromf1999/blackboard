@@ -117,6 +117,7 @@ class BeeGraphicsView(MainControlsMixin,
         self.loading_overlay = (
             widgets.loading_overlay.LoadingOverlay(self))
         self.layers_handle = widgets.layers.LayersHandle(self, self)
+        self.legend_handle = widgets.legend.LegendHandle(self, self)
 
         # Set before the actions are built, since the grid toggle acts
         # on it as soon as it is restored from the settings
@@ -175,6 +176,8 @@ class BeeGraphicsView(MainControlsMixin,
         # as it is restored from the settings
         self.layers_dock = widgets.layers.LayersDock(parent, self)
         self.update_layers_handle()
+        self.legend_dock = widgets.legend.LegendDock(parent, self)
+        self.update_legend_handle()
 
         # Context menu and actions
         self.build_menu_and_actions()
@@ -294,6 +297,38 @@ class BeeGraphicsView(MainControlsMixin,
             self.layers_handle.raise_()
         else:
             self.layers_handle.hide()
+
+    def on_action_show_legend(self, checked):
+        """Open the legend, or put it away behind its handle."""
+
+        self.legend_dock.set_collapsed(not checked)
+
+    def toggle_legend_panel(self):
+        """Open or put away the legend, from wherever it was asked for."""
+
+        qaction = actions.actions['show_legend'].qaction
+        qaction.setChecked(not qaction.isChecked())
+
+    def update_legend_handle(self):
+        """Show the handle only while the panel itself is away."""
+
+        dock = getattr(self, 'legend_dock', None)
+        if dock is None:
+            return
+        if dock.collapsed:
+            self.legend_handle.set_side(self.parent.dockWidgetArea(dock))
+            self.legend_handle.reposition()
+            self.legend_handle.show()
+            self.legend_handle.raise_()
+        else:
+            self.legend_handle.hide()
+
+    def refresh_legend(self):
+        """Follow the board's legend, however it came to change."""
+
+        dock = getattr(self, 'legend_dock', None)
+        if dock is not None:
+            dock.panel.refresh()
 
     def set_draw_tool(self, kind):
         """Pick a drawing tool, or ``None`` to go back to selecting."""
@@ -1753,7 +1788,8 @@ class BeeGraphicsView(MainControlsMixin,
             filename = f'{filename}{constants.FILE_EXT}'
         self.worker = fileio.ThreadedIO(
             fileio.save_bee, filename, self.scene, create_new=create_new,
-            thumbnail=self.thumbnail())
+            thumbnail=self.thumbnail(),
+            legend=self.scene.legend)
         self.worker.finished.connect(self.on_saving_finished)
         self.progress = widgets.BeeProgressDialog(
             f'Saving {filename}',
@@ -2405,6 +2441,8 @@ class BeeGraphicsView(MainControlsMixin,
             self.shortcuts_hint.reposition()
         if self.layers_handle.isVisible():
             self.layers_handle.reposition()
+        if self.legend_handle.isVisible():
+            self.legend_handle.reposition()
 
     def pin_toolbar_to(self, toolbar, items, avoid=None):
         """Put a bar over the given items, or hide it if there are none.

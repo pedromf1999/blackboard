@@ -70,6 +70,7 @@ menu_structure = [
             MENU_SEPARATOR,
             'show_grid',
             'show_layers',
+            'show_legend',
             MENU_SEPARATOR,
             'fullscreen',
             'always_on_top',

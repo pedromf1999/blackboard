@@ -72,6 +72,9 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def clear(self):
         self._clear_ongoing = True
         super().clear()
+        # The board's legend: one colour and one word per line. Belongs
+        # to the board rather than to any item on it, so it lives here.
+        self.legend = []
         # Nothing from the old board is still waiting for a group
         self.items_awaiting_group = []
         self.internal_clipboard = []
@@ -558,6 +561,13 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
 
     def has_table_selection(self):
         return self.item_with_table() is not None
+
+    def set_legend(self, rows):
+        """Replace the legend and tell the panel showing it."""
+
+        self.legend = [dict(row) for row in rows]
+        for view in self.views():
+            view.refresh_legend()
 
     def text_cursor_moved(self):
         """The cursor moved inside a note being written in.

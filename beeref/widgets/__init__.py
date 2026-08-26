@@ -29,6 +29,7 @@ from beeref.widgets import (  # noqa: F401
     group_toolbar,
     image_toolbar,
     layers,
+    legend,
     loading_overlay,
     settings,
     pinned_toolbar,
