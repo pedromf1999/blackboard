@@ -149,13 +149,14 @@ class LayersTree(QtWidgets.QTreeWidget):
 
         def describe(items, depth=0):
             for item in items:
-                box_color = getattr(item, 'box_color', None)
+                color = self.entry_color(item)
                 yield (id(item), depth, item.zValue(),
                        item.get_display_name(),
                        # So the dates shown for groups stay current
                        getattr(item, 'modified', None),
-                       # ... and so does the colour of the entry
-                       box_color.name() if box_color else None)
+                       # ... and so does the colour of the entry,
+                       # whether it comes from the box or from a title
+                       color.name() if color else None)
                 if getattr(item, 'TYPE', None) == 'group':
                     yield from describe(self.get_items(item), depth + 1)
 
@@ -244,21 +245,33 @@ class LayersTree(QtWidgets.QTreeWidget):
             color = readable_grey(background.color())
         entry.setIcon(0, self.marker_icon(color, item.isSelected()))
 
-    def set_entry_colors(self, entry, item):
-        """Show the item's own box colour on its entry.
+    def entry_color(self, item):
+        """The colour an item's entry is shown in, or None for no colour.
 
         Groups and text items both have a coloured box, so the panel
-        shows the same colours that are on the canvas.
+        shows the same colours that are on the canvas. A group with a
+        title goes by the colour of that title band instead: the band
+        is what is read on the canvas, so it is what the group is told
+        apart by here as well.
         """
 
         if not hasattr(item, 'box_color'):
-            return
+            return None
+        if getattr(item, 'title', '') and hasattr(
+                item, 'visible_header_color'):
+            return item.visible_header_color()
         # Translucent boxes show the canvas through them, so use the
         # colour they actually appear as
         if hasattr(item, 'visible_box_color'):
-            color = item.visible_box_color()
-        else:
-            color = item.box_color
+            return item.visible_box_color()
+        return item.box_color
+
+    def set_entry_colors(self, entry, item):
+        """Show the item's own colour on its entry."""
+
+        color = self.entry_color(item)
+        if color is None:
+            return
         entry.setBackground(0, QtGui.QBrush(color))
         # Keep the name readable whatever colour has been chosen
         entry.setForeground(0, QtGui.QBrush(readable_grey(color)))
