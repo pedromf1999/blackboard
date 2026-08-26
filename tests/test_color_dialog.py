@@ -205,3 +205,59 @@ def test_the_board_picker_hands_the_legend_over(view):
             view.pick_color_live('Choose', QtGui.QColor('red'),
                                  lambda c: None)
     call.assert_called_once_with(ANY, LEGEND)
+
+
+def standard(index):
+    return QtWidgets.QColorDialog.standardColor(index)
+
+
+def test_the_bottom_row_is_greys(view):
+    """A palette of sixty-four colours had not one plain shade in it."""
+
+    view.apply_palette_to_color_dialogs()
+    bottom = [standard(view.swatch_slot(view.SWATCH_ROWS - 1, column))
+              for column in range(view.SWATCH_COLUMNS)]
+
+    for color in bottom:
+        assert color.red() == color.green() == color.blue()
+
+
+def test_the_greys_run_dark_to_light(view):
+    view.apply_palette_to_color_dialogs()
+    bottom = [standard(view.swatch_slot(view.SWATCH_ROWS - 1, column)).red()
+              for column in range(view.SWATCH_COLUMNS)]
+
+    assert bottom == sorted(bottom)
+    assert bottom[0] == 0
+    assert bottom[-1] == 255
+
+
+def test_the_shade_groups_start_as_is_among_them(view):
+    """So a group given a colour can be put back the way it was."""
+
+    from beeref.items import BeeGroupItem
+    view.apply_palette_to_color_dialogs()
+    tones = [color.red() for color in view.swatch_greys()]
+
+    assert BeeGroupItem.DEFAULT_BOX_COLOR[0] in tones
+
+
+def test_the_greys_are_a_row_and_not_a_column(view):
+    """Qt lays its grid out down the columns, so the last eight slots
+    would have run down the right-hand edge."""
+
+    view.apply_palette_to_color_dialogs()
+    right_edge = [standard(view.swatch_slot(row, view.SWATCH_COLUMNS - 1))
+                  for row in range(view.SWATCH_ROWS - 1)]
+
+    assert any(color.red() != color.green() for color in right_edge)
+
+
+def test_the_colours_above_are_still_the_palette(view):
+    from beeref.assets import BeeAssets
+    view.apply_palette_to_color_dialogs()
+    palette = BeeAssets().palette
+
+    assert standard(view.swatch_slot(0, 0)) == palette[0]
+    assert standard(view.swatch_slot(0, 1)) == palette[1]
+    assert standard(view.swatch_slot(1, 0)) == palette[view.SWATCH_COLUMNS]
