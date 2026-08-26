@@ -17,9 +17,65 @@ def drag(view, kind, start=(0, 0), through=(80, 10), end=(120, 90)):
     return list(view.scene.items_by_type('draw'))[-1]
 
 
-def test_every_shape_is_on_the_top_bar(view):
+def test_the_shapes_are_behind_one_button(view):
+    """Five more buttons on the bar crowded out everything else."""
+
+    bar = view.draw_toolbar
     for kind in BeeDrawItem.SHAPES:
-        assert kind in view.draw_toolbar.buttons
+        assert kind in bar.buttons
+        # On the strip, not on the bar itself
+        assert bar.buttons[kind].parent() is bar.shape_bar
+    assert bar.shape_bar.isHidden() is True
+
+
+def test_the_shapes_button_opens_and_closes_the_strip(view):
+    bar = view.draw_toolbar
+    bar.shapes.click()
+    assert bar.shape_bar.isHidden() is False
+    assert bar.shapes.isChecked() is True
+
+    bar.shapes.click()
+    assert bar.shape_bar.isHidden() is True
+    assert bar.shapes.isChecked() is False
+
+
+def test_the_strip_sits_under_the_bar(view):
+    bar = view.draw_toolbar
+    bar.reposition()
+    bar.shapes.click()
+    assert bar.shape_bar.y() >= bar.y() + bar.height()
+    assert bar.shape_bar.x() >= bar.x()
+
+
+def test_picking_a_shape_leaves_the_strip_up(view):
+    """So the next shape is a single click away."""
+
+    bar = view.draw_toolbar
+    bar.shapes.click()
+    view.set_draw_tool(BeeDrawItem.HEXAGON)
+
+    assert bar.shape_bar.isHidden() is False
+    assert bar.buttons[BeeDrawItem.HEXAGON].isChecked() is True
+    assert bar.shapes.isChecked() is True
+
+
+def test_picking_another_tool_puts_the_shapes_away(view):
+    bar = view.draw_toolbar
+    bar.shapes.click()
+    view.set_draw_tool(BeeDrawItem.SKETCH)
+
+    assert bar.shape_bar.isHidden() is True
+    assert bar.shapes.isChecked() is False
+
+
+def test_escape_puts_the_shapes_away_too(view):
+    bar = view.draw_toolbar
+    bar.shapes.click()
+    view.set_draw_tool(BeeDrawItem.CIRCLE)
+    view.escape()
+
+    assert bar.shape_bar.isHidden() is True
+    assert view.draw_tool is None
 
 
 def test_a_shape_is_drawn_by_dragging_out_a_box(view):
@@ -165,7 +221,7 @@ def test_the_found_word_is_brought_up_to_a_readable_size(view):
     word = view.word_rect(item, 'brown')
     seen = view.mapToScene(view.viewport().rect()).boundingRect()
     assert word.width() / seen.width() == pytest.approx(
-        view.MATCH_SHARE, abs=0.05)
+        view.MATCH_SHARE, abs=0.03)
 
 
 def test_the_word_is_found_where_it_actually_sits(view):

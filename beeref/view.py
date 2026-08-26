@@ -1191,8 +1191,10 @@ class BeeGraphicsView(MainControlsMixin,
         self.text_search_index = -1
         self.find_next_text_match()
 
-    # How much of the window's width a found word is brought up to
-    MATCH_SHARE = 0.3
+    # How much of the window's width a found word is brought up to.
+    # A third filled the window with the word and little else; half
+    # that reads as easily and keeps far more of what surrounds it.
+    MATCH_SHARE = 0.15
 
     def on_action_find_next(self):
         if self.text_search_query:
@@ -1237,9 +1239,8 @@ class BeeGraphicsView(MainControlsMixin,
         """Go to the word itself, not merely to the note holding it.
 
         Centring on the note left a word on a large board still too
-        small to read. This brings the word up to about a third of the
-        window, which is close enough to read and far enough out to
-        keep some of what surrounds it.
+        small to read. This brings the word up to a readable size while
+        keeping what surrounds it in sight; see MATCH_SHARE.
         """
 
         word = self.word_rect(item, self.text_search_query)
