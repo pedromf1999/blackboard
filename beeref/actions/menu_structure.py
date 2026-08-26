@@ -122,6 +122,9 @@ menu_structure = [
     {
         'menu': '&Images',
         'items': [
+            'crop',
+            'image_outline',
+            MENU_SEPARATOR,
             'change_opacity',
             'grayscale',
             MENU_SEPARATOR,

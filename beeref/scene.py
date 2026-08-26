@@ -595,6 +595,12 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                    for target in held):
                 drawing.follow_attachments()
 
+    def selected_images(self):
+        """The currently selected images."""
+
+        return [item for item in self.selectedItems(user_only=True)
+                if getattr(item, 'TYPE', None) == 'pixmap']
+
     def selected_groups(self):
         """The currently selected groups."""
 
@@ -609,6 +615,11 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         """
 
         return bool(self.selected_text_items() or self.selected_draw_items())
+
+    def has_image_selection(self):
+        """Whether any image is selected."""
+
+        return bool(self.selected_images())
 
     def has_single_image_selection(self):
         """Checks whether the current selection is a single image."""

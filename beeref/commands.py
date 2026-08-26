@@ -659,6 +659,28 @@ class ChangeLineWidth(QtGui.QUndoCommand):
             item.set_line_width(width)
 
 
+class ChangeOutline(QtGui.QUndoCommand):
+    """Put a contour on images, take it off, or change how thick it is.
+
+    One command for all three, because they are all just a new width:
+    zero is no contour.
+    """
+
+    def __init__(self, items, widths):
+        super().__init__('Change outline')
+        self.items = list(items)
+        self.widths = list(widths)
+        self.old_widths = [item.outline_width for item in self.items]
+
+    def redo(self):
+        for item, width in zip(self.items, self.widths):
+            item.set_outline_width(width)
+
+    def undo(self):
+        for item, width in zip(self.items, self.old_widths):
+            item.set_outline_width(width)
+
+
 class ChangeTextWidth(QtGui.QUndoCommand):
     """Change the width text items wrap their text at."""
 

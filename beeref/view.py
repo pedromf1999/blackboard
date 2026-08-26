@@ -203,6 +203,8 @@ class BeeGraphicsView(MainControlsMixin,
         self.draw_item_toolbar.hide()
         self.group_toolbar = widgets.group_toolbar.GroupToolBar(self, self)
         self.group_toolbar.hide()
+        self.image_toolbar = widgets.image_toolbar.ImageToolBar(self, self)
+        self.image_toolbar.hide()
         self.table_toolbar = widgets.table_toolbar.TableToolBar(self, self)
         self.table_toolbar.hide()
 
@@ -1152,15 +1154,55 @@ class BeeGraphicsView(MainControlsMixin,
             return
         self.undo_stack.push(commands.ChangeLineWidth(items, factor))
 
+    def scale_selected_outlines(self, factor):
+        """Make the contours of the selected images thicker or thinner.
+
+        Images without one are left alone: the size buttons are for
+        changing a contour, not for putting one on.
+        """
+
+        items = [item for item in self.scene.selected_images()
+                 if item.has_outline()]
+        widths = [item.outline_width * factor for item in items]
+        # Held at the limit, every further press would record a step
+        # that changes nothing and then has to be undone one by one
+        wanted = [min(item.max_outline_width(),
+                      max(item.OUTLINE_MIN_WIDTH, width))
+                  for item, width in zip(items, widths)]
+        if wanted == [item.outline_width for item in items]:
+            return
+        self.undo_stack.push(commands.ChangeOutline(items, widths))
+
     def on_action_size_increase(self):
-        """Make whatever is selected bigger: text, or line thickness."""
+        """Make whatever is selected bigger: text, line or contour."""
 
         self.scale_selected_text(self.TEXT_SIZE_STEP)
         self.scale_selected_drawings(self.LINE_WIDTH_STEP)
+        self.scale_selected_outlines(self.LINE_WIDTH_STEP)
 
     def on_action_size_decrease(self):
         self.scale_selected_text(1 / self.TEXT_SIZE_STEP)
         self.scale_selected_drawings(1 / self.LINE_WIDTH_STEP)
+        self.scale_selected_outlines(1 / self.LINE_WIDTH_STEP)
+
+    def on_action_image_outline(self):
+        """Put a contour on the selected images, or take it off.
+
+        Off when every one of them already has a contour, so a second
+        press undoes what the first did rather than leaving a mixed
+        selection flipping one image at a time.
+        """
+
+        items = self.scene.selected_images()
+        if not items:
+            widgets.BeeNotification(self, 'No image selected')
+            return
+        turn_off = all(item.has_outline() for item in items)
+        self.undo_stack.push(commands.ChangeOutline(
+            items,
+            [0 if turn_off else item.default_outline_width()
+             for item in items]))
+        self.update_image_toolbar()
 
     def apply_text_char_format(self, items, charformat):
         """Apply the format to the given items, as one undo step."""
@@ -1808,6 +1850,8 @@ class BeeGraphicsView(MainControlsMixin,
                                      self.scene.has_selection())
         self.actiongroup_set_enabled('active_when_single_image',
                                      self.scene.has_single_image_selection())
+        self.actiongroup_set_enabled('active_when_image_selection',
+                                     self.scene.has_image_selection())
         self.actiongroup_set_enabled('active_when_text_selection',
                                      self.scene.has_text_selection())
         self.update_table_actions()
@@ -2181,6 +2225,15 @@ class BeeGraphicsView(MainControlsMixin,
             toolbar.update_lock(groups[0].locked)
         self.pin_toolbar_to(toolbar, groups)
 
+    def update_image_toolbar(self):
+        """Show the crop and contour buttons over the selected images."""
+
+        toolbar = getattr(self, 'image_toolbar', None)
+        images = self.scene.selected_images()
+        if toolbar is not None and images:
+            toolbar.update_state(images)
+        self.pin_toolbar_to(toolbar, images)
+
     def update_table_toolbar(self):
         """Show the table buttons while the cursor is inside a table.
 
@@ -2211,6 +2264,7 @@ class BeeGraphicsView(MainControlsMixin,
         self.update_text_toolbar()
         self.update_draw_item_toolbar()
         self.update_group_toolbar()
+        self.update_image_toolbar()
         self.update_table_toolbar()
 
     def scrollContentsBy(self, dx, dy):

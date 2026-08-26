@@ -447,6 +447,13 @@ actions = ActionList([
         group='active_when_single_image',
     ),
     Action(
+        id='image_outline',
+        text='&Outline',
+        shortcuts=['Shift+O'],
+        callback='on_action_image_outline',
+        group='active_when_image_selection',
+    ),
+    Action(
         id='flip_horizontally',
         text='Flip &Horizontally',
         shortcuts=['H'],

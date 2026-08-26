@@ -94,7 +94,9 @@ def test_get_extra_save_data(item):
         'filename': 'foobar.png',
         'crop': [10, 20, 30, 40],
         'opacity': 0.75,
-        'grayscale': True
+        'grayscale': True,
+        'outline_width': 0,
+        'outline_color': (235, 235, 235, 255),
     }
 
 

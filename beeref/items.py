@@ -792,11 +792,24 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     TYPE = 'pixmap'
     CROP_HANDLE_SIZE = 15
 
+    # The contour drawn round the image. Its width is in item
+    # coordinates, like a drawing's line width, so it grows and shrinks
+    # with the image instead of staying a fixed number of screen pixels.
+    # The default and the limit are fractions of the shorter side, so a
+    # contour looks the same on a thumbnail and on a photograph.
+    DEFAULT_OUTLINE_COLOR = (235, 235, 235, 255)
+    OUTLINE_DEFAULT_FRACTION = 0.02
+    OUTLINE_MAX_FRACTION = 0.25
+    OUTLINE_MIN_WIDTH = 0.5
+
     def __init__(self, image, filename=None, **kwargs):
         super().__init__(QtGui.QPixmap.fromImage(image))
         self.save_id = None
         self.filename = filename
         self.reset_crop()
+        # Zero means no contour at all
+        self.outline_width = 0
+        self.outline_color = QtGui.QColor(*self.DEFAULT_OUTLINE_COLOR)
         logger.debug(f'Initialized {self}')
         self.is_image = True
         self.crop_mode = False
@@ -813,6 +826,10 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
             item.crop = QtCore.QRectF(*data['crop'])
         item.setOpacity(data.get('opacity', 1))
         item.grayscale = data.get('grayscale', False)
+        item.outline_width = data.get('outline_width', 0)
+        color = data.get('outline_color')
+        if color:
+            item.outline_color = QtGui.QColor(*color)
         return item
 
     def __str__(self):
@@ -900,10 +917,58 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         else:
             return self.crop
 
+    def boundingRect(self):
+        """Room for the contour on top of whatever else needs room.
+
+        Only the painting bounds grow. The image's own rectangle stays
+        what it was, so the selection box, the handles and the point a
+        line fastens to all stay on the edge of the picture rather than
+        stepping outward when a contour is put on.
+        """
+
+        rect = super().boundingRect()
+        if not self.outline_width:
+            return rect
+        margin = self.outline_width / 2
+        return rect.marginsAdded(
+            QtCore.QMarginsF(margin, margin, margin, margin))
+
+    def default_outline_width(self):
+        """How thick a contour starts out, for an image this size."""
+
+        rect = self.crop
+        return max(self.OUTLINE_MIN_WIDTH,
+                   min(rect.width(), rect.height())
+                   * self.OUTLINE_DEFAULT_FRACTION)
+
+    def max_outline_width(self):
+        """Past this the contour is eating the picture."""
+
+        rect = self.crop
+        return max(self.OUTLINE_MIN_WIDTH,
+                   min(rect.width(), rect.height())
+                   * self.OUTLINE_MAX_FRACTION)
+
+    def set_outline_width(self, width):
+        """Set how thick the contour is, in item coordinates."""
+
+        self.prepareGeometryChange()
+        if width <= 0:
+            self.outline_width = 0
+        else:
+            self.outline_width = min(self.max_outline_width(),
+                                     max(self.OUTLINE_MIN_WIDTH, width))
+        self.update()
+
+    def has_outline(self):
+        return bool(self.outline_width)
+
     def get_extra_save_data(self):
         return {'filename': self.filename,
                 'opacity': self.opacity(),
                 'grayscale': self.grayscale,
+                'outline_width': self.outline_width,
+                'outline_color': self.outline_color.getRgb(),
                 'crop': [self.crop.topLeft().x(),
                          self.crop.topLeft().y(),
                          self.crop.width(),
@@ -1170,7 +1235,25 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         else:
             pm = self._grayscale_pixmap if self.grayscale else self.pixmap()
             painter.drawPixmap(self.crop, pm, self.crop)
+            self.paint_outline(painter)
             self.paint_selectable(painter, option, widget)
+
+    def paint_outline(self, painter):
+        """Draw the contour, sitting astride the edge of the picture.
+
+        Not inset: a thick contour drawn inside would cover the outer
+        band of the image, which is the part a frame is meant to set
+        off rather than hide.
+        """
+
+        if not self.outline_width:
+            return
+        pen = QtGui.QPen(self.outline_color)
+        pen.setWidthF(self.outline_width)
+        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtGui.QBrush())
+        painter.drawRect(self.crop)
 
     def enter_crop_mode(self):
         logger.debug(f'Entering crop mode on {self}')
