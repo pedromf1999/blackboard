@@ -1100,7 +1100,8 @@ class BeeGraphicsView(MainControlsMixin,
             dialog.setOption(
                 QtWidgets.QColorDialog.ColorDialogOption.ShowAlphaChannel)
         dialog.currentColorChanged.connect(preview)
-        widgets.color_dialog.simplify_color_dialog(dialog)
+        widgets.color_dialog.simplify_color_dialog(
+            dialog, self.scene.legend)
         # After simplifying, so the dialog is placed at the size it
         # ends up being rather than the size Qt built it at
         self.move_dialog_beside_selection(dialog)
