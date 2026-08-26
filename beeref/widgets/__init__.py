@@ -26,7 +26,6 @@ from beeref.widgets import (  # noqa: F401
     controls,
     draw_item_toolbar,
     draw_toolbar,
-    group_title,
     group_toolbar,
     image_toolbar,
     layers,

@@ -609,6 +609,9 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         # board written then opens looking the way it did
         self.title_align = (title_align if title_align in
                             self.TITLE_ALIGNMENTS else self.TITLE_CENTER)
+        # The line being typed into, while a title is being written
+        self.title_editor = None
+        self.title_editing = False
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
@@ -734,7 +737,12 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         children = self.bee_children()
         if not children:
             return
-        rect = self.childrenBoundingRect()
+        # The grouped items only. ``childrenBoundingRect`` would take in
+        # the line being typed into as well, and the box would then
+        # chase the words being written into it.
+        rect = QtCore.QRectF()
+        for child in children:
+            rect = rect.united(child.mapRectToParent(child.boundingRect()))
         padding = self.padding_for(rect)
         box = rect.adjusted(-padding, -padding, padding, padding)
         self.prepareGeometryChange()
@@ -766,10 +774,19 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         font.setPointSizeF(self.title_size_for(width))
         return font
 
+    def shows_header(self):
+        """Whether there is a band to draw.
+
+        A title being written counts, even before the first letter: the
+        band has to be there to type into.
+        """
+
+        return bool(self.title) or self.title_editing
+
     def header_height_for(self, width):
         """The height of the title band, or nothing without a title."""
 
-        if not self.title:
+        if not self.shows_header():
             return 0
         metrics = QtGui.QFontMetricsF(self.title_font(width))
         return metrics.height() * (1 + 2 * self.TITLE_PADDING_FRACTION)
@@ -784,6 +801,18 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             return (Qt.AlignmentFlag.AlignLeft
                     | Qt.AlignmentFlag.AlignVCenter)
         return Qt.AlignmentFlag.AlignCenter
+
+    def title_text_alignment(self):
+        """The same, for a document, which only knows across."""
+
+        if self.title_align == self.TITLE_LEFT:
+            return Qt.AlignmentFlag.AlignLeft
+        return Qt.AlignmentFlag.AlignHCenter
+
+    def title_inset(self):
+        """The gap kept between the words and the ends of the band."""
+
+        return self.header_height() * self.TITLE_PADDING_FRACTION
 
     def header_rect(self):
         """The band across the top of the box."""
@@ -807,7 +836,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     def paint_header(self, painter):
         """Draw the title band and the title in it."""
 
-        if not self.title:
+        if not self.shows_header():
             return
         band = self.header_rect()
         radius = self.corner_radius()
@@ -820,10 +849,15 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         painter.setClipPath(path)
         color = self.header_color or self.box_color
         painter.fillRect(band, QtGui.QBrush(color))
+        if self.title_editing:
+            # The words are the editor's while it is open, and drawing
+            # them here as well would double them up
+            painter.restore()
+            return
 
         painter.setFont(self.title_font())
         painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
-        inset = band.height() * self.TITLE_PADDING_FRACTION
+        inset = self.title_inset()
         room = band.adjusted(inset, 0, -inset, 0)
         metrics = QtGui.QFontMetricsF(self.title_font())
         painter.drawText(
@@ -903,6 +937,53 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             self.rect().adjusted(inset, inset, -inset, -inset),
             radius, radius)
 
+    def enter_title_edit_mode(self):
+        """Open the title for writing, on the group itself."""
+
+        if self.title_editor is not None:
+            self.title_editor.setFocus()
+            return
+        logger.debug(f'Writing the title of {self}')
+        self.title_editing = True
+        self.fit_to_children()
+        self.title_editor = GroupTitleEditor(self)
+        self.title_editor.setFocus()
+        scene = self.scene()
+        if scene is not None:
+            scene.title_group = self
+        self.update()
+
+    def exit_title_edit_mode(self, commit=True):
+        """Take the words out of the editor and put the editor away."""
+
+        editor = self.title_editor
+        if editor is None:
+            return
+        logger.debug(f'Finished the title of {self}')
+        text = editor.toPlainText().strip()
+        self.title_editor = None
+        scene = self.scene()
+        if scene is not None:
+            if scene.title_group is self:
+                scene.title_group = None
+            scene.removeItem(editor)
+        self.title_editing = False
+
+        if commit and text != self.title and scene is not None:
+            scene.undo_stack.push(commands.ChangeGroupTitle(
+                [self], text, self.header_color, self.title_align))
+        else:
+            # Nothing to record, but the band still has to go if the
+            # title was left empty
+            self.fit_to_children()
+            self.update()
+
+    def refresh_title_editor(self):
+        """Follow a change of colour or alignment while writing."""
+
+        if self.title_editor is not None:
+            self.title_editor.refresh()
+
     def create_copy(self):
         item = BeeGroupItem(
             box_color=self.box_color.getRgb(),
@@ -928,6 +1009,60 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     def add_to_mimedata(self, mimedata):
         # Nothing sensible to hand to other applications
         pass
+
+
+class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
+    """The line a group's title is typed into, on the group itself.
+
+    Not saved and not selectable: it exists only while a title is being
+    written, and what it is for is handing its words to the group.
+    """
+
+    def __init__(self, group):
+        super().__init__(group.title, group)
+        self.group = group
+        self.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextEditorInteraction)
+        self.refresh()
+        cursor = self.textCursor()
+        cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        self.setTextCursor(cursor)
+
+    def refresh(self):
+        """Sit in the band, in the band's own font and colour."""
+
+        group = self.group
+        band = group.header_rect()
+        inset = group.title_inset()
+        self.setFont(group.title_font())
+        self.setDefaultTextColor(
+            readable_grey(group.visible_header_color()))
+        self.setTextWidth(max(1.0, band.width() - 2 * inset))
+        option = self.document().defaultTextOption()
+        option.setAlignment(group.title_text_alignment())
+        self.document().setDefaultTextOption(option)
+        self.setPos(band.x() + inset,
+                    band.y()
+                    + (band.height() - self.boundingRect().height()) / 2)
+
+    def keyPressEvent(self, event):
+        # A title is one line: Enter finishes it rather than starting a
+        # second one. Escape throws the change away.
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.group.exit_title_edit_mode()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Escape:
+            self.group.exit_title_edit_mode(commit=False)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        # Clicking away finishes the title, the way clicking away from
+        # a note finishes the note
+        self.group.exit_title_edit_mode()
 
 
 @register_item

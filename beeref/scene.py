@@ -56,6 +56,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         # follow_moved_item
         self.uses_attachments = False
         self.edit_item = None
+        # The group whose title is being written, if any
+        self.title_group = None
         self.crop_item = None
         # The group whose items can currently be edited individually
         self.active_group = None
@@ -642,6 +644,16 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             if self.edit_item:
                 if item_at_pos != self.edit_item:
                     self.edit_item.exit_edit_mode()
+                else:
+                    super().mousePressEvent(event)
+                    return
+            if self.title_group is not None:
+                # Clicking the band itself goes on writing; the editor
+                # sits inside it and takes the click
+                group = self.title_group
+                editor = group.title_editor
+                if item_at_pos is not editor:
+                    group.exit_title_edit_mode()
                 else:
                     super().mousePressEvent(event)
                     return

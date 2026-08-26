@@ -327,6 +327,16 @@ class BeeGraphicsView(MainControlsMixin,
         """
 
         scene_pos = self.mapToScene(point)
+        header = self.group_header_at(point)
+        if header is not None and not header.locked:
+            # A group's title is text too, and clicking it with the tool
+            # should open it rather than lay a note over it
+            self.set_draw_tool(None)
+            header.setSelected(True)
+            header.enter_title_edit_mode()
+            self.update_group_toolbar()
+            return
+
         existing = self.get_text_item_at(point)
         if existing is not None:
             group = self.scene.get_group_ancestor(existing)
@@ -352,6 +362,19 @@ class BeeGraphicsView(MainControlsMixin,
         cursor = item.textCursor()
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
         item.setTextCursor(cursor)
+
+    def group_header_at(self, point):
+        """A group whose title band lies under the given viewport point."""
+
+        scene_pos = self.mapToScene(point)
+        for item in self.scene.items(scene_pos):
+            if getattr(item, 'TYPE', None) != BeeGroupItem.TYPE:
+                continue
+            if not item.shows_header():
+                continue
+            if item.header_rect().contains(item.mapFromScene(scene_pos)):
+                return item
+        return None
 
     def group_to_write_in(self, point, scene_pos):
         """The group a new note clicked here should go into, if any."""
@@ -1020,42 +1043,82 @@ class BeeGraphicsView(MainControlsMixin,
         return None
 
     def on_action_group_title(self):
-        """Ask for a title for the selected groups, and its colour."""
+        """Write the title on the group itself."""
 
         groups = self.scene.selected_groups()
         if not groups:
             widgets.BeeNotification(self, 'No group selected')
             return
-        first = groups[0]
-        originals = [(group.title, group.header_color, group.title_align)
-                     for group in groups]
+        self.set_draw_tool(None)
+        groups[0].enter_title_edit_mode()
+        self.update_group_toolbar()
 
-        def preview(title, color, align):
+    def group_being_titled(self):
+        """The group whose title is being written, if one is."""
+
+        return self.scene.title_group
+
+    def on_action_group_title_color(self):
+        """Ask for a colour for the title band, showing it as it is picked.
+
+        The band is only visible once there are words in it, so this is
+        offered where the words are: the same button that colours a
+        group colours its title while the title is being written.
+        """
+
+        groups = ([self.group_being_titled()] if self.group_being_titled()
+                  else self.scene.selected_groups())
+        if not groups:
+            widgets.BeeNotification(self, 'No group selected')
+            return
+        originals = [group.header_color for group in groups]
+
+        def preview(color):
             for group in groups:
                 group.header_color = color
-                group.title_align = align
-                group.title = title
+                group.refresh_title_editor()
+                group.update()
 
-        dialog = widgets.group_title.GroupTitleDialog(
-            self, title=first.title, header_color=first.header_color,
-            box_color=first.box_color, align=first.title_align,
-            preview=preview)
-        self.move_dialog_beside_selection(dialog)
-        accepted = dialog.exec()
+        color = self.pick_color_live(
+            'Choose Title Colour', groups[0].header_color
+            or groups[0].box_color, preview)
 
-        # The originals go back whichever way the dialog went: the undo
-        # command records what it finds when it is built, and that has
-        # to be what was there before the preview
-        for group, (title, color, align) in zip(groups, originals):
-            group.header_color = color
-            group.title_align = align
-            group.title = title
-        if not accepted:
+        for group, original in zip(groups, originals):
+            group.header_color = original
+            group.refresh_title_editor()
+            group.update()
+        if color is None:
             return
-        title, color, align = dialog.get_answer()
-        self.undo_stack.push(
-            commands.ChangeGroupTitle(groups, title, color, align))
+        self.undo_stack.push(commands.ChangeGroupTitle(
+            groups, groups[0].title, color, groups[0].title_align))
+        for group in groups:
+            group.refresh_title_editor()
+
+    def set_group_title_align(self, align):
+        """Put the title of the selected groups left or centred."""
+
+        groups = ([self.group_being_titled()] if self.group_being_titled()
+                  else self.scene.selected_groups())
+        if not groups:
+            widgets.BeeNotification(self, 'No group selected')
+            return
+        if self.group_being_titled() is not None:
+            # Mid-writing there is nothing to record yet; the title is
+            # still in the editor and goes on the stack when it is done
+            for group in groups:
+                group.title_align = align
+                group.refresh_title_editor()
+                group.update()
+        else:
+            self.undo_stack.push(commands.ChangeGroupTitle(
+                groups, groups[0].title, groups[0].header_color, align))
         self.update_group_toolbar()
+
+    def on_action_group_title_align_left(self):
+        self.set_group_title_align(BeeGroupItem.TITLE_LEFT)
+
+    def on_action_group_title_align_center(self):
+        self.set_group_title_align(BeeGroupItem.TITLE_CENTER)
 
     def on_action_group_box_color(self):
         groups = [item for item in self.scene.selectedItems(user_only=True)
@@ -2287,6 +2350,7 @@ class BeeGraphicsView(MainControlsMixin,
         groups = self.scene.selected_groups()
         if toolbar is not None and groups:
             toolbar.update_lock(groups[0].locked)
+            toolbar.update_title(groups[0])
         self.pin_toolbar_to(toolbar, groups)
 
     def update_image_toolbar(self):

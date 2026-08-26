@@ -36,16 +36,47 @@ class GroupToolBar(PinnedToolBar):
     def __init__(self, parent, view):
         super().__init__(parent, view)
 
+        # One button, two jobs: while a title is being written it
+        # colours the title, because that is what the colour on screen
+        # is at that moment
+        self.writing_title = False
         self.color = self.add_button(
-            'color', 'Group colour', view.on_action_group_box_color,
-            keep_colors=True)
+            'color', 'Group colour', self.on_color, keep_colors=True)
         self.title = self.add_button(
-            'text', 'Group title', view.on_action_group_title)
+            'text', 'Write the group title', view.on_action_group_title)
+        self.align_left = self.add_button(
+            'align_left', 'Title on the left',
+            view.on_action_group_title_align_left)
+        self.align_left.setCheckable(True)
+        self.align_center = self.add_button(
+            'align_center', 'Title centred',
+            view.on_action_group_title_align_center)
+        self.align_center.setCheckable(True)
         self.lock = self.add_button('lock', 'Lock group', self.toggle_lock)
         self.ungroup = self.add_button(
             'ungroup', 'Ungroup', view.on_action_ungroup_items)
 
         self.adjustSize()
+
+    def on_color(self):
+        """Colour the title if one is being written, else the group."""
+
+        if self.writing_title:
+            self.view.on_action_group_title_color()
+        else:
+            self.view.on_action_group_box_color()
+
+    def update_title(self, group):
+        """Show what the bar is acting on: the group, or its title."""
+
+        self.writing_title = group.title_editing
+        self.color.setToolTip(
+            'Title colour' if self.writing_title else 'Group colour')
+        self.align_left.setChecked(group.title_align == group.TITLE_LEFT)
+        self.align_center.setChecked(group.title_align == group.TITLE_CENTER)
+        # Alignment means nothing until there is a title to align
+        for button in (self.align_left, self.align_center):
+            button.setEnabled(group.shows_header())
 
     def toggle_lock(self):
         """Lock or unlock through the menu entry.

@@ -7,7 +7,6 @@ from beeref import commands
 from beeref.assets import BeeAssets
 from beeref.items import BeeGroupItem, BeePixmapItem
 from beeref.utils import readable_grey
-from beeref.widgets.group_title import GroupTitleDialog
 
 
 def group_with_image(view, width=300, height=200):
@@ -155,47 +154,6 @@ def test_a_copied_group_keeps_its_title(view):
     assert copy.header_color == QtGui.QColor('#e8a33d')
 
 
-def test_the_dialog_puts_a_title_on(view):
-    group = group_with_image(view)
-
-    def answer(self):
-        self.edit.setText('Lid Latch')
-        self.header_color = QtGui.QColor('#e8a33d')
-        return True
-
-    with patch.object(GroupTitleDialog, 'exec', answer):
-        view.on_action_group_title()
-
-    assert group.title == 'Lid Latch'
-    assert group.header_color == QtGui.QColor('#e8a33d')
-
-
-def test_emptying_the_field_takes_the_title_off(view):
-    """The same dialog puts one on and removes it."""
-
-    group = group_with_image(view)
-    group.title = 'Lid Latch'
-
-    def answer(self):
-        self.edit.setText('   ')
-        return True
-
-    with patch.object(GroupTitleDialog, 'exec', answer):
-        view.on_action_group_title()
-
-    assert group.title == ''
-    assert group.header_height() == 0
-
-
-def test_cancelling_leaves_the_group_alone(view):
-    group = group_with_image(view)
-    group.title = 'Lid Latch'
-
-    with patch.object(GroupTitleDialog, 'exec', lambda self: 0):
-        view.on_action_group_title()
-    assert group.title == 'Lid Latch'
-
-
 def test_the_title_can_be_undone(view):
     group = group_with_image(view)
     view.undo_stack.push(commands.ChangeGroupTitle(
@@ -273,65 +231,220 @@ def test_the_alignment_can_be_undone(view):
     assert group.title_align == BeeGroupItem.TITLE_CENTER
 
 
-def test_the_board_shows_a_colour_while_it_is_being_picked(view):
-    """Judging a colour against the dialog's own swatch is no judgement."""
+def type_title(group, text):
+    """What the user typing into the band amounts to."""
+
+    group.title_editor.setPlainText(text)
+
+
+def test_the_title_is_written_on_the_group_itself(view):
+    """No dialog: the band opens where the title is going to be."""
 
     group = group_with_image(view)
-    seen = []
+    group.setSelected(True)
+    view.on_action_group_title()
 
-    def answer(self):
-        self.edit.setText('Lid Latch')
-        self.header_color = QtGui.QColor('#e8a33d')
-        self.show_preview()
-        seen.append((group.title, QtGui.QColor(group.header_color)))
-        return True
-
-    with patch.object(GroupTitleDialog, 'exec', answer):
-        view.on_action_group_title()
-
-    # The band was on the board, words and all, before OK was pressed
-    assert seen == [('Lid Latch', QtGui.QColor('#e8a33d'))]
+    assert group.title_editing is True
+    assert group.title_editor is not None
+    assert view.scene.title_group is group
+    # The band is there to type into, before the first letter
+    assert group.shows_header() is True
+    assert group.header_height() > 0
 
 
-def test_what_is_recorded_is_what_was_there_before_the_preview(view):
+def test_what_is_typed_becomes_the_title(view):
     group = group_with_image(view)
+    group.setSelected(True)
+    view.on_action_group_title()
+    type_title(group, 'Lid Latch')
+    group.exit_title_edit_mode()
 
-    def answer(self):
-        self.edit.setText('Lid Latch')
-        self.header_color = QtGui.QColor('#e8a33d')
-        self.show_preview()
-        return True
-
-    with patch.object(GroupTitleDialog, 'exec', answer):
-        view.on_action_group_title()
     assert group.title == 'Lid Latch'
+    assert group.title_editing is False
+    assert group.title_editor is None
+    assert view.scene.title_group is None
+
+
+def test_writing_nothing_leaves_the_group_without_a_header(view):
+    group = group_with_image(view)
+    before = group.rect()
+    group.setSelected(True)
+    view.on_action_group_title()
+    group.exit_title_edit_mode()
+
+    assert group.title == ''
+    assert group.shows_header() is False
+    assert group.rect().height() == pytest.approx(before.height())
+
+
+def test_escaping_throws_the_change_away(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.setSelected(True)
+    view.on_action_group_title()
+    type_title(group, 'Something else')
+    group.exit_title_edit_mode(commit=False)
+
+    assert group.title == 'Lid Latch'
+
+
+def test_the_written_title_can_be_undone(view):
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.on_action_group_title()
+    type_title(group, 'Lid Latch')
+    group.exit_title_edit_mode()
 
     view.undo_stack.undo()
     assert group.title == ''
-    assert group.header_color is None
 
 
-def test_a_cancelled_dialog_takes_the_preview_back_off(view):
+def test_the_box_does_not_chase_the_words_being_typed(view):
+    """The editor is parented to the group, so it must not be measured
+    as one of the group's items."""
+
     group = group_with_image(view)
+    group.setSelected(True)
+    view.on_action_group_title()
+    with_band = group.rect()
+    type_title(group, 'A title that is really quite long indeed')
+    group.fit_to_children()
 
-    def answer(self):
-        self.edit.setText('Lid Latch')
-        self.header_color = QtGui.QColor('#e8a33d')
-        self.show_preview()
-        return False
-
-    with patch.object(GroupTitleDialog, 'exec', answer):
-        view.on_action_group_title()
-
-    assert group.title == ''
-    assert group.header_color is None
+    assert group.rect().width() == pytest.approx(with_band.width())
 
 
-def test_dropping_out_of_the_colour_dialog_keeps_the_colour_it_had(view):
-    """Cancelling a colour must not leave the preview behind."""
+def test_the_colour_button_colours_the_title_while_one_is_written(view):
+    """The same button, doing whatever the colour on screen is at
+    that moment."""
 
-    dialog = GroupTitleDialog(None, title='Lid Latch',
-                              header_color=QtGui.QColor('#112233'))
-    with patch('PyQt6.QtWidgets.QColorDialog.exec', return_value=0):
-        dialog.on_pick_color()
-    assert dialog.header_color == QtGui.QColor('#112233')
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.update_group_toolbar()
+    assert view.group_toolbar.writing_title is False
+
+    view.on_action_group_title()
+    view.update_group_toolbar()
+    assert view.group_toolbar.writing_title is True
+    assert view.group_toolbar.color.toolTip() == 'Title colour'
+
+    with patch.object(view, 'on_action_group_title_color') as titled:
+        view.group_toolbar.on_color()
+    assert titled.called
+
+
+def test_the_colour_button_colours_the_group_the_rest_of_the_time(view):
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.update_group_toolbar()
+
+    with patch.object(view, 'on_action_group_box_color') as boxed:
+        view.group_toolbar.on_color()
+    assert boxed.called
+
+
+def test_the_title_colour_shows_on_the_board_as_it_is_picked(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.setSelected(True)
+    seen = []
+
+    def picked(title, initial, preview, **kwargs):
+        preview(QtGui.QColor('#e8a33d'))
+        seen.append(QtGui.QColor(group.header_color))
+        return QtGui.QColor('#e8a33d')
+
+    with patch.object(view, 'pick_color_live', side_effect=picked):
+        view.on_action_group_title_color()
+
+    assert seen == [QtGui.QColor('#e8a33d')]
+    assert group.header_color == QtGui.QColor('#e8a33d')
+
+
+def test_the_alignment_buttons_show_which_way_the_title_sits(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.setSelected(True)
+    view.update_group_toolbar()
+
+    assert view.group_toolbar.align_center.isChecked() is True
+    assert view.group_toolbar.align_left.isChecked() is False
+
+    view.on_action_group_title_align_left()
+    assert group.title_align == BeeGroupItem.TITLE_LEFT
+    assert view.group_toolbar.align_left.isChecked() is True
+
+
+def test_alignment_waits_until_there_is_a_title_to_align(view):
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.update_group_toolbar()
+    assert view.group_toolbar.align_left.isEnabled() is False
+
+    group.title = 'Lid Latch'
+    view.update_group_toolbar()
+    assert view.group_toolbar.align_left.isEnabled() is True
+
+
+def test_aligning_mid_writing_records_nothing_yet(view):
+    """The title is still in the editor; it goes on the stack when done."""
+
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.on_action_group_title()
+    depth = view.undo_stack.index()
+
+    view.on_action_group_title_align_left()
+    assert group.title_align == BeeGroupItem.TITLE_LEFT
+    assert view.undo_stack.index() == depth
+
+
+def test_the_text_tool_opens_a_title_instead_of_covering_it(view):
+    """A group's title is text too, and the tool is for reaching text."""
+
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    point = view.mapFromScene(
+        group.mapToScene(group.header_rect().center()))
+
+    assert view.group_header_at(point) is group
+    view.write_note_at(point)
+    assert group.title_editing is True
+    # And no note was laid over the band
+    assert view.scene.selected_text_items() == []
+
+
+def test_the_text_tool_still_writes_a_note_below_the_band(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    inside = group.rect().center()
+    point = view.mapFromScene(group.mapToScene(inside))
+
+    assert view.group_header_at(point) is None
+
+
+def test_an_untitled_group_has_no_band_for_the_tool_to_find(view):
+    group = group_with_image(view)
+    point = view.mapFromScene(group.mapToScene(group.rect().topLeft()))
+    assert view.group_header_at(point) is None
+
+
+def test_a_locked_group_keeps_its_title_to_itself(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.locked = True
+    point = view.mapFromScene(
+        group.mapToScene(group.header_rect().center()))
+
+    view.write_note_at(point)
+    assert group.title_editing is False
+
+
+def test_clicking_away_finishes_the_title(view):
+    group = group_with_image(view)
+    group.setSelected(True)
+    view.on_action_group_title()
+    type_title(group, 'Lid Latch')
+
+    view.scene.title_group.exit_title_edit_mode()
+    assert group.title == 'Lid Latch'
+    assert view.scene.title_group is None

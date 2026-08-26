@@ -301,8 +301,20 @@ actions = ActionList([
     ),
     Action(
         id='group_title',
-        text='&Title...',
+        text='Write &Title',
         callback='on_action_group_title',
+        group='active_when_selection',
+    ),
+    Action(
+        id='group_title_align_left',
+        text='Title on the &Left',
+        callback='on_action_group_title_align_left',
+        group='active_when_selection',
+    ),
+    Action(
+        id='group_title_align_center',
+        text='Title C&entred',
+        callback='on_action_group_title_align_center',
         group='active_when_selection',
     ),
     Action(

@@ -140,6 +140,8 @@ menu_structure = [
             'ungroup_items',
             MENU_SEPARATOR,
             'group_title',
+            'group_title_align_left',
+            'group_title_align_center',
             'group_box_color',
             'lock_group',
             MENU_SEPARATOR,
