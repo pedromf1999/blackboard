@@ -20,6 +20,7 @@ MENU_SEPARATOR = 0
 TEXT_MENU = '&Text'
 DRAW_MENU = '&Draw'
 GROUP_MENU = '&Group'
+IMAGES_MENU = '&Images'
 
 menu_structure = [
     {
@@ -121,7 +122,7 @@ menu_structure = [
         ],
     },
     {
-        'menu': '&Images',
+        'menu': IMAGES_MENU,
         'items': [
             'crop',
             'image_outline',
@@ -132,6 +133,11 @@ menu_structure = [
             MENU_SEPARATOR,
             'show_color_gamut',
             'sample_color',
+            MENU_SEPARATOR,
+            # Reachable from the short menu too: stacking is decided
+            # per item, and right-clicking one is how it is said
+            'raise_to_top',
+            'lower_to_bottom',
         ],
     },
     {

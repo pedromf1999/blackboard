@@ -1799,13 +1799,13 @@ def test_on_context_menu_over_image_inside_group(view):
     pixmapitem.setSelected(True)
     view.on_action_group_items()
     group = list(view.scene.items_by_type('group'))[0]
-    view.context_menu = MagicMock()
+    view.image_context_menu = MagicMock()
     view.group_context_menu = MagicMock()
 
     with patch.object(view, 'get_item_at', return_value=pixmapitem):
         view.on_context_menu(QtCore.QPoint(0, 0))
 
-    view.context_menu.exec.assert_called_once()
+    view.image_context_menu.exec.assert_called_once()
     view.group_context_menu.exec.assert_not_called()
     assert view.scene.active_group is group
     assert pixmapitem.isSelected() is True

@@ -21,7 +21,7 @@ from PyQt6 import QtGui, QtWidgets
 
 from .actions import Action, actions
 from .menu_structure import (
-    menu_structure, MENU_SEPARATOR, GROUP_MENU, TEXT_MENU)
+    menu_structure, MENU_SEPARATOR, GROUP_MENU, IMAGES_MENU, TEXT_MENU)
 
 
 class ActionsMixin:
@@ -45,6 +45,9 @@ class ActionsMixin:
         self.group_context_menu = QtWidgets.QMenu(self)
         self._create_menu(
             self.group_context_menu, self._get_menu_items(GROUP_MENU))
+        self.image_context_menu = QtWidgets.QMenu(self)
+        self._create_menu(
+            self.image_context_menu, self._get_menu_items(IMAGES_MENU))
         for func, arg in self._post_create_functions:
             func(arg)
         del self._post_create_functions
@@ -52,8 +55,8 @@ class ActionsMixin:
     def _get_menu_items(self, menu_name):
         """The items of the given top level menu.
 
-        The Text and Group menus double as context menus, so their
-        contents are only defined once, in the menu structure.
+        The Text, Group and Images menus double as context menus, so
+        their contents are only defined once, in the menu structure.
         """
 
         for item in menu_structure:

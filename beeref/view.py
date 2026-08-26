@@ -788,11 +788,25 @@ class BeeGraphicsView(MainControlsMixin,
             self.text_context_menu.exec(self.mapToGlobal(point))
             return
 
-        # An item inside a group offers its own actions, such as crop
-        # and the transforms, with the group opened up so they apply.
-        # The full menu still holds the group's own actions.
+        # Images offer their own options the same way, so that cropping
+        # and the stacking order are a click away rather than buried in
+        # the long menu
         item = self.get_item_at(point)
         group = self.scene.get_group_ancestor(item) if item else None
+        if (item is not None
+                and getattr(item, 'TYPE', None) == BeePixmapItem.TYPE
+                and not (group is not None and group.locked)):
+            if group is not None:
+                self.scene.enter_group(group, item)
+            elif not item.isSelected():
+                self.scene.deselect_all_items()
+                item.setSelected(True)
+            self.image_context_menu.exec(self.mapToGlobal(point))
+            return
+
+        # Anything else inside a group offers its own actions, with the
+        # group opened up so they apply. The full menu still holds the
+        # group's own actions.
         if item is not None and group is not None and not group.locked:
             self.scene.enter_group(group, item)
             self.context_menu.exec(self.mapToGlobal(point))
