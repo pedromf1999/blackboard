@@ -139,6 +139,7 @@ menu_structure = [
             'group_items',
             'ungroup_items',
             MENU_SEPARATOR,
+            'group_title',
             'group_box_color',
             'lock_group',
             MENU_SEPARATOR,

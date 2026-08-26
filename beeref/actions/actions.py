@@ -300,6 +300,12 @@ actions = ActionList([
         group='active_when_selection',
     ),
     Action(
+        id='group_title',
+        text='&Title...',
+        callback='on_action_group_title',
+        group='active_when_selection',
+    ),
+    Action(
         id='group_box_color',
         text='Group &Colour...',
         callback='on_action_group_box_color',

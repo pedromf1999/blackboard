@@ -575,14 +575,31 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # A fraction makes every group look like the same box, scaled.
     CORNER_RADIUS_FRACTION = 0.04
 
+    # The title band across the top. Sized from the box's width, which
+    # the band does not change -- taking it from the shorter side would
+    # be circular, since the band is added to the height.
+    TITLE_FRACTION = 0.04
+    TITLE_MIN_SIZE = 7
+    # Room above and below the letters, as a fraction of their size
+    TITLE_PADDING_FRACTION = 0.35
+
     def __init__(self, box_color=None, locked=False,
-                 created=None, modified=None, **kwargs):
+                 created=None, modified=None, title=None,
+                 header_color=None, **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
+        self.settings = BeeSettings()
         self.init_selectable()
         self.is_editable = False
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
+        # An empty title means no band at all; the group looks exactly
+        # as it did before there were titles
+        self._title = title or ''
+        # None means the band takes the group's own colour, so it keeps
+        # following it when the group is recoloured
+        self.header_color = (QtGui.QColor(*header_color)
+                             if header_color else None)
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
@@ -648,11 +665,26 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self._box_color = value
         self.update()
 
+    @property
+    def title(self):
+        return self._title
+
+    @title.setter
+    def title(self, value):
+        self._title = value or ''
+        # The band is added above the items, never over them, so the
+        # box has to be re-measured when a title comes or goes
+        self.fit_to_children()
+        self.update()
+
     def get_extra_save_data(self):
         return {'box_color': self.box_color.getRgb(),
                 'locked': self.locked,
                 'created': self.created,
-                'modified': self.modified}
+                'modified': self.modified,
+                'title': self.title,
+                'header_color': (self.header_color.getRgb()
+                                 if self.header_color else None)}
 
     def bee_children(self):
         """The items grouped inside this one."""
@@ -683,15 +715,104 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         return []
 
     def fit_to_children(self):
-        """Grow the box so that it contains all its items, with padding."""
+        """Grow the box so that it contains all its items, with padding.
+
+        A title takes its band from above the padding rather than out
+        of it, so the words never come down over somebody's work.
+        """
 
         children = self.bee_children()
         if not children:
             return
         rect = self.childrenBoundingRect()
         padding = self.padding_for(rect)
+        box = rect.adjusted(-padding, -padding, padding, padding)
         self.prepareGeometryChange()
-        self.setRect(rect.adjusted(-padding, -padding, padding, padding))
+        header = self.header_height_for(box.width())
+        self.setRect(box.adjusted(0, -header, 0, 0))
+
+    def title_size_for(self, width):
+        """How big the title's letters are, for a box this wide.
+
+        Measured from the width because the band is added to the height:
+        taking it from the shorter side would have the size depend on
+        the band and the band depend on the size.
+        """
+
+        return max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION)
+
+    def title_font(self, width=None):
+        """Bold, and in the bundled face -- a title is not a note.
+
+        Falls back to the interface font on the rare install where the
+        bundled one could not be loaded, which is better than no title.
+        """
+
+        if width is None:
+            width = self.rect().width()
+        family = BeeAssets().font_family
+        font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
+        font.setBold(True)
+        font.setPointSizeF(self.title_size_for(width))
+        return font
+
+    def header_height_for(self, width):
+        """The height of the title band, or nothing without a title."""
+
+        if not self.title:
+            return 0
+        metrics = QtGui.QFontMetricsF(self.title_font(width))
+        return metrics.height() * (1 + 2 * self.TITLE_PADDING_FRACTION)
+
+    def header_height(self):
+        return self.header_height_for(self.rect().width())
+
+    def header_rect(self):
+        """The band across the top of the box."""
+
+        rect = self.rect()
+        return QtCore.QRectF(rect.x(), rect.y(),
+                             rect.width(), self.header_height())
+
+    def visible_header_color(self):
+        """The colour the band actually appears in.
+
+        A band with no colour of its own is the group's colour, and a
+        translucent one lets the canvas through, which is what the
+        title has to stay readable against.
+        """
+
+        canvas = QtGui.QColor(
+            self.settings.valueOrDefault('View/canvas_color'))
+        return blend_over(self.header_color or self.box_color, canvas)
+
+    def paint_header(self, painter):
+        """Draw the title band and the title in it."""
+
+        if not self.title:
+            return
+        band = self.header_rect()
+        radius = self.corner_radius()
+
+        # Clipped to the box so the band takes the box's rounded top
+        # corners without having to be built out of arcs
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(self.rect(), radius, radius)
+        painter.save()
+        painter.setClipPath(path)
+        color = self.header_color or self.box_color
+        painter.fillRect(band, QtGui.QBrush(color))
+
+        painter.setFont(self.title_font())
+        painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
+        inset = band.height() * self.TITLE_PADDING_FRACTION
+        room = band.adjusted(inset, 0, -inset, 0)
+        metrics = QtGui.QFontMetricsF(self.title_font())
+        painter.drawText(
+            room, int(Qt.AlignmentFlag.AlignCenter),
+            metrics.elidedText(self.title, Qt.TextElideMode.ElideRight,
+                               room.width()))
+        painter.restore()
 
     def set_children_interactive(self, value):
         """Whether the items inside the group can be clicked individually.
@@ -738,6 +859,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         painter.setBrush(QtGui.QBrush(self.box_color))
         radius = self.corner_radius()
         painter.drawRoundedRect(self.rect(), radius, radius)
+        self.paint_header(painter)
         if self.drop_target:
             self.paint_drop_target(painter)
         self.paint_selectable(painter, option, widget)
@@ -764,8 +886,12 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             radius, radius)
 
     def create_copy(self):
-        item = BeeGroupItem(box_color=self.box_color.getRgb(),
-                            locked=self.locked)
+        item = BeeGroupItem(
+            box_color=self.box_color.getRgb(),
+            locked=self.locked,
+            title=self.title,
+            header_color=(self.header_color.getRgb()
+                          if self.header_color else None))
         item.setPos(self.pos())
         item.setZValue(self.zValue())
         item.setScale(self.scale())

@@ -685,6 +685,34 @@ class ChangeOutline(QtGui.QUndoCommand):
             item.set_outline_width(width)
 
 
+class ChangeGroupTitle(QtGui.QUndoCommand):
+    """Set a group's title and the colour of the band it sits in.
+
+    One command for both, because they are asked for together: the
+    dialog offers the words and their colour side by side.
+    """
+
+    def __init__(self, groups, title, header_color):
+        super().__init__('Change group title')
+        self.groups = list(groups)
+        self.title = title
+        self.header_color = header_color
+        self.old = [(group.title, group.header_color)
+                    for group in self.groups]
+
+    def redo(self):
+        for group in self.groups:
+            group.header_color = self.header_color
+            group.title = self.title
+            group.touch()
+
+    def undo(self):
+        for group, (title, color) in zip(self.groups, self.old):
+            group.header_color = color
+            group.title = title
+            group.touch()
+
+
 class ChangeOutlineColor(QtGui.QUndoCommand):
     """Change the colour of the contour round images."""
 

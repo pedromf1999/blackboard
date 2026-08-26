@@ -39,6 +39,8 @@ class GroupToolBar(PinnedToolBar):
         self.color = self.add_button(
             'color', 'Group colour', view.on_action_group_box_color,
             keep_colors=True)
+        self.title = self.add_button(
+            'text', 'Group title', view.on_action_group_title)
         self.lock = self.add_button('lock', 'Lock group', self.toggle_lock)
         self.ungroup = self.add_button(
             'ungroup', 'Ungroup', view.on_action_ungroup_items)

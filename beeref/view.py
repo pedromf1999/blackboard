@@ -1019,6 +1019,25 @@ class BeeGraphicsView(MainControlsMixin,
             return color
         return None
 
+    def on_action_group_title(self):
+        """Ask for a title for the selected groups, and its colour."""
+
+        groups = self.scene.selected_groups()
+        if not groups:
+            widgets.BeeNotification(self, 'No group selected')
+            return
+        first = groups[0]
+        dialog = widgets.group_title.GroupTitleDialog(
+            self, title=first.title, header_color=first.header_color,
+            box_color=first.box_color)
+        self.move_dialog_beside_selection(dialog)
+        if not dialog.exec():
+            return
+        title, color = dialog.get_answer()
+        self.undo_stack.push(
+            commands.ChangeGroupTitle(groups, title, color))
+        self.update_group_toolbar()
+
     def on_action_group_box_color(self):
         groups = [item for item in self.scene.selectedItems(user_only=True)
                   if item.TYPE == BeeGroupItem.TYPE]
