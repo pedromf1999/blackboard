@@ -26,6 +26,52 @@ from beeref.utils import readable_grey
 logger = logging.getLogger(__name__)
 
 
+class GreyScale(QtWidgets.QWidget):
+    """A row of plain shades, under the palette.
+
+    The palette has not one grey in sixty-four colours, so a box could
+    be given any hue but never a plain shade. They go under the grid
+    rather than into it: the grid is full, and every colour in it is
+    one somebody might want.
+    """
+
+    SWATCH = 22
+    # Black to white, with the shade a group is drawn in among them in
+    # its place, so a group that has been recoloured can be put back
+    TONES = (0, 90, 128, 160, 192, 224, 255)
+
+    def __init__(self, dialog):
+        super().__init__(dialog)
+        self.dialog = dialog
+
+        layout = QtWidgets.QHBoxLayout()
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(3)
+        for tone in self.tones():
+            layout.addWidget(self.build_swatch(QtGui.QColor(tone, tone, tone)))
+        layout.addStretch(100)
+        self.setLayout(layout)
+
+    @classmethod
+    def tones(cls):
+        # Imported here rather than at the top: the items know about the
+        # widgets, and the widgets would then know about the items
+        from beeref.items import BeeGroupItem
+        return sorted(set(cls.TONES) | {BeeGroupItem.DEFAULT_BOX_COLOR[0]})
+
+    def build_swatch(self, color):
+        button = QtWidgets.QToolButton(self)
+        button.setFixedSize(self.SWATCH, self.SWATCH)
+        button.setToolTip(color.name())
+        button.setStyleSheet(
+            f'background-color: {color.name()};'
+            ' border: 1px solid #555; border-radius: 3px;')
+        button.clicked.connect(
+            lambda checked=False, color=color: self.dialog.setCurrentColor(
+                color))
+        return button
+
+
 class LegendColors(QtWidgets.QWidget):
     """The board's legend, offered in the colour dialog.
 
@@ -128,8 +174,9 @@ def simplify_color_dialog(dialog, legend=None):
     them, so a future Qt that renames one would leave that part showing
     rather than break anything.
 
-    A board's legend, when there is one, goes in where the custom slots
-    used to be; see LegendColors.
+    A row of greys goes in where the custom slots used to be, and a
+    board's legend under that when there is one; see GreyScale and
+    LegendColors.
     """
 
     children = [child for child in dialog.children()
@@ -157,13 +204,15 @@ def simplify_color_dialog(dialog, legend=None):
             continue
         child.hide()
 
-    if legend and keep:
+    if keep:
         # Into the column the swatches are in, right under them, which
         # is where the custom slots used to be
         holder = layout_holding(dialog.layout(), labelled[0].buddy())
         if holder is not None:
             column, index = holder
-            column.insertWidget(index + 1, LegendColors(dialog, legend))
+            column.insertWidget(index + 1, GreyScale(dialog))
+            if legend:
+                column.insertWidget(index + 2, LegendColors(dialog, legend))
 
     if screen_button is not None:
         # An eyedropper says it better than the sentence did, and the

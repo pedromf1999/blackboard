@@ -32,8 +32,9 @@ def test_only_the_swatches_and_the_eyedropper_are_left(qapp):
     simplify_color_dialog(dialog)
 
     showing = [child for child in parts(dialog) if not child.isHidden()]
-    # The grid, the eyedropper and the OK/Cancel box, and no headings
-    assert len(showing) == 3
+    # The grid, the greys under it, the eyedropper and the OK/Cancel
+    # box, and no headings over the grid
+    assert len(showing) == 4
     assert [c for c in showing if isinstance(c, QtWidgets.QLabel)] == []
     assert any(isinstance(c, QtWidgets.QDialogButtonBox) for c in showing)
     assert screen_button(dialog) in showing
@@ -193,7 +194,9 @@ def test_it_sits_where_the_custom_slots_used_to(qapp):
 
     from beeref.widgets.color_dialog import layout_holding
     column, index = layout_holding(dialog.layout(), grid)
-    assert column.itemAt(index + 1).widget() is legend_widget(dialog)
+    # The greys first, then the board's own colours under them
+    assert column.itemAt(index + 1).widget() is grey_strip(dialog)
+    assert column.itemAt(index + 2).widget() is legend_widget(dialog)
 
 
 def test_the_board_picker_hands_the_legend_over(view):
@@ -211,53 +214,70 @@ def standard(index):
     return QtWidgets.QColorDialog.standardColor(index)
 
 
-def test_the_bottom_row_is_greys(view):
-    """A palette of sixty-four colours had not one plain shade in it."""
-
-    view.apply_palette_to_color_dialogs()
-    bottom = [standard(view.swatch_slot(view.SWATCH_ROWS - 1, column))
-              for column in range(view.SWATCH_COLUMNS)]
-
-    for color in bottom:
-        assert color.red() == color.green() == color.blue()
+def grey_strip(dialog):
+    from beeref.widgets.color_dialog import GreyScale
+    found = dialog.findChildren(GreyScale)
+    return found[0] if found else None
 
 
-def test_the_greys_run_dark_to_light(view):
-    view.apply_palette_to_color_dialogs()
-    bottom = [standard(view.swatch_slot(view.SWATCH_ROWS - 1, column)).red()
-              for column in range(view.SWATCH_COLUMNS)]
+def test_the_greys_are_offered_under_the_palette(qapp):
+    """Sixty-four colours and not one plain shade among them."""
 
-    assert bottom == sorted(bottom)
-    assert bottom[0] == 0
-    assert bottom[-1] == 255
+    dialog = make_dialog(qapp)
+    simplify_color_dialog(dialog)
+
+    strip = grey_strip(dialog)
+    assert strip is not None
+    tones = strip.tones()
+    assert tones == sorted(tones)
+    assert tones[0] == 0
+    assert tones[-1] == 255
 
 
-def test_the_shade_groups_start_as_is_among_them(view):
-    """So a group given a colour can be put back the way it was."""
+def test_the_shade_groups_start_as_is_among_them(qapp):
+    """So a group that has been recoloured can be put back."""
 
     from beeref.items import BeeGroupItem
+    from beeref.widgets.color_dialog import GreyScale
+
+    assert BeeGroupItem.DEFAULT_BOX_COLOR[0] in GreyScale.tones()
+
+
+def test_picking_a_grey_sets_the_colour(qapp):
+    dialog = make_dialog(qapp)
+    simplify_color_dialog(dialog)
+
+    swatches(grey_strip(dialog))[0].click()
+    assert dialog.currentColor() == QtGui.QColor(0, 0, 0)
+
+
+def test_the_greys_cost_the_palette_nothing(view):
+    """They go under the grid, not into it: the grid is full."""
+
+    from beeref.assets import BeeAssets
     view.apply_palette_to_color_dialogs()
-    tones = [color.red() for color in view.swatch_greys()]
+    palette = [color for color in BeeAssets().palette
+               if color != QtGui.QColor(0, 0, 0)]
 
-    assert BeeGroupItem.DEFAULT_BOX_COLOR[0] in tones
+    shown = {standard(i).name() for i in range(48)}
+    assert shown == {color.name() for color in palette[:48]}
 
 
-def test_the_greys_are_a_row_and_not_a_column(view):
-    """Qt lays its grid out down the columns, so the last eight slots
-    would have run down the right-hand edge."""
+def test_black_is_not_in_the_grid_twice(view):
+    """It leads the palette, and it leads the greys as well."""
 
     view.apply_palette_to_color_dialogs()
-    right_edge = [standard(view.swatch_slot(row, view.SWATCH_COLUMNS - 1))
-                  for row in range(view.SWATCH_ROWS - 1)]
-
-    assert any(color.red() != color.green() for color in right_edge)
+    assert QtGui.QColor(0, 0, 0).name() not in {
+        standard(i).name() for i in range(48)}
 
 
-def test_the_colours_above_are_still_the_palette(view):
+def test_the_palette_keeps_the_order_it_had(view):
+    """Only black is gone; nothing else was rearranged."""
+
     from beeref.assets import BeeAssets
     view.apply_palette_to_color_dialogs()
     palette = BeeAssets().palette
 
-    assert standard(view.swatch_slot(0, 0)) == palette[0]
-    assert standard(view.swatch_slot(0, 1)) == palette[1]
-    assert standard(view.swatch_slot(1, 0)) == palette[view.SWATCH_COLUMNS]
+    assert standard(0) == palette[1]
+    assert standard(1) == palette[2]
+    assert standard(10) == palette[11]

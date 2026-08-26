@@ -1075,53 +1075,23 @@ class BeeGraphicsView(MainControlsMixin,
                 min(topleft.y(), screen.bottom() - size.height()))
         dialog.move(x, y)
 
-    # The grid Qt offers is six rows of eight. The bottom row is given
-    # over to greys: a palette of sixty-four colours had not one, so a
-    # box could be given any hue but never a plain shade.
-    SWATCH_ROWS = 6
-    SWATCH_COLUMNS = 8
-    # Black to white, with the shade a group is drawn in put among them
-    # in its place, so the colour a group starts as can be picked again
-    GREY_TONES = (0, 90, 128, 160, 192, 224, 255)
-
-    @classmethod
-    def swatch_greys(cls):
-        """The bottom row, dark to light."""
-
-        tones = set(cls.GREY_TONES)
-        tones.add(BeeGroupItem.DEFAULT_BOX_COLOR[0])
-        chosen = sorted(tones)[:cls.SWATCH_COLUMNS]
-        return [QtGui.QColor(tone, tone, tone) for tone in chosen]
-
-    @classmethod
-    def swatch_slot(cls, row, column):
-        """Qt lays its grid out down the columns, not across the rows.
-
-        Which means a row on screen is every sixth slot, and putting a
-        row of greys at the end of the list would have laid them down
-        the right-hand edge instead.
-        """
-
-        return row + column * cls.SWATCH_ROWS
-
-    @classmethod
-    def apply_palette_to_color_dialogs(cls):
+    @staticmethod
+    def apply_palette_to_color_dialogs():
         """Put our palette in the colour picker's swatches.
+
+        The grid holds 48, and the palette leads with black -- which is
+        also the first of the greys offered under the grid, so it would
+        be there twice. Skipping it leaves room for one more colour
+        rather than a gap.
 
         The setters are static, so this reaches every colour dialog the
         application opens, including the ones in the settings.
         """
 
-        palette = BeeAssets().palette
-        for row in range(cls.SWATCH_ROWS - 1):
-            for column in range(cls.SWATCH_COLUMNS):
-                index = row * cls.SWATCH_COLUMNS + column
-                if index < len(palette):
-                    QtWidgets.QColorDialog.setStandardColor(
-                        cls.swatch_slot(row, column), palette[index])
-        for column, grey in enumerate(cls.swatch_greys()):
-            QtWidgets.QColorDialog.setStandardColor(
-                cls.swatch_slot(cls.SWATCH_ROWS - 1, column), grey)
+        colors = [color for color in BeeAssets().palette
+                  if color != QtGui.QColor(0, 0, 0)]
+        for i, color in enumerate(colors[:48]):
+            QtWidgets.QColorDialog.setStandardColor(i, color)
 
     def pick_color_live(self, title, initial, preview, alpha=True):
         """Ask for a colour, showing each choice on the board as it is made.
