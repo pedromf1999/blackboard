@@ -1044,6 +1044,32 @@ class BeeGraphicsView(MainControlsMixin,
             self.undo_stack.push(
                 commands.ChangeGroupBoxColor(groups, color))
 
+    def on_action_image_outline_color(self):
+        """Ask for a contour colour, showing it on the board as picked."""
+
+        items = self.scene.selected_images()
+        if not items:
+            widgets.BeeNotification(self, 'No image selected')
+            return
+        originals = [item.outline_color for item in items]
+
+        def preview(color):
+            for item in items:
+                item.outline_color = color
+                item.update()
+
+        color = self.pick_color_live(
+            'Choose Outline Colour', items[0].outline_color, preview)
+
+        # The originals go back whichever way the dialog went: the undo
+        # command records what it finds when it is built, and that has
+        # to be the colour from before the preview
+        for item, original in zip(items, originals):
+            item.outline_color = original
+            item.update()
+        if color is not None:
+            self.undo_stack.push(commands.ChangeOutlineColor(items, color))
+
     def on_action_find_text(self):
         query, ok = QtWidgets.QInputDialog.getText(
             self, 'Find Text', 'Find:', text=self.text_search_query)

@@ -454,6 +454,12 @@ actions = ActionList([
         group='active_when_image_selection',
     ),
     Action(
+        id='image_outline_color',
+        text='Outline Colo&ur...',
+        callback='on_action_image_outline_color',
+        group='active_when_image_selection',
+    ),
+    Action(
         id='flip_horizontally',
         text='Flip &Horizontally',
         shortcuts=['H'],

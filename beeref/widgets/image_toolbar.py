@@ -40,6 +40,9 @@ class ImageToolBar(PinnedToolBar):
         self.outline = self.add_button(
             'outline', 'Outline (Shift+O)', view.on_action_image_outline)
         self.outline.setCheckable(True)
+        self.color = self.add_button(
+            'color', 'Outline colour', view.on_action_image_outline_color,
+            keep_colors=True)
         # The same pair of icons as everywhere else: one makes what is
         # selected bigger, the other smaller -- letters, line or contour
         self.thinner = self.add_button(
@@ -59,5 +62,5 @@ class ImageToolBar(PinnedToolBar):
         self.crop.setEnabled(len(items) == 1)
         outlined = [item for item in items if item.has_outline()]
         self.outline.setChecked(len(outlined) == len(items))
-        for button in (self.thinner, self.thicker):
+        for button in (self.color, self.thinner, self.thicker):
             button.setEnabled(bool(outlined))

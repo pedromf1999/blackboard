@@ -336,10 +336,14 @@ class CropItem(QtGui.QUndoCommand):
 
     def redo(self):
         self.old_crop = self.item.crop
+        # Cropping thins a contour that no longer fits, so undoing the
+        # crop has to give the frame back as well as the picture
+        self.old_outline = self.item.outline_width
         self.item.crop = self.crop
 
     def undo(self):
         self.item.crop = self.old_crop
+        self.item.set_outline_width(self.old_outline)
 
 
 class GroupItems(QtGui.QUndoCommand):
@@ -679,6 +683,26 @@ class ChangeOutline(QtGui.QUndoCommand):
     def undo(self):
         for item, width in zip(self.items, self.old_widths):
             item.set_outline_width(width)
+
+
+class ChangeOutlineColor(QtGui.QUndoCommand):
+    """Change the colour of the contour round images."""
+
+    def __init__(self, items, color):
+        super().__init__('Change outline colour')
+        self.items = list(items)
+        self.color = color
+        self.old_colors = [item.outline_color for item in self.items]
+
+    def redo(self):
+        for item in self.items:
+            item.outline_color = self.color
+            item.update()
+
+    def undo(self):
+        for item, color in zip(self.items, self.old_colors):
+            item.outline_color = color
+            item.update()
 
 
 class ChangeTextWidth(QtGui.QUndoCommand):

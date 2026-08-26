@@ -806,10 +806,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         super().__init__(QtGui.QPixmap.fromImage(image))
         self.save_id = None
         self.filename = filename
-        self.reset_crop()
-        # Zero means no contour at all
+        # Before the crop: setting the crop measures the contour against
+        # what is left of the picture, and so needs these to exist
         self.outline_width = 0
         self.outline_color = QtGui.QColor(*self.DEFAULT_OUTLINE_COLOR)
+        self.reset_crop()
         logger.debug(f'Initialized {self}')
         self.is_image = True
         self.crop_mode = False
@@ -850,6 +851,13 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         logger.debug(f'Setting crop for {self} to {value}')
         self.prepareGeometryChange()
         self._crop = value
+        # A contour frames the picture, so it is measured against the
+        # picture. Cropping a photograph down to a stamp used to leave
+        # the frame at its old thickness, which then swallowed what was
+        # left of the image.
+        if self.outline_width:
+            self.outline_width = min(self.outline_width,
+                                     self.max_outline_width())
         self.update()
 
     @property
