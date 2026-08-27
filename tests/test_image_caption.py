@@ -128,15 +128,19 @@ def test_the_letters_are_measured_against_what_is_left(view):
     assert item.caption_size() < whole
 
 
-def test_the_caption_is_bold_and_in_the_bundled_face(view):
+def test_the_caption_is_the_interface_font_and_plain(view):
+    """A note about a picture, not a heading over one."""
+
+    from PyQt6 import QtWidgets
     from beeref.assets import BeeAssets
 
     item = image(view)
     item.caption = 'Top view'
     font = item.caption_font()
 
-    assert font.bold() is True
-    assert font.family() == BeeAssets().font_family
+    assert font.bold() is False
+    assert font.family() == QtWidgets.QApplication.font().family()
+    assert font.family() != BeeAssets().font_family
 
 
 def test_the_band_can_have_its_own_colour(view):
@@ -223,3 +227,61 @@ def test_the_command_sets_both_at_once(view):
 
     view.undo_stack.undo()
     assert item.caption == ''
+
+
+def test_the_band_has_its_bottom_corners_taken_off(view):
+    """Square where it meets the picture, round at the far end, the way
+    the band under a group's title is at the other end."""
+
+    item = image(view)
+    item.caption = 'Top view'
+    band = item.caption_rect()
+    path = item.rounded_bottom_path(band)
+
+    assert item.caption_radius() > 0
+    assert path.contains(band.topLeft() + QtCore.QPointF(1, 1)) is True
+    # The corner itself is outside the rounded path
+    assert path.contains(
+        band.bottomLeft() + QtCore.QPointF(1, -1)) is False
+
+
+def test_a_picture_with_no_caption_is_a_plain_rectangle(view):
+    item = image(view)
+    path = item.rounded_bottom_path(item.framed_rect())
+
+    assert path.contains(
+        item.crop.bottomLeft() + QtCore.QPointF(1, -1)) is True
+
+
+def test_the_contour_goes_round_the_caption_as_well(view):
+    """A frame stopping above the words would leave them outside it."""
+
+    item = image(view)
+    item.set_outline_width(6)
+    without = item.framed_rect()
+    item.caption = 'Top view'
+    with_caption = item.framed_rect()
+
+    assert with_caption.height() == without.height() + item.caption_height()
+    assert with_caption.bottom() == item.caption_rect().bottom()
+
+
+def test_there_is_room_to_paint_the_contour_round_the_caption(view):
+    item = image(view)
+    item.caption = 'Top view'
+    plain = item.boundingRect()
+    item.set_outline_width(6)
+
+    assert item.boundingRect().bottom() > plain.bottom()
+    assert item.boundingRect().bottom() >= item.caption_rect().bottom()
+
+
+def test_the_rounding_keeps_its_weight_on_a_small_picture(view):
+    """Proportional to the band, with a floor so it does not vanish."""
+
+    small = image(view, 60, 40)
+    big = image(view, 1200, 800)
+    small.caption = big.caption = 'Top view'
+
+    assert small.caption_radius() > 0
+    assert big.caption_radius() > small.caption_radius()

@@ -1396,14 +1396,16 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         stepping outward when a contour is put on.
         """
 
-        rect = super().boundingRect()
+        # The caption hangs below the picture rather than over it, so
+        # there has to be room under it to paint in -- and the contour
+        # goes round both, so its own margin is added after that
+        rect = super().boundingRect().adjusted(
+            0, 0, 0, self.caption_height())
         if self.outline_width:
             margin = self.outline_width / 2
             rect = rect.marginsAdded(
                 QtCore.QMarginsF(margin, margin, margin, margin))
-        # The caption hangs below the picture rather than over it, so
-        # there has to be room under it to paint in
-        return rect.adjusted(0, 0, 0, self.caption_height())
+        return rect
 
     @property
     def caption(self):
@@ -1444,11 +1446,14 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
                    self.crop.width() * self.CAPTION_FRACTION)
 
     def caption_font(self):
-        """Bold, and in the bundled face, the way group titles are."""
+        """The interface font, plain.
 
-        family = BeeAssets().font_family
-        font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
-        font.setBold(True)
+        A caption is a note about a picture rather than a heading over
+        one, so it does not take the weight or the face a group title
+        does.
+        """
+
+        font = QtGui.QFont(QtWidgets.QApplication.font())
         font.setPointSizeF(self.caption_size())
         return font
 
@@ -1467,6 +1472,47 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
     def caption_inset(self):
         return self.caption_height() * self.CAPTION_PADDING_FRACTION
+
+    def caption_radius(self):
+        """How round the band's bottom corners are.
+
+        Proportional to the band, so it keeps its weight whatever size
+        the picture is, with the usual floor for very small ones.
+        """
+
+        band = self.caption_rect()
+        return min(max(CORNER_RADIUS, band.height() * 0.3),
+                   band.height(), band.width() / 2)
+
+    def framed_rect(self):
+        """The picture and its caption together."""
+
+        rect = QtCore.QRectF(self.crop)
+        rect.setHeight(rect.height() + self.caption_height())
+        return rect
+
+    def rounded_bottom_path(self, rect):
+        """A rectangle with its two bottom corners taken off.
+
+        The top meets the picture square, the way the band under a
+        group's title does at the other end.
+        """
+
+        radius = self.caption_radius() if self.shows_caption() else 0
+        path = QtGui.QPainterPath()
+        if radius <= 0:
+            path.addRect(rect)
+            return path
+        path.moveTo(rect.topLeft())
+        path.lineTo(rect.topRight())
+        path.lineTo(rect.right(), rect.bottom() - radius)
+        path.quadTo(rect.bottomRight(),
+                    QtCore.QPointF(rect.right() - radius, rect.bottom()))
+        path.lineTo(rect.left() + radius, rect.bottom())
+        path.quadTo(rect.bottomLeft(),
+                    QtCore.QPointF(rect.left(), rect.bottom() - radius))
+        path.closeSubpath()
+        return path
 
     def visible_caption_color(self):
         """The colour the band actually appears in."""
@@ -1498,7 +1544,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         painter.save()
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.caption_color))
-        painter.drawRect(band)
+        painter.drawPath(self.rounded_bottom_path(band))
         if self.caption_editing:
             # The words are the editor's while it is open
             painter.restore()
@@ -1876,18 +1922,21 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
         if not self.outline_width:
             return
+        # A contour goes round the picture and its caption together:
+        # a frame that stopped above the words would leave them hanging
+        # outside it
+        path = self.rounded_bottom_path(self.framed_rect())
         # A stretched picture keeps an even contour; see even_stroke
         stretch = self.even_stroke(painter)
-        rect = self.crop
         if stretch is not None:
-            rect = QtGui.QTransform.fromScale(*stretch).mapRect(rect)
+            path = QtGui.QTransform.fromScale(*stretch).map(path)
 
         pen = QtGui.QPen(self.outline_color)
         pen.setWidthF(self.outline_width)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         painter.setPen(pen)
         painter.setBrush(QtGui.QBrush())
-        painter.drawRect(rect)
+        painter.drawPath(path)
         if stretch is not None:
             painter.restore()
 
