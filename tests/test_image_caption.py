@@ -285,3 +285,39 @@ def test_the_rounding_keeps_its_weight_on_a_small_picture(view):
 
     assert small.caption_radius() > 0
     assert big.caption_radius() > small.caption_radius()
+
+
+def test_the_contour_is_as_thick_along_the_caption(view):
+    """A contour is centred on the edge it follows, so the band drawn
+    over it swallowed the inner half."""
+
+    size = 400
+    item = image(view, 200, 140)
+    # Unselected, or the selection box would be measured along with it
+    item.setSelected(False)
+    item.caption = 'Top view'
+    item.set_outline_width(8)
+    item.outline_color = QtGui.QColor('white')
+
+    canvas = QtGui.QImage(size, size, QtGui.QImage.Format.Format_ARGB32)
+    canvas.fill(QtGui.QColor(0, 0, 0, 0))
+    painter = QtGui.QPainter(canvas)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    painter.translate(80, 80)
+    item.paint(painter, None, None)
+    painter.end()
+
+    def white_run(y):
+        count = 0
+        for x in range(size - 1, 0, -1):
+            color = canvas.pixelColor(x, y)
+            if (color.alpha() > 80 and color.red() > 200
+                    and color.blue() > 200):
+                count += 1
+            elif count:
+                break
+        return count
+
+    beside_picture = white_run(80 + 70)
+    beside_caption = white_run(80 + int(item.caption_rect().center().y()))
+    assert beside_picture == beside_caption == 8

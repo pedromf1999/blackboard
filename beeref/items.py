@@ -1908,8 +1908,12 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         else:
             pm = self._grayscale_pixmap if self.grayscale else self.pixmap()
             painter.drawPixmap(self.crop, pm, self.crop)
-            self.paint_outline(painter)
+            # The caption first: a contour is centred on the edge it
+            # follows, and the band drawn over it swallowed the inner
+            # half, leaving the frame half as thick along the caption
+            # as it was along the picture
             self.paint_caption(painter)
+            self.paint_outline(painter)
             self.paint_selectable(painter, option, widget)
 
     def paint_outline(self, painter):
