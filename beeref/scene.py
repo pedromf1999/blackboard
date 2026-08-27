@@ -701,6 +701,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                     # Double-clicking it again edits it, as usual.
                     self.enter_group(group, item)
                     return
+            if self.title_double_clicked(item, event.scenePos()):
+                return
             if not item.isSelected():
                 item.setSelected(True)
             if item.is_editable:
@@ -712,6 +714,28 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                     toggle_item=item)
             return
         super().mouseDoubleClickEvent(event)
+
+    def title_double_clicked(self, item, scene_pos):
+        """Open a group's title when its band is double-clicked.
+
+        Words are opened by double-clicking them everywhere else in the
+        application, and the alternative here was zooming to the group,
+        which the rest of the box still does.
+        """
+
+        if getattr(item, 'TYPE', None) != 'group' or item.locked:
+            return False
+        if not item.shows_header():
+            return False
+        if not item.header_rect().contains(item.mapFromScene(scene_pos)):
+            return False
+        if not item.isSelected():
+            self.deselect_all_items()
+            item.setSelected(True)
+        item.enter_title_edit_mode()
+        for view in self.views():
+            view.update_group_toolbar()
+        return True
 
     def mouseMoveEvent(self, event):
         if self.active_mode == self.RUBBERBAND_MODE:

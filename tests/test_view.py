@@ -2056,20 +2056,21 @@ def test_wheel_event_zoom(zoom_mock, view):
     event.position.return_value = QtCore.QPointF(10.0, 20.0)
     event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
     view.wheelEvent(event)
-    zoom_mock.assert_called_once_with(40, QtCore.QPointF(10.0, 20.0))
+    # Inverted is the default: wheel away to zoom in
+    zoom_mock.assert_called_once_with(-40, QtCore.QPointF(10.0, 20.0))
     event.accept.assert_called_once_with()
 
 
 @patch('beeref.view.BeeGraphicsView.smooth_zoom')
-def test_wheel_event_zoom_custom_inverted(zoom_mock, view, kbsettings):
+def test_wheel_event_zoom_custom_not_inverted(zoom_mock, view, kbsettings):
     kbsettings.MOUSEWHEEL_ACTIONS['zoom2'].set_modifiers(['Alt'])
-    kbsettings.MOUSEWHEEL_ACTIONS['zoom2'].set_inverted(True)
+    kbsettings.MOUSEWHEEL_ACTIONS['zoom2'].set_inverted(False)
     event = MagicMock()
     event.angleDelta.return_value = QtCore.QPointF(0.0, 40.0)
     event.position.return_value = QtCore.QPointF(10.0, 20.0)
     event.modifiers.return_value = Qt.KeyboardModifier.AltModifier
     view.wheelEvent(event)
-    zoom_mock.assert_called_once_with(-40, QtCore.QPointF(10.0, 20.0))
+    zoom_mock.assert_called_once_with(40, QtCore.QPointF(10.0, 20.0))
     event.accept.assert_called_once_with()
 
 

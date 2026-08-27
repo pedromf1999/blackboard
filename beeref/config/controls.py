@@ -91,13 +91,16 @@ class MouseWheelConfig(MouseConfigBase):
 
     SETTINGS_GROUP = 'MouseWheel'
 
-    def __init__(self, id, group, text, modifiers, invertible):
+    def __init__(self, id, group, text, modifiers, invertible,
+                 inverted=False):
         self.id = id
         self.group = group
         self.text = text
         self.modifiers = modifiers
         self.invertible = invertible
-        self.inverted = False
+        # The way round this starts out, and what restoring defaults
+        # and 'controls changed' are measured against
+        self.inverted = inverted
 
     def controls_changed(self):
         """Whether controls have changed from their defaults."""
@@ -193,6 +196,9 @@ class KeyboardSettings(QtCore.QSettings):
             text='Zoom',
             modifiers=('No Modifier',),
             invertible=True,
+            # Wheel away to zoom in, which is the way round the rest of
+            # this desk works. Still a setting, just the other default.
+            inverted=True,
         ),
         MouseWheelConfig(
             id='zoom2',
@@ -200,6 +206,7 @@ class KeyboardSettings(QtCore.QSettings):
             text='Zoom (alternative)',
             modifiers=(),
             invertible=True,
+            inverted=True,
         ),
         MouseWheelConfig(
             id='pan_horizontal1',

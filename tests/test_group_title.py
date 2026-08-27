@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 import pytest
-from PyQt6 import QtGui
+from PyQt6 import QtCore, QtGui
 
 from beeref import commands
 from beeref.assets import BeeAssets
@@ -448,3 +448,54 @@ def test_clicking_away_finishes_the_title(view):
     view.scene.title_group.exit_title_edit_mode()
     assert group.title == 'Lid Latch'
     assert view.scene.title_group is None
+
+
+def double_click(view, group, point):
+    """A double click on the group, at a point in its own coordinates."""
+
+    return view.scene.title_double_clicked(
+        group, group.mapToScene(point))
+
+
+def test_double_clicking_the_band_opens_the_title(view):
+    """Words are opened by double-clicking them everywhere else."""
+
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+
+    assert double_click(view, group, group.header_rect().center()) is True
+    assert group.title_editing is True
+    assert group.isSelected() is True
+
+
+def test_double_clicking_the_rest_of_the_box_does_not(view):
+    """That still zooms to the group, as it always did."""
+
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+
+    assert double_click(view, group, group.rect().center()) is False
+    assert group.title_editing is False
+
+
+def test_a_group_with_no_band_has_nothing_to_open(view):
+    group = group_with_image(view)
+    assert double_click(view, group, group.rect().topLeft()) is False
+
+
+def test_a_locked_group_keeps_its_title_shut(view):
+    group = group_with_image(view)
+    group.title = 'Lid Latch'
+    group.locked = True
+
+    assert double_click(view, group, group.header_rect().center()) is False
+    assert group.title_editing is False
+
+
+def test_an_image_is_not_a_group(view):
+    from beeref.items import BeePixmapItem
+    item = BeePixmapItem(QtGui.QImage(
+        10, 10, QtGui.QImage.Format.Format_ARGB32))
+    view.scene.addItem(item)
+
+    assert view.scene.title_double_clicked(item, QtCore.QPointF(0, 0)) is False
