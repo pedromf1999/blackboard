@@ -179,6 +179,10 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
     # Drawn by dragging out a box rather than by following the hand,
     # and closed, so they have no ends to fasten to anything
     SHAPES = (CIRCLE, SQUARE, TRIANGLE, PENTAGON, HEXAGON)
+    # The drawings that fasten themselves to what they are drawn
+    # against. A sketch follows the hand rather than being aimed from
+    # one thing to another, so it stays free of everything.
+    FASTENING = (LINE, SPLINE, ARROW, SPLINE_ARROW)
     # How many sides each of them has; a circle has none
     SHAPE_SIDES = {TRIANGLE: 3, SQUARE: 4, PENTAGON: 5, HEXAGON: 6}
     KINDS = (SKETCH, LINE, SPLINE, ARROW, SPLINE_ARROW) + SHAPES
@@ -226,6 +230,11 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
 
     def get_default_name(self):
         return self.NAMES[self.kind]
+
+    def fastens(self):
+        """Whether this drawing takes hold of what it is drawn against."""
+
+        return self.kind in self.FASTENING
 
     def max_line_width(self):
         """The thickest this drawing may be drawn.

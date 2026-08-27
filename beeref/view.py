@@ -486,8 +486,9 @@ class BeeGraphicsView(MainControlsMixin,
             self.drawing_points.append(pos)
         self.drawing_item.set_points(
             [[p.x(), p.y()] for p in self.drawing_points])
-        if self.draw_tool not in BeeDrawItem.SHAPES:
-            # Nothing on a shape to fasten, so nothing to promise
+        if self.draw_tool in BeeDrawItem.FASTENING:
+            # Only what can fasten promises to; a shape has no ends and
+            # a sketch is not aimed at anything
             self.show_snap_preview(pos)
 
     @staticmethod
@@ -530,6 +531,8 @@ class BeeGraphicsView(MainControlsMixin,
     def snap_end(self, item, which, scene_pos):
         """Fasten one end of an existing drawing, if it landed on something."""
 
+        if not item.fastens():
+            return
         target = self.snap_target_at(scene_pos)
         if target is None or target is item:
             return
@@ -559,9 +562,7 @@ class BeeGraphicsView(MainControlsMixin,
         item.set_points([[p.x() - origin.x(), p.y() - origin.y()]
                          for p in points])
         item.setPos(origin)
-        if item.kind not in BeeDrawItem.SHAPES:
-            # A shape has corners, not ends, and fastening a corner to
-            # a note would pull the shape out of square
+        if item.fastens():
             self.snap_ends(item, points[0], points[-1])
         self.undo_stack.push(commands.InsertItems(self.scene, [item]))
 
