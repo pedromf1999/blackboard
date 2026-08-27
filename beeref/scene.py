@@ -1071,8 +1071,10 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         if not self.items_awaiting_group:
             return
 
-        groups = {item.save_id: item
-                  for item in self.items_by_type('group')}
+        # Pictures as well as groups: a sketch drawn on a picture is
+        # held by it the way a grouped item is held by its group
+        groups = {item.save_id: item for item in self.items()
+                  if getattr(item, 'save_id', None) is not None}
 
         # A group may itself be waiting for the group it sits in, so keep
         # going while anything is still being placed
@@ -1092,9 +1094,13 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
             waiting = still_waiting
         self.items_awaiting_group = waiting
 
+        # Groups only: the lookup above holds every item that can hold
+        # another, and a picture has no box to size or contents to shut
+        holders = [item for item in groups.values()
+                   if getattr(item, 'TYPE', None) == 'group']
         # Innermost groups first: an outer group's box can only be
         # sized once the groups inside it know their own size
-        for group in sorted(groups.values(),
+        for group in sorted(holders,
                             key=lambda g: len(self.group_chain(g)),
                             reverse=True):
             group.fit_to_children()

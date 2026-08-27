@@ -549,6 +549,49 @@ class MoveToGroup(QtGui.QUndoCommand):
         self.refit(set(self.old_parents) | {self.group})
 
 
+class DrawOnItem(QtGui.QUndoCommand):
+    """Make a drawing part of the picture it was drawn on.
+
+    The picture then carries it when it is moved, scaled or turned, the
+    way a group carries what is inside it. Kept apart from MoveToGroup
+    because a picture has no box to refit and does not take the
+    selection off what was just drawn.
+    """
+
+    def __init__(self, scene, item, target):
+        super().__init__('Draw on image')
+        self.scene = scene
+        self.item = item
+        self.target = target
+        self.old_parent = item.parentItem()
+        self.old_pos = item.pos()
+
+    def reparent(self, parent):
+        """Re-parent, keeping how the drawing looks on screen.
+
+        A picture may be scaled or turned, so what goes onto it has to
+        take up the difference itself or it would jump.
+        """
+
+        scene_pos = self.item.scenePos()
+        appearance = self.item.get_appearance()
+        self.item.setParentItem(parent)
+        if parent is None and self.item.scene() is None:
+            self.scene.addItem(self.item)
+        self.item.set_appearance(appearance)
+        if parent is None:
+            self.item.setPos(scene_pos)
+        else:
+            self.item.setPos(parent.mapFromScene(scene_pos))
+
+    def redo(self):
+        self.reparent(self.target)
+
+    def undo(self):
+        self.reparent(self.old_parent)
+        self.item.setPos(self.old_pos)
+
+
 class ChangeDrawColor(QtGui.QUndoCommand):
     """Change the colour of drawn lines and arrows."""
 

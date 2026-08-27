@@ -141,7 +141,9 @@ class BeeItemMixin(SelectableMixin):
             # without it are unaffected
             data['stretch'] = list(stretch)
         parent = self.parentItem()
-        if getattr(parent, 'TYPE', None) == 'group':
+        # Any item that is saved can hold another: a group holds what
+        # was grouped, and a picture holds what was sketched on it
+        if getattr(parent, 'save_id', None) is not None:
             data['parent_group'] = parent.save_id
         return data
 

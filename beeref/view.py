@@ -564,7 +564,34 @@ class BeeGraphicsView(MainControlsMixin,
         item.setPos(origin)
         if item.fastens():
             self.snap_ends(item, points[0], points[-1])
+
+        host = self.image_drawn_on(item)
+        if host is None:
+            self.undo_stack.push(commands.InsertItems(self.scene, [item]))
+            return
+        # One step to undo, not two: drawing on a picture is one act
+        self.undo_stack.beginMacro('Sketch on image')
         self.undo_stack.push(commands.InsertItems(self.scene, [item]))
+        self.undo_stack.push(commands.DrawOnItem(self.scene, item, host))
+        self.undo_stack.endMacro()
+
+    def image_drawn_on(self, item):
+        """The picture a sketch was drawn inside, if it was drawn in one.
+
+        Sketches only. A line is aimed from one thing to another and
+        fastens its ends instead, and a shape is a shape wherever it is
+        put. Decided by where the middle of the sketch fell, which is
+        the same rule that decides which group something is dropped
+        into.
+        """
+
+        if item.kind != BeeDrawItem.SKETCH:
+            return None
+        center = item.mapToScene(item.center)
+        for candidate in self.scene.items(center):
+            if getattr(candidate, 'TYPE', None) == BeePixmapItem.TYPE:
+                return candidate
+        return None
 
     def snap_ends(self, item, start, end):
         """Fasten either end of a new drawing to whatever it landed on.
