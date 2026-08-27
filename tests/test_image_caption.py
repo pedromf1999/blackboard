@@ -399,3 +399,50 @@ def test_the_band_grows_while_the_words_are_typed(view):
 
     item.exit_caption_edit_mode()
     assert item.caption_height() > one_line
+
+
+LONG_CAPTION = (
+    'Top view of the assembly with the fixing screw the return spring '
+    'and the hinged cover all visible in this photograph taken in the '
+    'studio')
+
+
+def test_the_editor_fits_inside_the_band_it_is_given(view):
+    """Qt gives a document four units of margin on each side. Unaccounted
+    for, the words wrapped narrower than the band was measured to and
+    stood taller than it."""
+
+    for width in (80, 140, 300):
+        item = image(view, width, 60)
+        item.setSelected(True)
+        view.on_action_image_caption()
+        item.caption_editor.setPlainText(LONG_CAPTION)
+        band = item.caption_rect()
+
+        assert item.caption_editor.boundingRect().height() <= band.height()
+        assert item.caption_editor.pos().y() >= band.top()
+        item.exit_caption_edit_mode()
+        item.setSelected(False)
+
+
+def test_the_band_is_the_same_size_once_the_writing_is_done(view):
+    """What is typed into it is what comes out of it."""
+
+    item = image(view, 80, 60)
+    view.on_action_image_caption()
+    item.caption_editor.setPlainText(LONG_CAPTION)
+    while_writing = item.caption_rect().height()
+
+    item.exit_caption_edit_mode()
+    assert item.caption_rect().height() == while_writing
+
+
+def test_a_long_caption_on_a_small_picture_is_all_there(view):
+    """Ten lines of it, if that is what it takes."""
+
+    item = image(view, 80, 60)
+    item.caption = LONG_CAPTION
+    lines = item.caption_text_height() / item.caption_line_height()
+
+    assert lines > 5
+    assert item.caption_rect().height() >= item.caption_text_height()

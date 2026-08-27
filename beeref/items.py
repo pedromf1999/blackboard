@@ -1139,6 +1139,11 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         self.item = item
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
+        # No margin of its own: the band is measured to the width the
+        # words are given, and Qt's four units on each side would have
+        # them wrapping narrower than that and standing taller than the
+        # band that was made for them
+        self.document().setDocumentMargin(0)
         self.settling = False
         self.refresh()
         cursor = self.textCursor()
@@ -1167,9 +1172,9 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         option = self.document().defaultTextOption()
         option.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.document().setDefaultTextOption(option)
-        self.setPos(band.x() + inset,
-                    band.y()
-                    + (band.height() - self.boundingRect().height()) / 2)
+        # From the top of the band, not centred on it: the band is
+        # built to fit these words, so there is nothing to centre in
+        self.setPos(band.x() + inset, band.y() + inset)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -1497,6 +1502,10 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         """
 
         line = self.caption_line_height()
+        if self.caption_editor is not None:
+            # Ask the editor rather than measuring the same words a
+            # second way: the band has to hold exactly what it lays out
+            return max(self.caption_editor.boundingRect().height(), line)
         text = self.caption_draft()
         if not text:
             return line
