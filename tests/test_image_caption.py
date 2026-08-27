@@ -453,21 +453,29 @@ def test_a_long_caption_on_a_small_picture_is_all_there(view):
 ONE_LONG_WORD = 'dwadawdfarfweffef' + 'f' * 45
 
 
-def test_one_long_word_breaks_rather_than_being_cut_off(view):
-    """Wrapping at gaps alone leaves a word with none of them to run off
-    the end of the band."""
+def test_words_are_not_taken_apart(view):
+    """A caption of ordinary words is what this is for. One long run of
+    letters runs off the end rather than being broken up."""
 
+    item = image(view, 300, 200)
+    item.caption = ONE_LONG_WORD
+
+    assert item.caption_text_height() == item.caption_line_height()
+
+
+def test_a_caption_of_ordinary_words_still_wraps(view):
     item = image(view, 300, 200)
     short = image(view, 300, 200)
     short.caption = 'Top view'
-    item.caption = ONE_LONG_WORD
+    item.caption = LONG_CAPTION
 
     assert item.caption_text_height() > short.caption_text_height()
 
 
 def test_what_is_typed_and_what_is_drawn_break_alike(view):
-    """The editor broke a long word and the painting did not, so the
-    band shrank when the writing finished and took the words with it."""
+    """Qt breaks inside a word by default, so a long one looked right
+    while it was typed and lost its beginning once the writing was
+    finished."""
 
     item = image(view, 300, 200)
     view.on_action_image_caption()
@@ -476,28 +484,3 @@ def test_what_is_typed_and_what_is_drawn_break_alike(view):
 
     item.exit_caption_edit_mode()
     assert item.caption_rect().height() == pytest.approx(while_writing)
-
-
-def test_the_words_are_all_inside_the_band(view):
-    """Nothing painted past its right-hand edge."""
-
-    size = 500
-    item = image(view, 200, 120)
-    item.setSelected(False)
-    item.caption = ONE_LONG_WORD
-    item.caption_color = QtGui.QColor(0, 0, 0)
-
-    canvas = QtGui.QImage(size, size, QtGui.QImage.Format.Format_ARGB32)
-    canvas.fill(QtGui.QColor(0, 0, 0, 0))
-    painter = QtGui.QPainter(canvas)
-    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-    painter.translate(100, 100)
-    item.paint_caption(painter)
-    painter.end()
-
-    band = item.caption_rect()
-    letters = [x for x in range(size) for y in range(size)
-               if canvas.pixelColor(x, y).lightness() > 120]
-    assert letters, 'no words were drawn at all'
-    assert min(letters) >= 100 + band.left()
-    assert max(letters) <= 100 + band.right()

@@ -1171,10 +1171,11 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         self.setTextWidth(max(1.0, band.width() - 2 * inset))
         option = self.document().defaultTextOption()
         option.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        # Said out loud rather than left to Qt's default, so that what
-        # is typed breaks in the same places as what is drawn
-        option.setWrapMode(
-            QtGui.QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        # Between words, like the drawn caption. Qt's own default for a
+        # document breaks inside a word when it has to, which had a
+        # long one looking right while it was typed and losing its
+        # beginning the moment the writing finished.
+        option.setWrapMode(QtGui.QTextOption.WrapMode.WordWrap)
         self.document().setDefaultTextOption(option)
         # From the top of the band, not centred on it: the band is
         # built to fit these words, so there is nothing to centre in
@@ -1275,11 +1276,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     CAPTION_MIN_SIZE = 7
     CAPTION_PADDING_FRACTION = 0.35
     DEFAULT_CAPTION_COLOR = (52, 52, 52, 255)
-    # Break between words where there is a gap to break at, and inside
-    # one where there is not: a single long word will not fit across a
-    # small picture, and cutting it off hides what it says
-    CAPTION_WRAP = (Qt.TextFlag.TextWordWrap
-                    | Qt.TextFlag.TextWrapAnywhere)
+    # Between words only. A word longer than the band runs off the end
+    # of it rather than being taken apart, which is what a caption of
+    # ordinary words wants and what one long run of letters gets for
+    # asking.
+    CAPTION_WRAP = Qt.TextFlag.TextWordWrap
 
     def __init__(self, image, filename=None, **kwargs):
         super().__init__(QtGui.QPixmap.fromImage(image))
