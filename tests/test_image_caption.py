@@ -321,3 +321,81 @@ def test_the_contour_is_as_thick_along_the_caption(view):
     beside_picture = white_run(80 + 70)
     beside_caption = white_run(80 + int(item.caption_rect().center().y()))
     assert beside_picture == beside_caption == 8
+
+
+def test_the_text_tool_opens_a_caption(view):
+    """A picture's caption is text too, and the tool is for reaching text."""
+
+    item = image(view)
+    item.caption = 'Top view'
+    point = view.mapFromScene(
+        item.mapToScene(item.caption_rect().center()))
+
+    assert view.image_caption_at(point) is item
+    view.write_note_at(point)
+    assert item.caption_editing is True
+    # And no note was laid over the band
+    assert view.scene.selected_text_items() == []
+
+
+def test_the_text_tool_still_writes_a_note_over_the_picture(view):
+    item = image(view)
+    item.caption = 'Top view'
+    point = view.mapFromScene(item.mapToScene(item.crop.center()))
+
+    assert view.image_caption_at(point) is None
+
+
+def test_a_picture_with_no_caption_has_no_band_to_find(view):
+    item = image(view)
+    point = view.mapFromScene(item.mapToScene(item.crop.bottomLeft()))
+    assert view.image_caption_at(point) is None
+
+
+def test_a_long_caption_wraps_instead_of_being_cut_off(view):
+    """Cutting it off with an ellipsis hid the very thing it says."""
+
+    short = image(view, 240, 160)
+    short.caption = 'Top view'
+    long = image(view, 240, 160)
+    long.caption = ('Top view of the assembly, with the fixing screw and '
+                    'the return spring both visible')
+
+    assert long.caption_height() > short.caption_height()
+    assert long.caption_text_height() > long.caption_line_height() * 2
+
+
+def test_the_band_keeps_its_corners_however_many_lines(view):
+    short = image(view, 240, 160)
+    short.caption = 'Top view'
+    long = image(view, 240, 160)
+    long.caption = ('Top view of the assembly, with the fixing screw and '
+                    'the return spring both visible')
+
+    assert long.caption_radius() == short.caption_radius()
+
+
+def test_the_contour_still_wraps_the_whole_band(view):
+    item = image(view, 240, 160)
+    item.caption = ('Top view of the assembly, with the fixing screw and '
+                    'the return spring both visible')
+    item.set_outline_width(5)
+
+    assert item.framed_rect().bottom() == item.caption_rect().bottom()
+    assert item.boundingRect().bottom() > item.caption_rect().bottom()
+
+
+def test_the_band_grows_while_the_words_are_typed(view):
+    """Not only once the writing is finished."""
+
+    item = image(view, 240, 160)
+    view.on_action_image_caption()
+    one_line = item.caption_height()
+
+    item.caption_editor.setPlainText(
+        'Top view of the assembly, with the fixing screw and the '
+        'return spring both visible')
+    assert item.caption_height() > one_line
+
+    item.exit_caption_edit_mode()
+    assert item.caption_height() > one_line

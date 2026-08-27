@@ -1139,10 +1139,22 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         self.item = item
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
+        self.settling = False
         self.refresh()
         cursor = self.textCursor()
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
         self.setTextCursor(cursor)
+        # The band grows under the words as they are typed
+        self.document().contentsChanged.connect(self.on_text_changed)
+
+    def on_text_changed(self):
+        if self.settling:
+            return
+        self.settling = True
+        self.item.prepareGeometryChange()
+        self.refresh()
+        self.item.update()
+        self.settling = False
 
     def refresh(self):
         item = self.item
@@ -1457,11 +1469,48 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         font.setPointSizeF(self.caption_size())
         return font
 
+    def caption_draft(self):
+        """What the caption says right now, the editor included.
+
+        So the band grows under the words as they are typed rather than
+        only once the writing is finished.
+        """
+
+        if self.caption_editor is not None:
+            return self.caption_editor.toPlainText()
+        return self._caption
+
+    def caption_line_height(self):
+        return QtGui.QFontMetricsF(self.caption_font()).height()
+
+    def caption_text_width(self):
+        """The room the words have across the picture."""
+
+        return max(1.0, self.crop.width() - 2 * self.caption_inset())
+
+    def caption_text_height(self):
+        """How tall the words are once wrapped to that width.
+
+        A caption too long for the picture wraps and the band grows
+        down to hold it. Cutting it off with an ellipsis hid the very
+        thing the caption was written to say.
+        """
+
+        line = self.caption_line_height()
+        text = self.caption_draft()
+        if not text:
+            return line
+        metrics = QtGui.QFontMetricsF(self.caption_font())
+        rect = metrics.boundingRect(
+            QtCore.QRectF(0, 0, self.caption_text_width(), 0),
+            int(Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap),
+            text)
+        return max(rect.height(), line)
+
     def caption_height(self):
         if not self.shows_caption():
             return 0
-        metrics = QtGui.QFontMetricsF(self.caption_font())
-        return metrics.height() * (1 + 2 * self.CAPTION_PADDING_FRACTION)
+        return self.caption_text_height() + 2 * self.caption_inset()
 
     def caption_rect(self):
         """The band along the bottom edge, hanging below the picture."""
@@ -1471,7 +1520,13 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
                              rect.width(), self.caption_height())
 
     def caption_inset(self):
-        return self.caption_height() * self.CAPTION_PADDING_FRACTION
+        """The gap kept round the words.
+
+        Measured from one line rather than from the band, which now
+        depends on how many lines there turn out to be.
+        """
+
+        return self.caption_line_height() * self.CAPTION_PADDING_FRACTION
 
     def caption_radius(self):
         """How round the band's bottom corners are.
@@ -1481,7 +1536,9 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         """
 
         band = self.caption_rect()
-        return min(max(CORNER_RADIUS, band.height() * 0.3),
+        # From one line, not from the band: a caption that wrapped onto
+        # four lines would otherwise be given corners to match
+        return min(max(CORNER_RADIUS, self.caption_line_height() * 0.5),
                    band.height(), band.width() / 2)
 
     def framed_rect(self):
@@ -1554,12 +1611,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         painter.setPen(QtGui.QPen(
             readable_grey(self.visible_caption_color())))
         inset = self.caption_inset()
-        room = band.adjusted(inset, 0, -inset, 0)
-        metrics = QtGui.QFontMetricsF(self.caption_font())
+        room = band.adjusted(inset, inset, -inset, -inset)
         painter.drawText(
-            room, int(Qt.AlignmentFlag.AlignCenter),
-            metrics.elidedText(self.caption, Qt.TextElideMode.ElideRight,
-                               room.width()))
+            room,
+            int(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap),
+            self.caption)
         painter.restore()
 
     def enter_caption_edit_mode(self):

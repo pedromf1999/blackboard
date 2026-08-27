@@ -373,6 +373,16 @@ class BeeGraphicsView(MainControlsMixin,
             self.update_group_toolbar()
             return
 
+        caption = self.image_caption_at(point)
+        if caption is not None:
+            # A picture's caption is text too, and clicking it with the
+            # tool should open it rather than lay a note over it
+            self.set_draw_tool(None)
+            caption.setSelected(True)
+            caption.enter_caption_edit_mode()
+            self.update_image_toolbar()
+            return
+
         existing = self.get_text_item_at(point)
         if existing is not None:
             group = self.scene.get_group_ancestor(existing)
@@ -409,6 +419,19 @@ class BeeGraphicsView(MainControlsMixin,
             if not item.shows_header():
                 continue
             if item.header_rect().contains(item.mapFromScene(scene_pos)):
+                return item
+        return None
+
+    def image_caption_at(self, point):
+        """A picture whose caption band lies under the given point."""
+
+        scene_pos = self.mapToScene(point)
+        for item in self.scene.items(scene_pos):
+            if getattr(item, 'TYPE', None) != BeePixmapItem.TYPE:
+                continue
+            if not item.shows_caption():
+                continue
+            if item.caption_rect().contains(item.mapFromScene(scene_pos)):
                 return item
         return None
 
