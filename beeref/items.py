@@ -1171,6 +1171,10 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         self.setTextWidth(max(1.0, band.width() - 2 * inset))
         option = self.document().defaultTextOption()
         option.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        # Said out loud rather than left to Qt's default, so that what
+        # is typed breaks in the same places as what is drawn
+        option.setWrapMode(
+            QtGui.QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         self.document().setDefaultTextOption(option)
         # From the top of the band, not centred on it: the band is
         # built to fit these words, so there is nothing to centre in
@@ -1271,6 +1275,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     CAPTION_MIN_SIZE = 7
     CAPTION_PADDING_FRACTION = 0.35
     DEFAULT_CAPTION_COLOR = (52, 52, 52, 255)
+    # Break between words where there is a gap to break at, and inside
+    # one where there is not: a single long word will not fit across a
+    # small picture, and cutting it off hides what it says
+    CAPTION_WRAP = (Qt.TextFlag.TextWordWrap
+                    | Qt.TextFlag.TextWrapAnywhere)
 
     def __init__(self, image, filename=None, **kwargs):
         super().__init__(QtGui.QPixmap.fromImage(image))
@@ -1512,7 +1521,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         metrics = QtGui.QFontMetricsF(self.caption_font())
         rect = metrics.boundingRect(
             QtCore.QRectF(0, 0, self.caption_text_width(), 0),
-            int(Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap),
+            int(Qt.AlignmentFlag.AlignHCenter | self.CAPTION_WRAP),
             text)
         return max(rect.height(), line)
 
@@ -1623,7 +1632,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         room = band.adjusted(inset, inset, -inset, -inset)
         painter.drawText(
             room,
-            int(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap),
+            int(Qt.AlignmentFlag.AlignCenter | self.CAPTION_WRAP),
             self.caption)
         painter.restore()
 
