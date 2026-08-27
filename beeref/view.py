@@ -1229,6 +1229,50 @@ class BeeGraphicsView(MainControlsMixin,
             self.undo_stack.push(
                 commands.ChangeGroupBoxColor(groups, color))
 
+    def on_action_image_caption(self):
+        """Write the caption on the picture itself."""
+
+        items = self.scene.selected_images()
+        if not items:
+            widgets.BeeNotification(self, 'No image selected')
+            return
+        self.set_draw_tool(None)
+        items[0].enter_caption_edit_mode()
+        self.update_image_toolbar()
+
+    def image_being_captioned(self):
+        return self.scene.caption_item
+
+    def on_action_image_caption_color(self):
+        """Ask for a colour for the caption band, showing it as picked."""
+
+        item = self.image_being_captioned()
+        items = [item] if item is not None else self.scene.selected_images()
+        if not items:
+            widgets.BeeNotification(self, 'No image selected')
+            return
+        originals = [each.caption_color for each in items]
+
+        def preview(color):
+            for each in items:
+                each.caption_color = color
+                each.refresh_caption_editor()
+                each.update()
+
+        color = self.pick_color_live(
+            'Choose Caption Colour', items[0].caption_color, preview)
+
+        for each, original in zip(items, originals):
+            each.caption_color = original
+            each.refresh_caption_editor()
+            each.update()
+        if color is None:
+            return
+        self.undo_stack.push(commands.ChangeCaption(
+            items, items[0].caption, color))
+        for each in items:
+            each.refresh_caption_editor()
+
     def on_action_image_outline_color(self):
         """Ask for a contour colour, showing it on the board as picked."""
 
@@ -1277,12 +1321,18 @@ class BeeGraphicsView(MainControlsMixin,
             self.on_action_find_text()
 
     def get_text_search_matches(self):
-        """The text items containing the current search query, ordered
-        top to bottom so that cycling through them is predictable."""
+        """Everything carrying the current search query.
+
+        Notes, tables inside them, the titles of groups and the
+        captions on pictures: all of it is writing on the board, so all
+        of it is looked through. Ordered top to bottom so that cycling
+        through them is predictable.
+        """
 
         query = self.text_search_query.lower()
-        matches = [item for item in self.scene.items_by_type('text')
-                   if query in item.toPlainText().lower()]
+        matches = [item for item in self.scene.items()
+                   if hasattr(item, 'search_text')
+                   and query in item.search_text().lower()]
         return sorted(
             matches,
             key=lambda item: (item.sceneBoundingRect().top(),
@@ -1317,7 +1367,7 @@ class BeeGraphicsView(MainControlsMixin,
         keeping what surrounds it in sight; see MATCH_SHARE.
         """
 
-        word = self.word_rect(item, self.text_search_query)
+        word = item.search_rect(self.text_search_query)
         if word is None or word.isEmpty():
             self.centerOn(item.sceneBoundingRect().center())
             return
@@ -1332,33 +1382,6 @@ class BeeGraphicsView(MainControlsMixin,
         box = QtCore.QRectF(0, 0, width, height)
         box.moveCenter(word.center())
         self.fit_rect(box)
-
-    def word_rect(self, item, query):
-        """Where the first match sits on the board, in scene coordinates."""
-
-        text = item.toPlainText()
-        start = text.lower().find(query.lower())
-        if start < 0:
-            return None
-        cursor = QtGui.QTextCursor(item.document())
-        cursor.setPosition(start)
-        block = cursor.block()
-        layout = block.layout()
-        if layout is None:
-            return None
-        offset = start - block.position()
-        line = layout.lineForTextPosition(offset)
-        if not line.isValid():
-            return None
-        left = line.cursorToX(offset)[0]
-        right = line.cursorToX(min(offset + len(query),
-                                   block.length() - 1))[0]
-        origin = item.document().documentLayout().blockBoundingRect(
-            block).topLeft()
-        rect = QtCore.QRectF(origin.x() + min(left, right),
-                             origin.y() + line.y(),
-                             abs(right - left), line.height())
-        return item.mapToScene(rect).boundingRect()
 
     def on_action_text_bold(self):
         """Toggle bold on the selected words, or the whole text."""

@@ -329,6 +329,8 @@ def test_sqliteio_write_inserts_new_pixmap_item_png(tmpfile, view):
         'grayscale': True,
         'outline_width': 0,
         'outline_color': [235, 235, 235, 255],
+        'caption': '',
+        'caption_color': [52, 52, 52, 255],
     }
     assert result[7] == 'pixmap'
     assert result[8] == b'abc'
@@ -450,6 +452,8 @@ def test_sqliteio_write_updates_existing_pixmap_item(tmpfile, view):
         'grayscale': True,
         'outline_width': 0,
         'outline_color': [235, 235, 235, 255],
+        'caption': '',
+        'caption_color': [52, 52, 52, 255],
     }
     assert result[7] == b'abc'
 
@@ -498,6 +502,8 @@ def test_sqliteio_write_keeps_pixmap_item_of_error_item(tmpfile, view):
         'grayscale': False,
         'outline_width': 0,
         'outline_color': [235, 235, 235, 255],
+        'caption': '',
+        'caption_color': [52, 52, 52, 255],
     }
     assert result[7] == b'abc'
 

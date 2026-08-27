@@ -125,6 +125,7 @@ menu_structure = [
         'menu': IMAGES_MENU,
         'items': [
             'crop',
+            'image_caption',
             'image_outline',
             'image_outline_color',
             MENU_SEPARATOR,

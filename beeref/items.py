@@ -874,6 +874,22 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         font.setPointSizeF(self.title_size_for(width))
         return font
 
+    def search_text(self):
+        """What Find looks through: the title across the top."""
+
+        return self.title
+
+    def search_rect(self, query):
+        """Where a match sits on the board, for Find to go to.
+
+        The band rather than the word in it: the words are drawn
+        straight onto the box rather than laid out in a document, so
+        there is no letter to measure against, and a band is small
+        enough to be worth going to whole.
+        """
+
+        return self.mapToScene(self.header_rect()).boundingRect()
+
     def shows_header(self):
         """Whether there is a band to draw.
 
@@ -1111,6 +1127,54 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         pass
 
 
+class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
+    """The line an image's caption is typed into, on the picture itself.
+
+    The same idea as the one a group's title is written in; kept apart
+    because the band it sits in is measured differently.
+    """
+
+    def __init__(self, item):
+        super().__init__(item.caption, item)
+        self.item = item
+        self.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextEditorInteraction)
+        self.refresh()
+        cursor = self.textCursor()
+        cursor.select(QtGui.QTextCursor.SelectionType.Document)
+        self.setTextCursor(cursor)
+
+    def refresh(self):
+        item = self.item
+        band = item.caption_rect()
+        inset = item.caption_inset()
+        self.setFont(item.caption_font())
+        self.setDefaultTextColor(
+            readable_grey(item.visible_caption_color()))
+        self.setTextWidth(max(1.0, band.width() - 2 * inset))
+        option = self.document().defaultTextOption()
+        option.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.document().setDefaultTextOption(option)
+        self.setPos(band.x() + inset,
+                    band.y()
+                    + (band.height() - self.boundingRect().height()) / 2)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.item.exit_caption_edit_mode()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Escape:
+            self.item.exit_caption_edit_mode(commit=False)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.item.exit_caption_edit_mode()
+
+
 class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
     """The line a group's title is typed into, on the group itself.
 
@@ -1182,6 +1246,15 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     OUTLINE_MAX_FRACTION = 0.25
     OUTLINE_MIN_WIDTH = 0.5
 
+    # The caption along the bottom edge. Sized from the picture's width,
+    # which the band does not change, and measured against the cropped
+    # picture rather than the whole file, so a crop takes its caption
+    # with it.
+    CAPTION_FRACTION = 0.04
+    CAPTION_MIN_SIZE = 7
+    CAPTION_PADDING_FRACTION = 0.35
+    DEFAULT_CAPTION_COLOR = (52, 52, 52, 255)
+
     def __init__(self, image, filename=None, **kwargs):
         super().__init__(QtGui.QPixmap.fromImage(image))
         self.save_id = None
@@ -1190,6 +1263,11 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         # what is left of the picture, and so needs these to exist
         self.outline_width = 0
         self.outline_color = QtGui.QColor(*self.DEFAULT_OUTLINE_COLOR)
+        # An empty caption means no band at all
+        self._caption = ''
+        self.caption_color = QtGui.QColor(*self.DEFAULT_CAPTION_COLOR)
+        self.caption_editing = False
+        self.caption_editor = None
         self.reset_crop()
         logger.debug(f'Initialized {self}')
         self.is_image = True
@@ -1211,6 +1289,10 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         color = data.get('outline_color')
         if color:
             item.outline_color = QtGui.QColor(*color)
+        item.caption = data.get('caption', '')
+        color = data.get('caption_color')
+        if color:
+            item.caption_color = QtGui.QColor(*color)
         return item
 
     def __str__(self):
@@ -1315,11 +1397,166 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         """
 
         rect = super().boundingRect()
-        if not self.outline_width:
-            return rect
-        margin = self.outline_width / 2
-        return rect.marginsAdded(
-            QtCore.QMarginsF(margin, margin, margin, margin))
+        if self.outline_width:
+            margin = self.outline_width / 2
+            rect = rect.marginsAdded(
+                QtCore.QMarginsF(margin, margin, margin, margin))
+        # The caption hangs below the picture rather than over it, so
+        # there has to be room under it to paint in
+        return rect.adjusted(0, 0, 0, self.caption_height())
+
+    @property
+    def caption(self):
+        return self._caption
+
+    @caption.setter
+    def caption(self, value):
+        self.prepareGeometryChange()
+        self._caption = value or ''
+        self.update()
+
+    def search_text(self):
+        """What Find looks through: the caption along the bottom."""
+
+        return self.caption
+
+    def search_rect(self, query):
+        return self.mapToScene(self.caption_rect()).boundingRect()
+
+    def shows_caption(self):
+        """Whether there is a band to draw.
+
+        A caption being written counts, even before the first letter:
+        the band has to be there to type into.
+        """
+
+        return bool(self._caption) or self.caption_editing
+
+    def caption_size(self):
+        """How big the caption's letters are, for this picture.
+
+        Measured against the crop, so a picture cut down to a corner
+        gets a caption in proportion to what is left of it rather than
+        to the file it came from.
+        """
+
+        return max(self.CAPTION_MIN_SIZE,
+                   self.crop.width() * self.CAPTION_FRACTION)
+
+    def caption_font(self):
+        """Bold, and in the bundled face, the way group titles are."""
+
+        family = BeeAssets().font_family
+        font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
+        font.setBold(True)
+        font.setPointSizeF(self.caption_size())
+        return font
+
+    def caption_height(self):
+        if not self.shows_caption():
+            return 0
+        metrics = QtGui.QFontMetricsF(self.caption_font())
+        return metrics.height() * (1 + 2 * self.CAPTION_PADDING_FRACTION)
+
+    def caption_rect(self):
+        """The band along the bottom edge, hanging below the picture."""
+
+        rect = self.crop
+        return QtCore.QRectF(rect.x(), rect.bottom(),
+                             rect.width(), self.caption_height())
+
+    def caption_inset(self):
+        return self.caption_height() * self.CAPTION_PADDING_FRACTION
+
+    def visible_caption_color(self):
+        """The colour the band actually appears in."""
+
+        canvas = QtGui.QColor(
+            self.settings.valueOrDefault('View/canvas_color'))
+        return blend_over(self.caption_color, canvas)
+
+    def shape(self):
+        """The picture, and the caption band hanging under it.
+
+        So that the band can be clicked and double-clicked like part of
+        the picture. Only the shape grows: the picture's own rectangle
+        is what the handles, the sizing and a line joined to it all go
+        by, and none of those should move because a caption was added.
+        """
+
+        path = super().shape()
+        if self.shows_caption():
+            path.addRect(self.caption_rect())
+        return path
+
+    def paint_caption(self, painter):
+        """Draw the caption band and the words in it."""
+
+        if not self.shows_caption():
+            return
+        band = self.caption_rect()
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QBrush(self.caption_color))
+        painter.drawRect(band)
+        if self.caption_editing:
+            # The words are the editor's while it is open
+            painter.restore()
+            return
+
+        painter.setFont(self.caption_font())
+        painter.setPen(QtGui.QPen(
+            readable_grey(self.visible_caption_color())))
+        inset = self.caption_inset()
+        room = band.adjusted(inset, 0, -inset, 0)
+        metrics = QtGui.QFontMetricsF(self.caption_font())
+        painter.drawText(
+            room, int(Qt.AlignmentFlag.AlignCenter),
+            metrics.elidedText(self.caption, Qt.TextElideMode.ElideRight,
+                               room.width()))
+        painter.restore()
+
+    def enter_caption_edit_mode(self):
+        """Open the caption for writing, on the picture itself."""
+
+        if self.caption_editor is not None:
+            self.caption_editor.setFocus()
+            return
+        logger.debug(f'Writing the caption of {self}')
+        self.caption_editing = True
+        self.prepareGeometryChange()
+        self.caption_editor = ImageCaptionEditor(self)
+        self.caption_editor.setFocus()
+        scene = self.scene()
+        if scene is not None:
+            scene.caption_item = self
+        self.update()
+
+    def exit_caption_edit_mode(self, commit=True):
+        """Take the words out of the editor and put the editor away."""
+
+        editor = self.caption_editor
+        if editor is None:
+            return
+        text = editor.toPlainText().strip()
+        self.caption_editor = None
+        scene = self.scene()
+        if scene is not None:
+            if scene.caption_item is self:
+                scene.caption_item = None
+            scene.removeItem(editor)
+        self.caption_editing = False
+
+        if commit and text != self.caption and scene is not None:
+            scene.undo_stack.push(commands.ChangeCaption(
+                [self], text, self.caption_color))
+        else:
+            self.prepareGeometryChange()
+            self.update()
+
+    def refresh_caption_editor(self):
+        if self.caption_editor is not None:
+            self.caption_editor.refresh()
 
     def default_outline_width(self):
         """How thick a contour starts out, for an image this size."""
@@ -1357,6 +1594,8 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
                 'grayscale': self.grayscale,
                 'outline_width': self.outline_width,
                 'outline_color': self.outline_color.getRgb(),
+                'caption': self.caption,
+                'caption_color': self.caption_color.getRgb(),
                 'crop': [self.crop.topLeft().x(),
                          self.crop.topLeft().y(),
                          self.crop.width(),
@@ -1624,6 +1863,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
             pm = self._grayscale_pixmap if self.grayscale else self.pixmap()
             painter.drawPixmap(self.crop, pm, self.crop)
             self.paint_outline(painter)
+            self.paint_caption(painter)
             self.paint_selectable(painter, option, widget)
 
     def paint_outline(self, painter):
@@ -2264,6 +2504,42 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
             return
         super().mouseReleaseEvent(event)
         self.cursor_may_have_moved()
+
+    def search_text(self):
+        """What Find looks through, tables and all.
+
+        The plain text of a note runs a table's cells together with the
+        rest of it, which is exactly what a search wants.
+        """
+
+        return self.toPlainText()
+
+    def search_rect(self, query):
+        """Where the first match sits on the board, in scene coordinates."""
+
+        text = self.toPlainText()
+        start = text.lower().find(query.lower())
+        if start < 0:
+            return None
+        cursor = QtGui.QTextCursor(self.document())
+        cursor.setPosition(start)
+        block = cursor.block()
+        layout = block.layout()
+        if layout is None:
+            return None
+        offset = start - block.position()
+        line = layout.lineForTextPosition(offset)
+        if not line.isValid():
+            return None
+        left = line.cursorToX(offset)[0]
+        right = line.cursorToX(min(offset + len(query),
+                                   block.length() - 1))[0]
+        origin = self.document().documentLayout().blockBoundingRect(
+            block).topLeft()
+        rect = QtCore.QRectF(origin.x() + min(left, right),
+                             origin.y() + line.y(),
+                             abs(right - left), line.height())
+        return self.mapToScene(rect).boundingRect()
 
     def selected_range(self):
         """The selected text, or all of it when nothing is selected."""

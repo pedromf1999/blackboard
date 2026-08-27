@@ -97,6 +97,8 @@ def test_get_extra_save_data(item):
         'grayscale': True,
         'outline_width': 0,
         'outline_color': (235, 235, 235, 255),
+        'caption': '',
+        'caption_color': (52, 52, 52, 255),
     }
 
 

@@ -58,6 +58,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         self.edit_item = None
         # The group whose title is being written, if any
         self.title_group = None
+        # The image whose caption is being written, if any
+        self.caption_item = None
         self.crop_item = None
         # The group whose items can currently be edited individually
         self.active_group = None
@@ -657,6 +659,13 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 else:
                     super().mousePressEvent(event)
                     return
+            if self.caption_item is not None:
+                item = self.caption_item
+                if item_at_pos is not item.caption_editor:
+                    item.exit_caption_edit_mode()
+                else:
+                    super().mousePressEvent(event)
+                    return
             if self.title_group is not None:
                 # Clicking the band itself goes on writing; the editor
                 # sits inside it and takes the click
@@ -703,6 +712,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                     return
             if self.title_double_clicked(item, event.scenePos()):
                 return
+            if self.caption_double_clicked(item, event.scenePos()):
+                return
             if not item.isSelected():
                 item.setSelected(True)
             if item.is_editable:
@@ -735,6 +746,23 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         item.enter_title_edit_mode()
         for view in self.views():
             view.update_group_toolbar()
+        return True
+
+    def caption_double_clicked(self, item, scene_pos):
+        """Open an image's caption when its band is double-clicked."""
+
+        if getattr(item, 'TYPE', None) != 'pixmap':
+            return False
+        if not item.shows_caption():
+            return False
+        if not item.caption_rect().contains(item.mapFromScene(scene_pos)):
+            return False
+        if not item.isSelected():
+            self.deselect_all_items()
+            item.setSelected(True)
+        item.enter_caption_edit_mode()
+        for view in self.views():
+            view.update_image_toolbar()
         return True
 
     def mouseMoveEvent(self, event):

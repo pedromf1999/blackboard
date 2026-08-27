@@ -706,6 +706,28 @@ class ChangeLegend(QtGui.QUndoCommand):
         self.scene.set_legend(self.old_rows)
 
 
+class ChangeCaption(QtGui.QUndoCommand):
+    """Set an image's caption and the colour of the band it sits in."""
+
+    def __init__(self, items, caption, color):
+        super().__init__('Change caption')
+        self.items = list(items)
+        self.caption = caption
+        self.color = color
+        self.old = [(item.caption, item.caption_color)
+                    for item in self.items]
+
+    def redo(self):
+        for item in self.items:
+            item.caption_color = self.color
+            item.caption = self.caption
+
+    def undo(self):
+        for item, (caption, color) in zip(self.items, self.old):
+            item.caption_color = color
+            item.caption = caption
+
+
 class ChangeGroupTitle(QtGui.QUndoCommand):
     """Set a group's title and the colour of the band it sits in.
 

@@ -472,6 +472,12 @@ actions = ActionList([
         group='active_when_image_selection',
     ),
     Action(
+        id='image_caption',
+        text='Write &Caption',
+        callback='on_action_image_caption',
+        group='active_when_image_selection',
+    ),
+    Action(
         id='image_outline_color',
         text='Outline Colo&ur...',
         callback='on_action_image_outline_color',

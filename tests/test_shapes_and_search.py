@@ -218,7 +218,7 @@ def test_the_found_word_is_brought_up_to_a_readable_size(view):
     view.text_search_index = -1
     view.find_next_text_match()
 
-    word = view.word_rect(item, 'brown')
+    word = item.search_rect('brown')
     seen = view.mapToScene(view.viewport().rect()).boundingRect()
     assert word.width() / seen.width() == pytest.approx(
         view.MATCH_SHARE, abs=0.03)
@@ -230,7 +230,7 @@ def test_the_word_is_found_where_it_actually_sits(view):
 
     item = BeeTextItem('aaaa bbbb cccc dddd target')
     view.scene.addItem(item)
-    word = view.word_rect(item, 'target')
+    word = item.search_rect('target')
 
     assert word is not None
     assert item.sceneBoundingRect().contains(word)
@@ -240,7 +240,7 @@ def test_the_word_is_found_where_it_actually_sits(view):
 def test_a_word_that_is_not_there_gives_nothing(view):
     item = BeeTextItem('nothing here')
     view.scene.addItem(item)
-    assert view.word_rect(item, 'elsewhere') is None
+    assert item.search_rect('elsewhere') is None
 
 
 def test_a_match_with_no_measurable_word_still_goes_to_the_note(view):
@@ -252,7 +252,8 @@ def test_a_match_with_no_measurable_word_still_goes_to_the_note(view):
     view.text_search_query = 'brown'
     view.text_search_index = -1
 
-    with patch.object(view, 'word_rect', return_value=None):
+    with patch.object(BeeTextItem, 'search_rect',
+                      return_value=None):
         with patch.object(view, 'centerOn') as centered:
             view.find_next_text_match()
     assert centered.call_args[0][0] == item.sceneBoundingRect().center()

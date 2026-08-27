@@ -35,14 +35,19 @@ class ImageToolBar(PinnedToolBar):
 
         self.crop = self.add_button(
             'crop', 'Crop this image (Shift+C)', view.on_action_crop)
+        self.caption = self.add_button(
+            'text', 'Write a caption', view.on_action_image_caption)
         # Stays pressed while the image has one, so the button says
         # what a press would do
         self.outline = self.add_button(
             'outline', 'Outline (Shift+O)', view.on_action_image_outline)
         self.outline.setCheckable(True)
+        # One button, two jobs: while a caption is being written it
+        # colours the caption, because that is what the colour on
+        # screen is at that moment
+        self.writing_caption = False
         self.color = self.add_button(
-            'color', 'Outline colour', view.on_action_image_outline_color,
-            keep_colors=True)
+            'color', 'Outline colour', self.on_color, keep_colors=True)
         # The same pair of icons as everywhere else: one makes what is
         # selected bigger, the other smaller -- letters, line or contour
         self.thinner = self.add_button(
@@ -54,13 +59,26 @@ class ImageToolBar(PinnedToolBar):
 
         self.adjustSize()
 
+    def on_color(self):
+        """Colour the caption if one is being written, else the outline."""
+
+        if self.writing_caption:
+            self.view.on_action_image_caption_color()
+        else:
+            self.view.on_action_image_outline_color()
+
     def update_state(self, items):
         """Show what these buttons can do to the images selected."""
 
         # Cropping is one picture at a time; it has its own mode, with
         # handles that belong to a single image
         self.crop.setEnabled(len(items) == 1)
+        self.caption.setEnabled(len(items) == 1)
+        self.writing_caption = any(item.caption_editing for item in items)
         outlined = [item for item in items if item.has_outline()]
         self.outline.setChecked(len(outlined) == len(items))
-        for button in (self.color, self.thinner, self.thicker):
+        self.color.setToolTip(
+            'Caption colour' if self.writing_caption else 'Outline colour')
+        self.color.setEnabled(bool(outlined) or self.writing_caption)
+        for button in (self.thinner, self.thicker):
             button.setEnabled(bool(outlined))
