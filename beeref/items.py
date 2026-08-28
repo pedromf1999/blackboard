@@ -916,7 +916,13 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         if not self.shows_header():
             return 0
         metrics = QtGui.QFontMetricsF(self.title_font(width))
-        return metrics.height() * (1 + 2 * self.TITLE_PADDING_FRACTION)
+        line = metrics.height()
+        room = line * self.TITLE_PADDING_FRACTION
+        if self.title_editor is not None:
+            # Ask the editor rather than measuring a line a second way:
+            # the band has to hold exactly what it lays out
+            line = max(self.title_editor.boundingRect().height(), line)
+        return line + 2 * room
 
     def header_height(self):
         return self.header_height_for(self.rect().width())
@@ -1220,6 +1226,10 @@ class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
         self.group = group
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
+        # No margin of its own: the band is measured to the width the
+        # words are given, and Qt's four units on each side would have
+        # them wrapping narrower and standing taller than the band
+        self.document().setDocumentMargin(0)
         self.refresh()
         cursor = self.textCursor()
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
@@ -1238,9 +1248,9 @@ class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
         option = self.document().defaultTextOption()
         option.setAlignment(group.title_text_alignment())
         self.document().setDefaultTextOption(option)
-        self.setPos(band.x() + inset,
-                    band.y()
-                    + (band.height() - self.boundingRect().height()) / 2)
+        # From the top of the band, not centred in it: the band is
+        # built to fit these words, so there is nothing to centre
+        self.setPos(band.x() + inset, band.y() + inset)
 
     def keyPressEvent(self, event):
         # A title is one line: Enter finishes it rather than starting a
