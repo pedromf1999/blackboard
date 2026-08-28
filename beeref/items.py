@@ -72,6 +72,50 @@ def sort_by_filename(items):
     return items_by_filename + items_by_save_id + items_remaining
 
 
+# A picture with fewer see-through pixels than this is treated as
+# having none. Antialiasing along an edge leaves a few; a picture that
+# really is cut out leaves a great many.
+OPAQUE_ENOUGH = 0.995
+
+
+def without_pointless_alpha(image):
+    """The picture with its alpha channel dropped when nothing uses it.
+
+    A screenshot arrives with an alpha channel whether or not anything
+    in it is see-through, and the storage format is chosen by whether
+    that channel is there. A handful of half-transparent pixels along
+    an antialiased edge was enough to have a ten-megapixel screenshot
+    kept as PNG: on a board of them that came to three and a quarter
+    gigabytes where JPEG would have taken thirty megabytes, and the
+    pictures measured 99.97% opaque.
+
+    A picture that really does use transparency keeps it, and so does
+    every picture when the storage format has been asked for by name
+    rather than left to be chosen.
+    """
+
+    if image.isNull() or not image.hasAlphaChannel():
+        return image
+    if BeeSettings().valueOrDefault('Items/image_storage_format') != 'best':
+        return image
+
+    alpha = image.convertToFormat(QtGui.QImage.Format.Format_Alpha8)
+    data = alpha.constBits()
+    data.setsize(alpha.sizeInBytes())
+    values = bytes(data)
+    width, height, line = alpha.width(), alpha.height(), alpha.bytesPerLine()
+    if not width or not height:
+        return image
+    # Row by row: a row is padded out to a multiple of four bytes, and
+    # counting the padding would make a narrow picture look see-through
+    opaque = sum(values[y * line:y * line + width].count(255)
+                 for y in range(height))
+    if opaque / (width * height) < OPAQUE_ENOUGH:
+        return image
+    logger.debug('Dropping an alpha channel that nothing uses')
+    return image.convertToFormat(QtGui.QImage.Format.Format_RGB32)
+
+
 class BeeItemMixin(SelectableMixin):
     """Base for all items added by the user."""
 

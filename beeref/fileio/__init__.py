@@ -21,7 +21,7 @@ from beeref import commands
 from beeref.fileio.errors import BeeFileIOError
 from beeref.fileio.image import load_image
 from beeref.fileio.sql import SQLiteIO, is_bee_file
-from beeref.items import BeePixmapItem
+from beeref.items import BeePixmapItem, without_pointless_alpha
 
 
 __all__ = [
@@ -89,7 +89,7 @@ def load_images(filenames, pos, scene, worker=None, fit_size=None):
             errors.append(filename)
             continue
 
-        item = BeePixmapItem(img, filename)
+        item = BeePixmapItem(without_pointless_alpha(img), filename)
         if fit_size is not None:
             item.setScale(item.fit_scale_to(fit_size))
         item.set_pos_center(pos)

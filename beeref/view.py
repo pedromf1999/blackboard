@@ -34,7 +34,8 @@ from beeref.fileio.errors import IMG_LOADING_ERROR_MSG
 from beeref.fileio.export import exporter_registry, ImagesToDirectoryExporter
 from beeref import widgets
 from beeref.items import (
-    BeeDrawItem, BeeGroupItem, BeePixmapItem, BeeTextItem)
+    BeeDrawItem, BeeGroupItem, BeePixmapItem, BeeTextItem,
+    without_pointless_alpha)
 from beeref.main_controls import MainControlsMixin
 from beeref.scene import BeeGraphicsScene
 from beeref.utils import get_file_extension_from_format, qcolor_to_hex
@@ -2178,7 +2179,7 @@ class BeeGraphicsView(MainControlsMixin,
 
         img = clipboard.image()
         if not img.isNull():
-            item = BeePixmapItem(img)
+            item = BeePixmapItem(without_pointless_alpha(img))
             item.setScale(item.fit_scale_to(self.new_image_size()))
             self.undo_stack.push(commands.InsertItems(self.scene, [item], pos))
             if len(self.scene.items()) == 1:
