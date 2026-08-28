@@ -14,7 +14,6 @@
 # along with BeeRef.  If not, see <https://www.gnu.org/licenses/>.
 
 from functools import partial
-from itertools import cycle
 import logging
 import math
 import os
@@ -91,8 +90,18 @@ class BeeGraphicsView(MainControlsMixin,
     SAMPLE_COLOR_MODE = 3
 
     # On-screen bounds in pixels between which the grid spacing is kept
+    # The closest and furthest apart the grid is allowed to look, and
+    # the steps it is allowed to take within each decade of the spacing
+    # from the settings.
+    #
+    # It used to alternate five and two, which meant the distance on
+    # screen swung between twenty-six and a hundred and twenty-five
+    # pixels: a little zoom either way and the number of lines changed
+    # fivefold. These steps are close enough together that the widest
+    # change is by two thirds rather than by five times.
     GRID_MIN_SPACING = 25
     GRID_MAX_SPACING = 250
+    GRID_STEPS = (1, 1.5, 2, 3, 5, 7)
 
     # Range offered when changing the size of text
     TEXT_SIZE_MIN = 4
@@ -692,22 +701,34 @@ class BeeGraphicsView(MainControlsMixin,
     def get_grid_step(self):
         """The grid spacing in scene coordinates.
 
-        The base spacing from the settings is scaled up or down so that
-        the grid keeps a sensible distance on screen at any zoom level:
-        it never turns into a dense mess when zoomed out, and never
-        disappears when zoomed in.
+        The spacing from the settings is scaled up or down so that the
+        grid keeps a sensible distance on screen at any zoom: it never
+        turns into a dense mess zoomed out, and never disappears zoomed
+        in. The step nearest the distance wanted is taken, measured
+        proportionally, so the grid is as close to that distance as the
+        steps allow -- and at the board's own size it is exactly the
+        spacing that was asked for.
         """
 
         zoom = self.get_scale()
-        step = self.settings.valueOrDefault('View/grid_size')
-        # Alternating factors give a 10/50/100/500 style sequence
-        factors = cycle((5, 2))
-        while step * zoom < self.GRID_MIN_SPACING:
-            step *= next(factors)
-        factors = cycle((2, 5))
-        while step * zoom > self.GRID_MAX_SPACING:
-            step /= next(factors)
-        return step
+        base = self.settings.valueOrDefault('View/grid_size')
+        if zoom <= 0 or base <= 0:
+            return base
+
+        # The spacing from the settings is what the grid looks like at
+        # its own size; away from there it steps to stay near it
+        on_screen = min(self.GRID_MAX_SPACING,
+                        max(self.GRID_MIN_SPACING, base))
+        wanted = on_screen / zoom
+        decade = 10 ** math.floor(math.log10(wanted / base))
+        best = None
+        for power in (decade / 10, decade, decade * 10):
+            for factor in self.GRID_STEPS:
+                step = base * power * factor
+                apart = abs(math.log(step / wanted))
+                if best is None or apart < best[0]:
+                    best = (apart, step)
+        return best[1]
 
     # How big the mark showing where a line would fasten is drawn, on
     # screen rather than on the board, so it stays the same at any zoom.
