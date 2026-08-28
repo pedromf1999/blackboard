@@ -90,18 +90,10 @@ class BeeGraphicsView(MainControlsMixin,
     SAMPLE_COLOR_MODE = 3
 
     # On-screen bounds in pixels between which the grid spacing is kept
-    # The closest and furthest apart the grid is allowed to look, and
-    # the steps it is allowed to take within each decade of the spacing
-    # from the settings.
-    #
-    # It used to alternate five and two, which meant the distance on
-    # screen swung between twenty-six and a hundred and twenty-five
-    # pixels: a little zoom either way and the number of lines changed
-    # fivefold. These steps are close enough together that the widest
-    # change is by two thirds rather than by five times.
+    # The closest and furthest apart the grid is allowed to look on
+    # screen, whatever spacing the settings ask for.
     GRID_MIN_SPACING = 25
     GRID_MAX_SPACING = 250
-    GRID_STEPS = (1, 1.5, 2, 3, 5, 7)
 
     # Range offered when changing the size of text
     TEXT_SIZE_MIN = 4
@@ -698,38 +690,6 @@ class BeeGraphicsView(MainControlsMixin,
     # How wide a dot of the dotted grid is drawn, in screen pixels
     GRID_DOT_SIZE = 4
 
-    def get_grid_step(self):
-        """The grid spacing in scene coordinates.
-
-        The spacing from the settings is scaled up or down so that the
-        grid keeps a sensible distance on screen at any zoom: it never
-        turns into a dense mess zoomed out, and never disappears zoomed
-        in. The step nearest the distance wanted is taken, measured
-        proportionally, so the grid is as close to that distance as the
-        steps allow -- and at the board's own size it is exactly the
-        spacing that was asked for.
-        """
-
-        zoom = self.get_scale()
-        base = self.settings.valueOrDefault('View/grid_size')
-        if zoom <= 0 or base <= 0:
-            return base
-
-        # The spacing from the settings is what the grid looks like at
-        # its own size; away from there it steps to stay near it
-        on_screen = min(self.GRID_MAX_SPACING,
-                        max(self.GRID_MIN_SPACING, base))
-        wanted = on_screen / zoom
-        decade = 10 ** math.floor(math.log10(wanted / base))
-        best = None
-        for power in (decade / 10, decade, decade * 10):
-            for factor in self.GRID_STEPS:
-                step = base * power * factor
-                apart = abs(math.log(step / wanted))
-                if best is None or apart < best[0]:
-                    best = (apart, step)
-        return best[1]
-
     # How big the mark showing where a line would fasten is drawn, on
     # screen rather than on the board, so it stays the same at any zoom.
     SNAP_MARKER_SIZE = 7
@@ -761,27 +721,71 @@ class BeeGraphicsView(MainControlsMixin,
         if not self.show_grid:
             return
 
-        step = self.get_grid_step()
-        pen = QtGui.QPen(
-            QtGui.QColor(self.settings.valueOrDefault('View/grid_color')))
+        fine, coarse, fade = self.grid_levels()
+        dots = self.settings.valueOrDefault('View/grid_style') == 'dots'
+        # The finer level first and faded, the coarser one over it at
+        # full strength. Every second line of the fine grid is a coarse
+        # line, so what this actually does is bring the lines in
+        # between in and out.
+        if fade > 0.02:
+            self.draw_grid(painter, rect, fine, fade, dots)
+        self.draw_grid(painter, rect, coarse, 1, dots)
+
+    def grid_levels(self):
+        """The two spacings to draw, and how far the finer one is in.
+
+        A grid tied to the board has to change spacing somewhere, or it
+        turns into a wall zoomed out and vanishes zoomed in. What was
+        being noticed was not the change itself but its suddenness: a
+        whole set of lines arriving between one turn of the wheel and
+        the next.
+
+        So two are drawn at once, an octave apart, and the finer of
+        them fades in as it is approached and out again as it gets too
+        close. Every second line of the finer grid is a line of the
+        coarser one, so nothing ever moves: lines only come in and go
+        out between the ones that stay.
+        """
+
+        zoom = self.get_scale()
+        base = self.settings.valueOrDefault('View/grid_size')
+        if zoom <= 0 or base <= 0:
+            return base, base * 2, 0
+
+        # What the grid looks like at the board's own size is what the
+        # settings ask for, reined in so it is never a mess or a pair
+        # of lines
+        on_screen = min(self.GRID_MAX_SPACING,
+                        max(self.GRID_MIN_SPACING, base))
+        octaves = math.log2(on_screen / zoom / base)
+        whole = math.floor(octaves)
+        fine = base * 2 ** whole
+        return fine, fine * 2, 1 - (octaves - whole)
+
+    def draw_grid(self, painter, rect, step, fade, dots):
+        """One level of the grid, at the given strength."""
+
+        color = QtGui.QColor(
+            self.settings.valueOrDefault('View/grid_color'))
+        color.setAlphaF(color.alphaF() * fade)
+        pen = QtGui.QPen(color)
         # Keep lines one pixel wide whatever the zoom level
         pen.setCosmetic(True)
-        painter.setPen(pen)
 
         across = self.grid_positions(rect.left(), rect.right(), step)
         down = self.grid_positions(rect.top(), rect.bottom(), step)
-
-        if self.settings.valueOrDefault('View/grid_style') == 'dots':
-            self.draw_grid_dots(painter, across, down)
+        if dots:
+            self.draw_grid_dots(painter, pen, across, down)
             return
 
+        painter.setPen(pen)
         lines = [QtCore.QLineF(x, rect.top(), x, rect.bottom())
                  for x in across]
         lines += [QtCore.QLineF(rect.left(), y, rect.right(), y)
                   for y in down]
         painter.drawLines(lines)
 
-    def draw_grid_dots(self, painter, across, down):
+    def draw_grid_dots(self, painter, pen, across, down):
         """A dot where the lines would have crossed.
 
         Drawn on whole screen pixels rather than at the point of the
@@ -798,8 +802,6 @@ class BeeGraphicsView(MainControlsMixin,
         thousand.
         """
 
-        pen = QtGui.QPen(
-            QtGui.QColor(self.settings.valueOrDefault('View/grid_color')))
         pen.setWidth(self.GRID_DOT_SIZE)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
 

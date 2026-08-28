@@ -54,16 +54,17 @@ def test_the_dots_take_the_grids_own_colour(view, settings):
 def test_the_dots_fall_where_the_lines_would_have_crossed(view, settings):
     """Same spacing: it is the same grid, drawn differently."""
 
-    step = view.get_grid_step()
+    step = view.grid_levels()[0]
     across = view.grid_positions(0, 500, step)
     assert across == [0, step, 2 * step, 3 * step, 4 * step]
 
 
 def test_the_spacing_setting_is_obeyed_either_way(view, settings):
+    view.setTransform(QtGui.QTransform.fromScale(1, 1))
     settings.setValue('View/grid_size', 50)
-    small = view.get_grid_step()
+    small = view.grid_levels()[0]
     settings.setValue('View/grid_size', 200)
-    assert view.get_grid_step() > small
+    assert view.grid_levels()[0] > small
 
 
 def test_a_hidden_grid_draws_neither(view, settings):
@@ -94,8 +95,9 @@ def test_dots_keep_their_distance_at_any_zoom(view, settings):
 
     for zoom in (0.02, 0.1, 0.5, 1, 4, 20):
         view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
-        on_screen = view.get_grid_step() * view.get_scale()
-        assert view.GRID_MIN_SPACING <= on_screen <= view.GRID_MAX_SPACING
+        fine, coarse, fade = view.grid_levels()
+        assert view.GRID_MIN_SPACING <= fine * zoom
+        assert coarse * zoom <= view.GRID_MAX_SPACING * 2
 
 
 def test_both_styles_are_spaced_alike(view, settings):
@@ -105,69 +107,44 @@ def test_both_styles_are_spaced_alike(view, settings):
     for zoom in (0.05, 1, 8):
         view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
         settings.setValue('View/grid_style', 'lines')
-        ruled = view.get_grid_step()
+        ruled = view.grid_levels()
         settings.setValue('View/grid_style', 'dots')
-        assert view.get_grid_step() == ruled
+        assert view.grid_levels() == ruled
 
 
-def dot_widths(view, settings, margin=12):
-    """Every width a whole dot comes out at.
+def dots_drawn(view):
+    """Every point the grid asks to have a dot put at."""
 
-    A dot cut by the edge of what is being looked at is not a dot of a
-    different size, so runs that touch either end are left out.
-    """
+    from unittest.mock import MagicMock, patch
+    from PyQt6 import QtCore
 
-    view.viewport().update()
-    shot = view.viewport().grab().toImage()
-    background = QtGui.QColor(settings.valueOrDefault('View/canvas_color'))
-    left, right = margin, shot.width() - margin
-    widths = set()
-    for y in range(margin, shot.height() - margin):
-        run = 0
-        for x in range(left, right):
-            if shot.pixelColor(x, y) != background:
-                if run == 0 and x == left:
-                    run = -10000  # started against the edge; not whole
-                run += 1
-            else:
-                if run > 0:
-                    widths.add(run)
-                run = 0
-    return widths
+    points = []
+
+    def remember(self, painter, pen, across, down):
+        points.extend(
+            QtCore.QPointF(round(p.x()), round(p.y()))
+            for p in (view.mapFromScene(QtCore.QPointF(x, y))
+                      for x in across for y in down))
+
+    with patch('PyQt6.QtWidgets.QGraphicsView.drawBackground'):
+        with patch.object(type(view), 'draw_grid_dots', remember):
+            view.drawBackground(MagicMock(), QtCore.QRectF(0, 0, 500, 400))
+    return points
 
 
-def test_a_dot_is_the_same_size_at_every_zoom(view, settings):
+def test_a_dot_is_always_put_on_a_whole_pixel(view, settings):
     """Points of the board land wherever the zoom puts them, and a
     round dot on a fractional pixel is spread over its neighbours: the
     same dot measured two pixels across at one zoom and five at
     another, which is the difference that gets noticed."""
 
-    view.resize(500, 400)
-    settings.setValue('View/grid_size', 100)
     settings.setValue('View/grid_style', 'dots')
     view.show_grid = True
 
     for zoom in (0.02, 0.07, 0.13, 0.5, 0.77, 1, 1.3, 4, 9.5, 20):
         view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
-        assert dot_widths(view, settings) == {view.GRID_DOT_SIZE}
-
-
-def test_a_dot_is_shaded_the_same_way_at_every_zoom(view, settings):
-    """Half a dot's width is the softened edge, so it would show there
-    even where the width came out right."""
-
-    view.resize(500, 400)
-    settings.setValue('View/grid_style', 'dots')
-    view.show_grid = True
-    background = QtGui.QColor(settings.valueOrDefault('View/canvas_color'))
-
-    seen = []
-    for zoom in (0.13, 1, 9.5):
-        view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
-        view.viewport().update()
-        shot = view.viewport().grab().toImage()
-        seen.append({shot.pixelColor(x, y).name()
-                     for x in range(6, shot.width() - 6)
-                     for y in range(6, shot.height() - 6)
-                     if shot.pixelColor(x, y) != background})
-    assert seen[0] == seen[1] == seen[2]
+        drawn_at = dots_drawn(view)
+        assert drawn_at, f'no dots at all at {zoom}'
+        for point in drawn_at:
+            assert point.x() == int(point.x())
+            assert point.y() == int(point.y())

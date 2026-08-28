@@ -1663,16 +1663,19 @@ def test_on_action_find_next_reuses_existing_query(dialog_mock, view):
 
 
 @pytest.mark.parametrize('zoom', [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 20, 100])
-def test_get_grid_step_stays_in_sensible_range(view, zoom):
+def test_grid_levels_stay_in_sensible_range(view, zoom):
     view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
-    onscreen = view.get_grid_step() * zoom
-    assert view.GRID_MIN_SPACING <= onscreen <= view.GRID_MAX_SPACING
+    fine, coarse, fade = view.grid_levels()
+    assert view.GRID_MIN_SPACING <= fine * zoom
+    assert coarse * zoom <= view.GRID_MAX_SPACING * 2
 
 
-def test_get_grid_step_uses_setting_when_zoom_neutral(view, settings):
+def test_grid_levels_use_the_setting_when_zoom_neutral(view, settings):
     settings.setValue('View/grid_size', 50)
     view.setTransform(QtGui.QTransform.fromScale(1, 1))
-    assert view.get_grid_step() == 50
+    fine, coarse, fade = view.grid_levels()
+    assert fine == 50
+    assert fade == 1
 
 
 def test_on_action_show_grid(view):
@@ -1688,10 +1691,13 @@ def test_draw_background_draws_grid_when_enabled(super_mock, view):
     painter = MagicMock()
     view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
     super_mock.assert_called_once()
-    painter.drawLines.assert_called_once()
-    lines = painter.drawLines.call_args[0][0]
+    # Two levels, an octave apart, the finer of them faded; see
+    # grid_levels
+    assert painter.drawLines.call_count == 2
     # 500x500 at the default spacing of 100: lines at 0, 100 ... 400
-    assert len(lines) == 10
+    assert len(painter.drawLines.call_args_list[0][0][0]) == 10
+    # And the coarser one at 0, 200, 400
+    assert len(painter.drawLines.call_args_list[1][0][0]) == 6
 
 
 @patch('PyQt6.QtWidgets.QGraphicsView.drawBackground')
