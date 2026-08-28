@@ -751,17 +751,7 @@ class BeeGraphicsView(MainControlsMixin,
         down = self.grid_positions(rect.top(), rect.bottom(), step)
 
         if self.settings.valueOrDefault('View/grid_style') == 'dots':
-            # A dot where the lines would have crossed, in the same
-            # colour and at the same spacing. Wider than the lines
-            # because it has to be: a dot the width of a line is a
-            # single pixel of a colour chosen to be barely there, and
-            # measured against the ruled grid it came to twelve pixels
-            # on a screen where the lines came to five thousand.
-            pen.setWidth(self.GRID_DOT_SIZE)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.drawPoints(
-                [QtCore.QPointF(x, y) for x in across for y in down])
+            self.draw_grid_dots(painter, across, down)
             return
 
         lines = [QtCore.QLineF(x, rect.top(), x, rect.bottom())
@@ -769,6 +759,37 @@ class BeeGraphicsView(MainControlsMixin,
         lines += [QtCore.QLineF(rect.left(), y, rect.right(), y)
                   for y in down]
         painter.drawLines(lines)
+
+    def draw_grid_dots(self, painter, across, down):
+        """A dot where the lines would have crossed.
+
+        Drawn on whole screen pixels rather than at the point of the
+        board the dot belongs to. Those points land wherever the zoom
+        puts them, and a round dot on a fractional pixel is spread over
+        its neighbours: the same dot measured two pixels across at one
+        zoom and five at another, which is the difference that gets
+        noticed.
+
+        Wider than the lines because it has to be. The grid colour is
+        chosen to be barely there, and a dot the width of a line is one
+        pixel of it: against the ruled grid on the same screen that
+        came to twelve pixels of ink where the lines came to five
+        thousand.
+        """
+
+        pen = QtGui.QPen(
+            QtGui.QColor(self.settings.valueOrDefault('View/grid_color')))
+        pen.setWidth(self.GRID_DOT_SIZE)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+
+        painter.save()
+        painter.setTransform(QtGui.QTransform())
+        painter.setPen(pen)
+        painter.drawPoints([
+            QtCore.QPointF(round(point.x()), round(point.y()))
+            for point in (self.mapFromScene(QtCore.QPointF(x, y))
+                          for x in across for y in down)])
+        painter.restore()
 
     @staticmethod
     def grid_positions(start, end, step):
