@@ -32,10 +32,11 @@ import shutil
 import sqlite3
 import tempfile
 
-from PyQt6 import QtGui
+from PyQt6 import QtCore, QtGui
 
 from beeref import constants
-from beeref.items import BeePixmapItem, BeeErrorItem
+from beeref.items import (
+    BeePixmapItem, BeeErrorItem, without_pointless_alpha)
 from .errors import BeeFileIOError, IMG_LOADING_ERROR_MSG
 from .schema import (SCHEMA, USER_VERSION, MIGRATIONS, APPLICATION_ID,
                      META_TABLE, META_VERSION_KEY,
@@ -480,6 +481,74 @@ class SQLiteIO:
 
         if self.worker:
             self.worker.finished.emit(self.filename, [])
+
+    @handle_sqlite_errors
+    def shrink_images(self):
+        """Store again, as photographs, the pictures kept losslessly.
+
+        A screenshot arrives with an alpha channel whether or not
+        anything in it is see-through, and that alone had it kept as
+        PNG. Boards written before that was noticed are full of them.
+        Pictures that really are cut out are left alone, and so is
+        anything already stored as a photograph.
+
+        Lossy and not undoable, which is why it is asked for rather
+        than done while saving.
+
+        How much was saved is logged rather than returned: the errors
+        are handled by a wrapper that has no value to hand back, and
+        the caller can see the file's size for itself anyway.
+        """
+
+        if self.readonly:
+            raise sqlite3.OperationalError(
+                'Attempt to write to a readonly database')
+
+        rows = self.fetchall('SELECT item_id, name, sz FROM sqlar')
+        if self.worker:
+            self.worker.begin_processing.emit(len(rows))
+
+        saved = 0
+        for i, (item_id, name, size) in enumerate(rows):
+            saved += self.shrink_one_image(item_id, name, size)
+            if self.worker:
+                self.worker.progress.emit(i + 1)
+                if self.worker.canceled:
+                    break
+        self.connection.commit()
+        logger.info(f'Shrinking images saved {saved} bytes')
+
+    def shrink_one_image(self, item_id, name, size):
+        """Store one picture as a photograph, if that is worth doing."""
+
+        row = self.fetchone(
+            'SELECT data FROM sqlar WHERE item_id=?', (item_id,))
+        if not row:
+            return 0
+        image = QtGui.QImage()
+        if not image.loadFromData(row[0]):
+            logger.debug(f'Could not read image {name}')
+            return 0
+
+        flat = without_pointless_alpha(image)
+        if flat is image:
+            # Either it uses its transparency or it never had any
+            return 0
+
+        barray = QtCore.QByteArray()
+        buffer = QtCore.QBuffer(barray)
+        buffer.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
+        if not flat.save(buffer, 'JPG', quality=90):
+            logger.debug(f'Could not write image {name}')
+            return 0
+        data = barray.data()
+        if len(data) >= size:
+            # No sense trading quality for nothing
+            return 0
+
+        self.ex('UPDATE sqlar SET name=?, sz=?, data=? WHERE item_id=?',
+                (f'{pathlib.Path(name).stem}.jpg', len(data), data, item_id))
+        return size - len(data)
 
     @handle_sqlite_errors
     def vacuum(self):

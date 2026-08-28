@@ -74,6 +74,16 @@ def compact_bee(filename, scene, worker=None):
     logger.info('End compact')
 
 
+def shrink_images_bee(filename, scene, worker=None):
+    """Store the pictures kept losslessly as photographs instead."""
+
+    logger.info(f'Shrinking the images in {filename}...')
+    io = SQLiteIO(filename, scene, worker=worker)
+    io.shrink_images()
+    io.vacuum()
+    logger.info('End shrinking')
+
+
 def load_images(filenames, pos, scene, worker=None, fit_size=None):
     """Add images to existing scene."""
 

@@ -133,6 +133,11 @@ actions = ActionList([
         callback='on_action_compact_file',
     ),
     Action(
+        id='shrink_images',
+        text='S&hrink Images...',
+        callback='on_action_shrink_images',
+    ),
+    Action(
         id='save_as',
         text='Save &As...',
         shortcuts=['Ctrl+Shift+S'],

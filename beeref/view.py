@@ -1938,6 +1938,81 @@ class BeeGraphicsView(MainControlsMixin,
             QtWidgets.QMessageBox.warning(
                 self, 'Compacting failed', errors[0])
 
+    def on_action_shrink_images(self):
+        """Store the pictures kept losslessly as photographs instead.
+
+        A screenshot arrives with an alpha channel whether or not
+        anything in it is see-through, and that alone had it kept as
+        PNG. Boards written before that was noticed carry it: one in
+        use came to three and a quarter gigabytes, of which the
+        pictures were 3.28 and measured 99.97 per cent opaque.
+
+        Asked for rather than done while saving, because it cannot be
+        taken back.
+        """
+
+        if not self.filename:
+            self.on_action_save_as()
+            return
+        if not self.undo_stack.isClean():
+            QtWidgets.QMessageBox.information(
+                self,
+                'Save first',
+                'Save your changes before shrinking the images.')
+            return
+
+        answer = QtWidgets.QMessageBox.warning(
+            self,
+            'Shrink the images?',
+            'The pictures on this board that are stored losslessly will '
+            'be stored as photographs instead, at ninety per cent '
+            'quality.' + chr(10) * 2 +
+            'On a board of screenshots this makes the file dozens of '
+            'times smaller. It cannot be undone: the pictures are '
+            'written again and what the encoding leaves out is gone. '
+            'Pictures that really use transparency are left alone.'
+            + chr(10) * 2 +
+            'Copy the file first if you want to keep what it looks like '
+            'now.',
+            QtWidgets.QMessageBox.StandardButton.Yes
+            | QtWidgets.QMessageBox.StandardButton.Cancel,
+            QtWidgets.QMessageBox.StandardButton.Cancel)
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+
+        self.before_shrinking = os.path.getsize(self.filename)
+        self.worker = fileio.ThreadedIO(
+            fileio.shrink_images_bee, self.filename, self.scene)
+        self.worker.finished.connect(self.on_shrinking_finished)
+        self.progress = widgets.BeeProgressDialog(
+            f'Shrinking the images in {self.filename}',
+            worker=self.worker,
+            parent=self)
+        self.worker.start()
+
+    def on_shrinking_finished(self, filename, errors):
+        self.progress.deleteLater()
+        if errors:
+            QtWidgets.QMessageBox.warning(
+                self, 'Shrinking failed', errors[0])
+            return
+        after = os.path.getsize(self.filename)
+        QtWidgets.QMessageBox.information(
+            self,
+            'Images shrunk',
+            f'{self.human_size(self.before_shrinking)} became '
+            f'{self.human_size(after)}.' + chr(10) * 2 +
+            'Open the board again to see the pictures as they are now '
+            'stored.')
+
+    @staticmethod
+    def human_size(size):
+        for unit in ('bytes', 'KB', 'MB'):
+            if size < 1024:
+                return f'{size:.0f} {unit}'
+            size /= 1024
+        return f'{size:.1f} GB'
+
     def on_action_save_as(self):
         self.cancel_active_modes()
         directory = os.path.dirname(self.filename) if self.filename else None
