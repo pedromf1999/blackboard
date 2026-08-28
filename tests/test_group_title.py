@@ -499,3 +499,66 @@ def test_an_image_is_not_a_group(view):
     view.scene.addItem(item)
 
     assert view.scene.title_double_clicked(item, QtCore.QPointF(0, 0)) is False
+
+
+def enormous_group(view, width, height):
+    """A group the size the ones on a working board reach."""
+
+    img = QtGui.QImage(200, 150, QtGui.QImage.Format.Format_ARGB32)
+    img.fill(QtGui.QColor('red'))
+    group = BeeGroupItem()
+    view.scene.addItem(group)
+    for x, y in ((0, 0), (width, height)):
+        child = BeePixmapItem(img)
+        child.setParentItem(group)
+        child.setPos(x, y)
+    group.fit_to_children()
+    return group
+
+
+def test_an_enormous_group_still_has_a_title(view):
+    """Qt's font engine overflows above ten thousand point: the metrics
+    come back negative, the band works out to nothing and the title is
+    nowhere to be seen. A board in use reached six hundred thousand
+    units across, which asked for twenty-five thousand point."""
+
+    group = enormous_group(view, 640000, 470000)
+    group.title = 'esfefefe'
+
+    assert group.title_font().pointSizeF() == group.TITLE_MAX_SIZE
+    assert group.header_height() > 0
+    assert group.header_rect().height() > 0
+
+
+def test_the_band_keeps_its_share_up_to_the_cap(view):
+    """Below it the title goes on growing with the box."""
+
+    small = enormous_group(view, 4000, 3000)
+    small.title = 'esfefefe'
+    big = enormous_group(view, 40000, 30000)
+    big.title = 'esfefefe'
+
+    assert big.title_font().pointSizeF() > small.title_font().pointSizeF()
+    assert big.header_height() > small.header_height()
+
+
+def test_a_band_is_never_left_without_a_height(view):
+    """Whatever the font engine makes of a very large size."""
+
+    group = enormous_group(view, 640000, 470000)
+    group.title = 'esfefefe'
+    with patch('PyQt6.QtGui.QFontMetricsF.height', return_value=-1234):
+        assert group.header_height() > 0
+
+
+def test_an_enormous_picture_still_has_a_caption(view):
+    from beeref.items import BeePixmapItem as Pixmap
+
+    img = QtGui.QImage(30, 20, QtGui.QImage.Format.Format_ARGB32)
+    item = Pixmap(img)
+    view.scene.addItem(item)
+    item.crop = QtCore.QRectF(0, 0, 640000, 470000)
+    item.caption = 'Top view'
+
+    assert item.caption_font().pointSizeF() == item.CAPTION_MAX_SIZE
+    assert item.caption_height() > 0

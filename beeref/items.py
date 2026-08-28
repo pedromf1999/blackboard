@@ -691,6 +691,12 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # be circular, since the band is added to the height.
     TITLE_FRACTION = 0.04
     TITLE_MIN_SIZE = 7
+    # Qt's font engine overflows somewhere above ten thousand point:
+    # the metrics come back negative, the band works out to nothing and
+    # the title is nowhere to be seen. A title is sized from the box,
+    # and a box on a real board reaches hundreds of thousands of units
+    # across, which asked for twenty-five thousand point.
+    TITLE_MAX_SIZE = 8000
     # Room above and below the letters, as a fraction of their size
     TITLE_PADDING_FRACTION = 0.35
 
@@ -868,7 +874,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         the band and the band depend on the size.
         """
 
-        return max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION)
+        return min(self.TITLE_MAX_SIZE,
+                   max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION))
 
     def title_font(self, width=None):
         """Bold, and in the bundled face -- a title is not a note.
@@ -917,6 +924,10 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
             return 0
         metrics = QtGui.QFontMetricsF(self.title_font(width))
         line = metrics.height()
+        if line <= 0:
+            # Whatever the font engine made of it, a band still has to
+            # have a height, or the title is simply not there
+            line = self.title_size_for(width) * 1.8
         room = line * self.TITLE_PADDING_FRACTION
         if self.title_editor is not None:
             # Ask the editor rather than measuring a line a second way:
@@ -1297,6 +1308,9 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
     # with it.
     CAPTION_FRACTION = 0.04
     CAPTION_MIN_SIZE = 7
+    # As for a group's title: past this the font engine overflows and
+    # the band works out to nothing
+    CAPTION_MAX_SIZE = 8000
     CAPTION_PADDING_FRACTION = 0.35
     DEFAULT_CAPTION_COLOR = (52, 52, 52, 255)
     # Between words only. A word longer than the band runs off the end
@@ -1492,8 +1506,9 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         to the file it came from.
         """
 
-        return max(self.CAPTION_MIN_SIZE,
-                   self.crop.width() * self.CAPTION_FRACTION)
+        return min(self.CAPTION_MAX_SIZE,
+                   max(self.CAPTION_MIN_SIZE,
+                       self.crop.width() * self.CAPTION_FRACTION))
 
     def caption_font(self):
         """The interface font, plain.
@@ -1519,7 +1534,10 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         return self._caption
 
     def caption_line_height(self):
-        return QtGui.QFontMetricsF(self.caption_font()).height()
+        line = QtGui.QFontMetricsF(self.caption_font()).height()
+        # A band still has to have a height, whatever the font engine
+        # made of a very large one
+        return line if line > 0 else self.caption_size() * 1.8
 
     def caption_text_width(self):
         """The room the words have across the picture."""
