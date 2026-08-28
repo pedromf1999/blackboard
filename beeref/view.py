@@ -1188,6 +1188,18 @@ class BeeGraphicsView(MainControlsMixin,
         groups[0].enter_title_edit_mode()
         self.update_group_toolbar()
 
+    def reveal(self, rect):
+        """Scroll until the given part of the board is in sight.
+
+        A band that has just been opened for writing can be off the
+        edge of the window: it is added above a group or below a
+        picture, and on a big one it is thousands of units of it, so it
+        opens somewhere nothing can be seen of it and the writing goes
+        on blind.
+        """
+
+        self.ensureVisible(rect, self.REVEAL_MARGIN, self.REVEAL_MARGIN)
+
     def group_being_titled(self):
         """The group whose title is being written, if one is."""
 
@@ -1359,6 +1371,9 @@ class BeeGraphicsView(MainControlsMixin,
         self.text_search_query = query
         self.text_search_index = -1
         self.find_next_text_match()
+
+    # Room left round something scrolled into sight
+    REVEAL_MARGIN = 40
 
     # How much of the window's width a found word is brought up to.
     # A third filled the window with the word and little else; half

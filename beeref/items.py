@@ -1084,6 +1084,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         scene = self.scene()
         if scene is not None:
             scene.title_group = self
+            for view in scene.views():
+                view.reveal(self.mapRectToScene(self.header_rect()))
         self.update()
 
     def exit_title_edit_mode(self, commit=True):
@@ -1672,6 +1674,8 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         scene = self.scene()
         if scene is not None:
             scene.caption_item = self
+            for view in scene.views():
+                view.reveal(self.mapRectToScene(self.caption_rect()))
         self.update()
 
     def exit_caption_edit_mode(self, commit=True):
