@@ -686,6 +686,9 @@ class BeeGraphicsView(MainControlsMixin,
     def on_grid_changed(self):
         self.viewport().update()
 
+    # How wide a dot of the dotted grid is drawn, in screen pixels
+    GRID_DOT_SIZE = 4
+
     def get_grid_step(self):
         """The grid spacing in scene coordinates.
 
@@ -744,18 +747,39 @@ class BeeGraphicsView(MainControlsMixin,
         pen.setCosmetic(True)
         painter.setPen(pen)
 
-        lines = []
-        start_x = rect.left() - (rect.left() % step)
-        x = start_x
-        while x < rect.right():
-            lines.append(QtCore.QLineF(x, rect.top(), x, rect.bottom()))
-            x += step
-        start_y = rect.top() - (rect.top() % step)
-        y = start_y
-        while y < rect.bottom():
-            lines.append(QtCore.QLineF(rect.left(), y, rect.right(), y))
-            y += step
+        across = self.grid_positions(rect.left(), rect.right(), step)
+        down = self.grid_positions(rect.top(), rect.bottom(), step)
+
+        if self.settings.valueOrDefault('View/grid_style') == 'dots':
+            # A dot where the lines would have crossed, in the same
+            # colour and at the same spacing. Wider than the lines
+            # because it has to be: a dot the width of a line is a
+            # single pixel of a colour chosen to be barely there, and
+            # measured against the ruled grid it came to twelve pixels
+            # on a screen where the lines came to five thousand.
+            pen.setWidth(self.GRID_DOT_SIZE)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            painter.drawPoints(
+                [QtCore.QPointF(x, y) for x in across for y in down])
+            return
+
+        lines = [QtCore.QLineF(x, rect.top(), x, rect.bottom())
+                 for x in across]
+        lines += [QtCore.QLineF(rect.left(), y, rect.right(), y)
+                  for y in down]
         painter.drawLines(lines)
+
+    @staticmethod
+    def grid_positions(start, end, step):
+        """Where the grid falls between the two, in scene coordinates."""
+
+        positions = []
+        at = start - (start % step)
+        while at < end:
+            positions.append(at)
+            at += step
+        return positions
 
     def on_scene_changed(self, region):
         # Anything that moves or resizes an item lands here, which is

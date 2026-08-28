@@ -193,6 +193,15 @@ class GridSizeWidget(IntegerGroup):
     MAX = 1000
 
 
+class GridStyleWidget(RadioGroup):
+    TITLE = 'Grid Style:'
+    HELPTEXT = 'How the guide grid is drawn.'
+    KEY = 'View/grid_style'
+    OPTIONS = (
+        ('lines', 'Lines', 'A ruled grid'),
+        ('dots', 'Dots', 'A dot where the lines would have crossed'))
+
+
 class ArrangeDefaultWidget(RadioGroup):
     TITLE = 'Default Arrange Method:'
     HELPTEXT = ('How images are arranged when inserted in batch')
@@ -276,6 +285,7 @@ class SettingsDialog(QtWidgets.QDialog):
         view_layout.addWidget(CanvasColorWidget(), 0, 0)
         view_layout.addWidget(GridColorWidget(), 0, 1)
         view_layout.addWidget(GridSizeWidget(), 1, 0)
+        view_layout.addWidget(GridStyleWidget(), 1, 1)
         tabs.addTab(view, '&View')
 
         layout = QtWidgets.QVBoxLayout()

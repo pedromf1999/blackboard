@@ -156,6 +156,13 @@ class BeeSettings(QtCore.QSettings):
             'post_save_callback':
                 lambda value: settings_events.grid_changed.emit(),
         },
+        'View/grid_style': {
+            'default': 'lines',
+            'cast': str,
+            'validate': lambda x: x in ('lines', 'dots'),
+            'post_save_callback':
+                lambda value: settings_events.grid_changed.emit(),
+        },
         'View/grid_size': {
             'default': 100,
             'cast': int,
