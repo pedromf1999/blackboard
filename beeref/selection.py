@@ -413,6 +413,16 @@ class SelectableMixin(BaseItemMixin):
         outer_margin = self.select_resize_size / 2
         inner_margin = self.select_resize_size / 2
         origin = self.bounding_rect_unselected().topLeft()
+
+        # The sides keep a usable height on a short item. Taking the
+        # margins out of the height left a sliver of a few units to grab
+        # a one-line note by, and nothing at all on anything shorter
+        # than the two margins together. The corner handles are checked
+        # before these, so they still win where the two overlap.
+        side_height = max(self.height - 2 * inner_margin,
+                          min(self.height, self.select_resize_size))
+        side_y = origin.y() + (self.height - side_height) / 2
+
         edges = [
             # top:
             {
@@ -436,18 +446,18 @@ class SelectableMixin(BaseItemMixin):
             {
                 'rect': QtCore.QRectF(
                     origin.x() - outer_margin,
-                    origin.y() + inner_margin,
+                    side_y,
                     outer_margin + inner_margin,
-                    self.height - 2 * inner_margin),
+                    side_height),
                 'vertical': False,
             },
             # right:
             {
                 'rect': QtCore.QRectF(
                     origin.x() + self.width - inner_margin,
-                    origin.y() + inner_margin,
+                    side_y,
                     outer_margin + inner_margin,
-                    self.height - 2 * inner_margin),
+                    side_height),
                 'vertical': False,
             }
         ]

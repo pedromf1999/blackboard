@@ -646,3 +646,57 @@ def test_the_toolbar_has_a_title_button(view):
     bar = TextToolBar(view, view)
     assert isinstance(bar.title, QtWidgets.QToolButton)
     assert bar.title.toolTip() == 'Write a title'
+
+
+def test_the_side_of_a_short_note_can_be_grabbed(view):
+    """Taking the margins out of the height left a sliver of a few
+    units to grab a one-line note by, and nothing at all on anything
+    shorter than the two margins together."""
+
+    item = note(view, 'Hi')
+    item.setSelected(True)
+    sides = [edge for edge in item.get_edge_bounds() if not edge['vertical']]
+
+    assert len(sides) == 2
+    for side in sides:
+        assert side['rect'].height() >= item.select_resize_size
+        assert side['rect'].width() > 0
+
+
+def test_a_tall_note_keeps_the_side_it_had(view):
+    """Only the short ones were the problem."""
+
+    item = note(view, 'One two three four five six seven eight nine ten')
+    item.set_wrap_width(60)
+    item.setSelected(True)
+    side = [e for e in item.get_edge_bounds() if not e['vertical']][0]
+
+    assert side['rect'].height() == item.height - item.select_resize_size
+
+
+def test_the_side_handle_stays_on_the_note(view):
+    item = note(view, 'Hi')
+    item.setSelected(True)
+    for side in [e for e in item.get_edge_bounds() if not e['vertical']]:
+        assert side['rect'].center().y() == item.center.y()
+
+
+def test_dragging_the_side_narrower_wraps_the_text(view):
+    item = titled(view, 'Chapter One', 'One two three four five six seven')
+    item.setSelected(True)
+    before = item.text_rect()
+    item.set_wrap_width(before.width() / 2)
+
+    assert item.text_rect().width() < before.width()
+    assert item.text_rect().height() > before.height()
+
+
+def test_dragging_it_wider_puts_the_text_back_on_one_line(view):
+    item = titled(view, 'Chapter One', 'One two three four five six seven')
+    item.setSelected(True)
+    tall = item.text_rect().height()
+    item.set_wrap_width(80)
+    assert item.text_rect().height() > tall
+
+    item.set_wrap_width(600)
+    assert item.text_rect().height() == tall
