@@ -771,37 +771,44 @@ class ChangeCaption(QtGui.QUndoCommand):
             item.caption = caption
 
 
-class ChangeGroupTitle(QtGui.QUndoCommand):
-    """Set a group's title and the colour of the band it sits in.
+class ChangeTitle(QtGui.QUndoCommand):
+    """Set an item's title and the colour of the band it sits in.
 
     One command for both, because they are asked for together: the
-    dialog offers the words and their colour side by side.
+    words and their colour are chosen side by side. Groups and notes
+    both have a title band, and this works on either.
     """
 
-    def __init__(self, groups, title, header_color, align=None):
-        super().__init__('Change group title')
-        self.groups = list(groups)
+    def __init__(self, items, title, header_color, align=None):
+        super().__init__('Change title')
+        self.items = list(items)
         self.title = title
         self.header_color = header_color
         self.align = align
-        self.old = [(group.title, group.header_color, group.title_align)
-                    for group in self.groups]
+        self.old = [(item.title, item.header_color, item.title_align)
+                    for item in self.items]
+
+    @staticmethod
+    def touch(item):
+        # Only groups keep a record of when they were last changed
+        if hasattr(item, 'touch'):
+            item.touch()
 
     def redo(self):
-        for group in self.groups:
-            group.header_color = self.header_color
+        for item in self.items:
+            item.header_color = self.header_color
             if self.align is not None:
-                group.title_align = self.align
-            # Last, because setting it re-measures the box
-            group.title = self.title
-            group.touch()
+                item.title_align = self.align
+            # Last, because setting it re-measures the item
+            item.title = self.title
+            self.touch(item)
 
     def undo(self):
-        for group, (title, color, align) in zip(self.groups, self.old):
-            group.header_color = color
-            group.title_align = align
-            group.title = title
-            group.touch()
+        for item, (title, color, align) in zip(self.items, self.old):
+            item.header_color = color
+            item.title_align = align
+            item.title = title
+            self.touch(item)
 
 
 class ChangeOutlineColor(QtGui.QUndoCommand):

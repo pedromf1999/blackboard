@@ -450,6 +450,24 @@ actions = ActionList([
         group='active_when_text_selection',
     ),
     Action(
+        id='text_title',
+        text='Write &Title',
+        callback='on_action_text_title',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_title_align_left',
+        text='Title on the &Left',
+        callback='on_action_text_title_align_left',
+        group='active_when_text_selection',
+    ),
+    Action(
+        id='text_title_align_center',
+        text='Title C&entred',
+        callback='on_action_text_title_align_center',
+        group='active_when_text_selection',
+    ),
+    Action(
         id='show_color_gamut',
         text='Show &Color Gamut',
         callback='on_action_show_color_gamut',

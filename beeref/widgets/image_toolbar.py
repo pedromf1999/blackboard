@@ -36,7 +36,7 @@ class ImageToolBar(PinnedToolBar):
         self.crop = self.add_button(
             'crop', 'Crop this image (Shift+C)', view.on_action_crop)
         self.caption = self.add_button(
-            'text', 'Write a caption', view.on_action_image_caption)
+            'title', 'Write a caption', view.on_action_image_caption)
         # Stays pressed while the image has one, so the button says
         # what a press would do
         self.outline = self.add_button(

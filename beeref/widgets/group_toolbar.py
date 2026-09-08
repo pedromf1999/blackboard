@@ -43,7 +43,7 @@ class GroupToolBar(PinnedToolBar):
         self.color = self.add_button(
             'color', 'Group colour', self.on_color, keep_colors=True)
         self.title = self.add_button(
-            'text', 'Write the group title', view.on_action_group_title)
+            'title', 'Write the group title', view.on_action_group_title)
         self.align_left = self.add_button(
             'align_left', 'Title on the left',
             view.on_action_group_title_align_left)

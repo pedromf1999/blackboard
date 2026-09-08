@@ -78,6 +78,42 @@ def sort_by_filename(items):
 OPAQUE_ENOUGH = 0.995
 
 
+def half_rounded_path(rect, radius, top):
+    """A rectangle with two of its corners taken off.
+
+    The other two stay square, because that end meets something: a
+    title band meets the note under it, a caption band the picture
+    above it, and rounding both sides of a join leaves the canvas
+    showing through it.
+    """
+
+    path = QtGui.QPainterPath()
+    radius = min(radius, rect.height(), rect.width() / 2)
+    if radius <= 0:
+        path.addRect(rect)
+        return path
+    if top:
+        path.moveTo(rect.left(), rect.bottom())
+        path.lineTo(rect.left(), rect.top() + radius)
+        path.quadTo(rect.topLeft(),
+                    QtCore.QPointF(rect.left() + radius, rect.top()))
+        path.lineTo(rect.right() - radius, rect.top())
+        path.quadTo(rect.topRight(),
+                    QtCore.QPointF(rect.right(), rect.top() + radius))
+        path.lineTo(rect.right(), rect.bottom())
+    else:
+        path.moveTo(rect.topLeft())
+        path.lineTo(rect.topRight())
+        path.lineTo(rect.right(), rect.bottom() - radius)
+        path.quadTo(rect.bottomRight(),
+                    QtCore.QPointF(rect.right() - radius, rect.bottom()))
+        path.lineTo(rect.left() + radius, rect.bottom())
+        path.quadTo(rect.bottomLeft(),
+                    QtCore.QPointF(rect.left(), rect.bottom() - radius))
+    path.closeSubpath()
+    return path
+
+
 def without_pointless_alpha(image):
     """The picture with its alpha channel dropped when nothing uses it.
 
@@ -704,8 +740,250 @@ class BeeDrawItem(BeeItemMixin, QtWidgets.QGraphicsItem):
         pass
 
 
+class TitleBandMixin:
+    """A band across the top of an item, holding a title.
+
+    Groups and notes both have one, and it behaves the same on either:
+    empty means no band at all, the band can take a colour of its own,
+    and the words are typed straight onto the item. What differs is how
+    big the letters are and where the band sits, which is left to the
+    item to say.
+    """
+
+    # Room above and below the letters, as a fraction of their size
+    TITLE_PADDING_FRACTION = 0.35
+    TITLE_MIN_SIZE = 7
+    # Qt's font engine overflows somewhere above ten thousand point:
+    # the metrics come back negative, the band works out to nothing and
+    # the title is nowhere to be seen. A title is sized from the item,
+    # and one on a real board reaches hundreds of thousands of units
+    # across, which asked for twenty-five thousand point.
+    TITLE_MAX_SIZE = 8000
+
+    # Where the title sits in its band
+    TITLE_CENTER = 'center'
+    TITLE_LEFT = 'left'
+    TITLE_ALIGNMENTS = (TITLE_CENTER, TITLE_LEFT)
+
+    def init_title(self, title=None, header_color=None, title_align=None):
+        """Start with no band, or with the one a file remembered."""
+
+        self._title = title or ''
+        # None means the band takes the item's own colour, so it keeps
+        # following it when the item is recoloured
+        self.header_color = (QtGui.QColor(*header_color)
+                             if header_color else None)
+        # Centred is what titles did before there was a choice, so a
+        # board written then opens looking the way it did
+        self.title_align = (title_align if title_align in
+                            self.TITLE_ALIGNMENTS else self.TITLE_CENTER)
+        # The line being typed into, while a title is being written
+        self.title_editor = None
+        self.title_editing = False
+
+    @property
+    def title(self):
+        return self._title
+
+    @title.setter
+    def title(self, value):
+        self._title = value or ''
+        self.on_title_changed()
+
+    def on_title_changed(self):
+        """Take account of a band that has just come or gone."""
+
+        self.update()
+
+    def title_save_data(self):
+        """The three things a band is made of, for the file."""
+
+        return {'title': self.title,
+                'title_align': self.title_align,
+                'header_color': (self.header_color.getRgb()
+                                 if self.header_color else None)}
+
+    def shows_header(self):
+        """Whether there is a band to draw.
+
+        A title being written counts, even before the first letter: the
+        band has to be there to type into.
+        """
+
+        return bool(self._title) or self.title_editing
+
+    def title_size(self):
+        """How big the title's letters are. Up to the item."""
+
+        raise NotImplementedError
+
+    def title_font_of_size(self, size):
+        """Bold, and in the bundled face -- a title is not a note.
+
+        Falls back to the interface font on the rare install where the
+        bundled one could not be loaded, which is better than no title.
+        """
+
+        family = BeeAssets().font_family
+        font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
+        font.setBold(True)
+        font.setPointSizeF(size)
+        return font
+
+    def title_font(self):
+        return self.title_font_of_size(self.title_size())
+
+    def line_height_for(self, size):
+        """The height of one line of letters this size."""
+
+        line = QtGui.QFontMetricsF(self.title_font_of_size(size)).height()
+        if line > 0:
+            return line
+        # Whatever the font engine made of it, a band still has to have
+        # a height, or the title is simply not there
+        return size * 1.8
+
+    def band_height_for(self, size):
+        """The band that letters of this size need, editor included."""
+
+        line = self.line_height_for(size)
+        room = line * self.TITLE_PADDING_FRACTION
+        if self.title_editor is not None:
+            # Ask the editor rather than measuring a line a second way:
+            # the band has to hold exactly what it lays out
+            line = max(self.title_editor.boundingRect().height(), line)
+        return line + 2 * room
+
+    def header_height(self):
+        if not self.shows_header():
+            return 0
+        return self.band_height_for(self.title_size())
+
+    def title_inset(self):
+        """The gap kept between the words and the ends of the band."""
+
+        return self.header_height() * self.TITLE_PADDING_FRACTION
+
+    def header_rect(self):
+        """The band itself, in item coordinates. Up to the item."""
+
+        raise NotImplementedError
+
+    def title_alignment(self):
+        """Where the title sits in its band, as Qt wants it."""
+
+        if self.title_align == self.TITLE_LEFT:
+            return (Qt.AlignmentFlag.AlignLeft
+                    | Qt.AlignmentFlag.AlignVCenter)
+        return Qt.AlignmentFlag.AlignCenter
+
+    def title_text_alignment(self):
+        """The same, for a document, which only knows across."""
+
+        if self.title_align == self.TITLE_LEFT:
+            return Qt.AlignmentFlag.AlignLeft
+        return Qt.AlignmentFlag.AlignHCenter
+
+    def default_header_color(self):
+        """The colour a band with none of its own takes."""
+
+        raise NotImplementedError
+
+    def visible_header_color(self):
+        """The colour the band actually appears in.
+
+        A translucent band lets the canvas through, and that is what
+        the title has to stay readable against.
+        """
+
+        canvas = QtGui.QColor(
+            self.settings.valueOrDefault('View/canvas_color'))
+        return blend_over(self.header_color or self.default_header_color(),
+                          canvas)
+
+    def paint_title_text(self, painter):
+        """Draw the words in the band, or nothing while they are typed."""
+
+        if self.title_editing:
+            # The words are the editor's while it is open, and drawing
+            # them here as well would double them up
+            return
+        band = self.header_rect()
+        inset = self.title_inset()
+        room = band.adjusted(inset, 0, -inset, 0)
+        font = self.title_font()
+        painter.setFont(font)
+        painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
+        metrics = QtGui.QFontMetricsF(font)
+        painter.drawText(
+            room, int(self.title_alignment()),
+            metrics.elidedText(self._title, Qt.TextElideMode.ElideRight,
+                               room.width()))
+
+    def title_search_rect(self):
+        """Where the title sits on the board, for Find to go to.
+
+        The band rather than the word in it: the words are drawn
+        straight onto the item rather than laid out in a document, so
+        there is no letter to measure against, and a band is small
+        enough to be worth going to whole.
+        """
+
+        return self.mapToScene(self.header_rect()).boundingRect()
+
+    def enter_title_edit_mode(self):
+        """Open the title for writing, on the item itself."""
+
+        if self.title_editor is not None:
+            self.title_editor.setFocus()
+            return
+        logger.debug(f'Writing the title of {self}')
+        self.title_editing = True
+        self.on_title_changed()
+        self.title_editor = TitleEditor(self)
+        self.title_editor.setFocus()
+        scene = self.scene()
+        if scene is not None:
+            scene.title_item = self
+            for view in scene.views():
+                view.reveal(self.mapRectToScene(self.header_rect()))
+        self.update()
+
+    def exit_title_edit_mode(self, commit=True):
+        """Take the words out of the editor and put the editor away."""
+
+        editor = self.title_editor
+        if editor is None:
+            return
+        logger.debug(f'Finished the title of {self}')
+        text = editor.toPlainText().strip()
+        self.title_editor = None
+        scene = self.scene()
+        if scene is not None:
+            if scene.title_item is self:
+                scene.title_item = None
+            scene.removeItem(editor)
+        self.title_editing = False
+
+        if commit and text != self._title and scene is not None:
+            scene.undo_stack.push(commands.ChangeTitle(
+                [self], text, self.header_color, self.title_align))
+        else:
+            # Nothing to record, but the band still has to go if the
+            # title was left empty
+            self.on_title_changed()
+            self.update()
+
+    def refresh_title_editor(self):
+        """Follow a change of colour or alignment while writing."""
+
+        if self.title_editor is not None:
+            self.title_editor.refresh()
+
+
 @register_item
-class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
+class BeeGroupItem(TitleBandMixin, BeeItemMixin,
+                   QtWidgets.QGraphicsRectItem):
     """A coloured box holding a group of items.
 
     The items are real children of this item, so moving, scaling or
@@ -734,20 +1012,6 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
     # the band does not change -- taking it from the shorter side would
     # be circular, since the band is added to the height.
     TITLE_FRACTION = 0.04
-    TITLE_MIN_SIZE = 7
-    # Qt's font engine overflows somewhere above ten thousand point:
-    # the metrics come back negative, the band works out to nothing and
-    # the title is nowhere to be seen. A title is sized from the box,
-    # and a box on a real board reaches hundreds of thousands of units
-    # across, which asked for twenty-five thousand point.
-    TITLE_MAX_SIZE = 8000
-    # Room above and below the letters, as a fraction of their size
-    TITLE_PADDING_FRACTION = 0.35
-
-    # Where the title sits in its band
-    TITLE_CENTER = 'center'
-    TITLE_LEFT = 'left'
-    TITLE_ALIGNMENTS = (TITLE_CENTER, TITLE_LEFT)
 
     def __init__(self, box_color=None, locked=False,
                  created=None, modified=None, title=None,
@@ -761,18 +1025,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self.box_color = QtGui.QColor(*(box_color or self.DEFAULT_BOX_COLOR))
         # An empty title means no band at all; the group looks exactly
         # as it did before there were titles
-        self._title = title or ''
-        # None means the band takes the group's own colour, so it keeps
-        # following it when the group is recoloured
-        self.header_color = (QtGui.QColor(*header_color)
-                             if header_color else None)
-        # Centred is what titles did before there was a choice, so a
-        # board written then opens looking the way it did
-        self.title_align = (title_align if title_align in
-                            self.TITLE_ALIGNMENTS else self.TITLE_CENTER)
-        # The line being typed into, while a title is being written
-        self.title_editor = None
-        self.title_editing = False
+        self.init_title(title, header_color, title_align)
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
@@ -838,27 +1091,19 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         self._box_color = value
         self.update()
 
-    @property
-    def title(self):
-        return self._title
-
-    @title.setter
-    def title(self, value):
-        self._title = value or ''
+    def on_title_changed(self):
         # The band is added above the items, never over them, so the
         # box has to be re-measured when a title comes or goes
         self.fit_to_children()
         self.update()
 
     def get_extra_save_data(self):
-        return {'box_color': self.box_color.getRgb(),
+        data = {'box_color': self.box_color.getRgb(),
                 'locked': self.locked,
                 'created': self.created,
-                'modified': self.modified,
-                'title': self.title,
-                'title_align': self.title_align,
-                'header_color': (self.header_color.getRgb()
-                                 if self.header_color else None)}
+                'modified': self.modified}
+        data.update(self.title_save_data())
+        return data
 
     def bee_children(self):
         """The items grouped inside this one."""
@@ -921,20 +1166,8 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         return min(self.TITLE_MAX_SIZE,
                    max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION))
 
-    def title_font(self, width=None):
-        """Bold, and in the bundled face -- a title is not a note.
-
-        Falls back to the interface font on the rare install where the
-        bundled one could not be loaded, which is better than no title.
-        """
-
-        if width is None:
-            width = self.rect().width()
-        family = BeeAssets().font_family
-        font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
-        font.setBold(True)
-        font.setPointSizeF(self.title_size_for(width))
-        return font
+    def title_size(self):
+        return self.title_size_for(self.rect().width())
 
     def search_text(self):
         """What Find looks through: the title across the top."""
@@ -950,57 +1183,19 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         enough to be worth going to whole.
         """
 
-        return self.mapToScene(self.header_rect()).boundingRect()
-
-    def shows_header(self):
-        """Whether there is a band to draw.
-
-        A title being written counts, even before the first letter: the
-        band has to be there to type into.
-        """
-
-        return bool(self.title) or self.title_editing
+        return self.title_search_rect()
 
     def header_height_for(self, width):
-        """The height of the title band, or nothing without a title."""
+        """The height of the title band, or nothing without a title.
+
+        Takes the width because the box is measured before it is set:
+        ``fit_to_children`` has to know how tall the band will be on a
+        box it has not given itself yet.
+        """
 
         if not self.shows_header():
             return 0
-        metrics = QtGui.QFontMetricsF(self.title_font(width))
-        line = metrics.height()
-        if line <= 0:
-            # Whatever the font engine made of it, a band still has to
-            # have a height, or the title is simply not there
-            line = self.title_size_for(width) * 1.8
-        room = line * self.TITLE_PADDING_FRACTION
-        if self.title_editor is not None:
-            # Ask the editor rather than measuring a line a second way:
-            # the band has to hold exactly what it lays out
-            line = max(self.title_editor.boundingRect().height(), line)
-        return line + 2 * room
-
-    def header_height(self):
-        return self.header_height_for(self.rect().width())
-
-    def title_alignment(self):
-        """Where the title sits in its band, as Qt wants it."""
-
-        if self.title_align == self.TITLE_LEFT:
-            return (Qt.AlignmentFlag.AlignLeft
-                    | Qt.AlignmentFlag.AlignVCenter)
-        return Qt.AlignmentFlag.AlignCenter
-
-    def title_text_alignment(self):
-        """The same, for a document, which only knows across."""
-
-        if self.title_align == self.TITLE_LEFT:
-            return Qt.AlignmentFlag.AlignLeft
-        return Qt.AlignmentFlag.AlignHCenter
-
-    def title_inset(self):
-        """The gap kept between the words and the ends of the band."""
-
-        return self.header_height() * self.TITLE_PADDING_FRACTION
+        return self.band_height_for(self.title_size_for(width))
 
     def header_rect(self):
         """The band across the top of the box."""
@@ -1009,17 +1204,10 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         return QtCore.QRectF(rect.x(), rect.y(),
                              rect.width(), self.header_height())
 
-    def visible_header_color(self):
-        """The colour the band actually appears in.
+    def default_header_color(self):
+        """A band with no colour of its own is the group's colour."""
 
-        A band with no colour of its own is the group's colour, and a
-        translucent one lets the canvas through, which is what the
-        title has to stay readable against.
-        """
-
-        canvas = QtGui.QColor(
-            self.settings.valueOrDefault('View/canvas_color'))
-        return blend_over(self.header_color or self.box_color, canvas)
+        return self.box_color
 
     def paint_header(self, painter):
         """Draw the title band and the title in it."""
@@ -1037,21 +1225,7 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         painter.setClipPath(path)
         color = self.header_color or self.box_color
         painter.fillRect(band, QtGui.QBrush(color))
-        if self.title_editing:
-            # The words are the editor's while it is open, and drawing
-            # them here as well would double them up
-            painter.restore()
-            return
-
-        painter.setFont(self.title_font())
-        painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
-        inset = self.title_inset()
-        room = band.adjusted(inset, 0, -inset, 0)
-        metrics = QtGui.QFontMetricsF(self.title_font())
-        painter.drawText(
-            room, int(self.title_alignment()),
-            metrics.elidedText(self.title, Qt.TextElideMode.ElideRight,
-                               room.width()))
+        self.paint_title_text(painter)
         painter.restore()
 
     def set_children_interactive(self, value):
@@ -1124,55 +1298,6 @@ class BeeGroupItem(BeeItemMixin, QtWidgets.QGraphicsRectItem):
         painter.drawRoundedRect(
             self.rect().adjusted(inset, inset, -inset, -inset),
             radius, radius)
-
-    def enter_title_edit_mode(self):
-        """Open the title for writing, on the group itself."""
-
-        if self.title_editor is not None:
-            self.title_editor.setFocus()
-            return
-        logger.debug(f'Writing the title of {self}')
-        self.title_editing = True
-        self.fit_to_children()
-        self.title_editor = GroupTitleEditor(self)
-        self.title_editor.setFocus()
-        scene = self.scene()
-        if scene is not None:
-            scene.title_group = self
-            for view in scene.views():
-                view.reveal(self.mapRectToScene(self.header_rect()))
-        self.update()
-
-    def exit_title_edit_mode(self, commit=True):
-        """Take the words out of the editor and put the editor away."""
-
-        editor = self.title_editor
-        if editor is None:
-            return
-        logger.debug(f'Finished the title of {self}')
-        text = editor.toPlainText().strip()
-        self.title_editor = None
-        scene = self.scene()
-        if scene is not None:
-            if scene.title_group is self:
-                scene.title_group = None
-            scene.removeItem(editor)
-        self.title_editing = False
-
-        if commit and text != self.title and scene is not None:
-            scene.undo_stack.push(commands.ChangeGroupTitle(
-                [self], text, self.header_color, self.title_align))
-        else:
-            # Nothing to record, but the band still has to go if the
-            # title was left empty
-            self.fit_to_children()
-            self.update()
-
-    def refresh_title_editor(self):
-        """Follow a change of colour or alignment while writing."""
-
-        if self.title_editor is not None:
-            self.title_editor.refresh()
 
     def create_copy(self):
         item = BeeGroupItem(
@@ -1271,16 +1396,16 @@ class ImageCaptionEditor(QtWidgets.QGraphicsTextItem):
         self.item.exit_caption_edit_mode()
 
 
-class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
-    """The line a group's title is typed into, on the group itself.
+class TitleEditor(QtWidgets.QGraphicsTextItem):
+    """The line a title is typed into, on the item it belongs to.
 
     Not saved and not selectable: it exists only while a title is being
-    written, and what it is for is handing its words to the group.
+    written, and what it is for is handing its words to the item.
     """
 
-    def __init__(self, group):
-        super().__init__(group.title, group)
-        self.group = group
+    def __init__(self, item):
+        super().__init__(item.title, item)
+        self.item = item
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextEditorInteraction)
         # No margin of its own: the band is measured to the width the
@@ -1295,15 +1420,15 @@ class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
     def refresh(self):
         """Sit in the band, in the band's own font and colour."""
 
-        group = self.group
-        band = group.header_rect()
-        inset = group.title_inset()
-        self.setFont(group.title_font())
+        item = self.item
+        band = item.header_rect()
+        inset = item.title_inset()
+        self.setFont(item.title_font())
         self.setDefaultTextColor(
-            readable_grey(group.visible_header_color()))
+            readable_grey(item.visible_header_color()))
         self.setTextWidth(max(1.0, band.width() - 2 * inset))
         option = self.document().defaultTextOption()
-        option.setAlignment(group.title_text_alignment())
+        option.setAlignment(item.title_text_alignment())
         self.document().setDefaultTextOption(option)
         # From the top of the band, not centred in it: the band is
         # built to fit these words, so there is nothing to centre
@@ -1313,11 +1438,11 @@ class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
         # A title is one line: Enter finishes it rather than starting a
         # second one. Escape throws the change away.
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.group.exit_title_edit_mode()
+            self.item.exit_title_edit_mode()
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape:
-            self.group.exit_title_edit_mode(commit=False)
+            self.item.exit_title_edit_mode(commit=False)
             event.accept()
             return
         super().keyPressEvent(event)
@@ -1326,7 +1451,7 @@ class GroupTitleEditor(QtWidgets.QGraphicsTextItem):
         super().focusOutEvent(event)
         # Clicking away finishes the title, the way clicking away from
         # a note finishes the note
-        self.group.exit_title_edit_mode()
+        self.item.exit_title_edit_mode()
 
 
 @register_item
@@ -1660,20 +1785,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         """
 
         radius = self.caption_radius() if self.shows_caption() else 0
-        path = QtGui.QPainterPath()
-        if radius <= 0:
-            path.addRect(rect)
-            return path
-        path.moveTo(rect.topLeft())
-        path.lineTo(rect.topRight())
-        path.lineTo(rect.right(), rect.bottom() - radius)
-        path.quadTo(rect.bottomRight(),
-                    QtCore.QPointF(rect.right() - radius, rect.bottom()))
-        path.lineTo(rect.left() + radius, rect.bottom())
-        path.quadTo(rect.bottomLeft(),
-                    QtCore.QPointF(rect.left(), rect.bottom() - radius))
-        path.closeSubpath()
-        return path
+        return half_rounded_path(rect, radius, top=False)
 
     def visible_caption_color(self):
         """The colour the band actually appears in."""
@@ -2265,7 +2377,8 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
 
 @register_item
-class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
+class BeeTextItem(TitleBandMixin, BeeItemMixin,
+                  QtWidgets.QGraphicsTextItem):
     """Class for text added by the user."""
 
     TYPE = 'text'
@@ -2293,13 +2406,23 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     URL_RE = re.compile(r'(?:https?://|www\.)\S+', re.IGNORECASE)
     URL_TRAILING_CHARS = '.,;:!?)]}\'"'
 
+    # How much larger than the note's own text its title is. A note has
+    # a type size of its own, unlike a group, so the heading is measured
+    # against that rather than against the width -- a wide one-line note
+    # would otherwise be given a heading fit for a poster.
+    TITLE_SIZE_FRACTION = 1.15
+
     def __init__(self, text=None, html=None, box_color=None,
-                 text_width=None, **kwargs):
+                 text_width=None, title=None, header_color=None,
+                 title_align=None, **kwargs):
         super().__init__(text or "Text")
         self.save_id = None
         logger.debug(f'Initialized {self}')
         self.is_image = False
         self.init_selectable()
+        # Before anything can ask how big the note is: an empty title
+        # means no band, and a note that looks as it always did
+        self.init_title(title, header_color, title_align)
         self.is_editable = True
         self.edit_mode = False
         self.settings = BeeSettings()
@@ -2419,6 +2542,7 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         data = {'text': self.toPlainText(),
                 'html': self.toHtml(),
                 'box_color': self.box_color.getRgb()}
+        data.update(self.title_save_data())
         if self.textWidth() > 0:
             # Only stored once the box has been given a width to wrap
             # at, so untouched text items save exactly as before
@@ -2438,6 +2562,19 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         against this.
         """
 
+        font = QtGui.QFont(self.font())
+        largest = self.largest_point_size()
+        if largest > 0:
+            font.setPointSizeF(largest)
+        return QtGui.QFontMetricsF(font).height()
+
+    def largest_point_size(self):
+        """The size of the biggest text in the note, in points.
+
+        Zero when nothing was ever sized, which means the note is being
+        drawn at its own font's size.
+        """
+
         largest = 0
         block = self.document().begin()
         while block.isValid():
@@ -2449,13 +2586,104 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
                     largest = max(largest,
                                   fragment.charFormat().fontPointSize())
             block = block.next()
+        return largest
 
-        font = QtGui.QFont(self.font())
-        if largest > 0:
-            # Text that was never sized reports zero; the item's own
-            # font is what it is being drawn at
-            font.setPointSizeF(largest)
-        return QtGui.QFontMetricsF(font).height()
+    def title_size(self):
+        """How big the title's letters are: a little more than the text."""
+
+        size = self.largest_point_size()
+        if size <= 0:
+            size = QtGui.QFontInfo(self.font()).pointSizeF()
+        return min(self.TITLE_MAX_SIZE,
+                   max(self.TITLE_MIN_SIZE, size * self.TITLE_SIZE_FRACTION))
+
+    def default_header_color(self):
+        """A band with no colour of its own is the note's own box."""
+
+        return self.box_color
+
+    def text_rect(self):
+        """The note without its band: the box the words sit in."""
+
+        return QtWidgets.QGraphicsTextItem.boundingRect(self)
+
+    def header_rect(self):
+        """The band sitting on top of the note.
+
+        Above the words rather than over them, so adding a title never
+        covers up what was written.
+        """
+
+        rect = self.text_rect()
+        height = self.header_height()
+        return QtCore.QRectF(rect.x(), rect.y() - height,
+                             rect.width(), height)
+
+    def on_title_changed(self):
+        # The band is added above the words, so the note is a different
+        # size once a title comes or goes
+        self.prepareGeometryChange()
+        self.update()
+
+    def title_band_path(self):
+        """The band, with its top corners taken off."""
+
+        return half_rounded_path(
+            self.header_rect(), self.corner_radius(), top=True)
+
+    def text_box_path(self):
+        """The box behind the words.
+
+        Square across the top when a band sits on it: the band brings
+        the rounded corners, and rounding both sides of the join left
+        the canvas showing through it.
+        """
+
+        rect = self.text_rect()
+        radius = self.corner_radius()
+        if not self.shows_header():
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(rect, radius, radius)
+            return path
+        return half_rounded_path(rect, radius, top=False)
+
+    def paint_header(self, painter):
+        """Draw the title band and the title in it."""
+
+        if not self.shows_header():
+            return
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QtGui.QBrush(self.header_color or self.box_color))
+        painter.drawPath(self.title_band_path())
+        self.paint_title_text(painter)
+        painter.restore()
+
+    def boundingRect(self):
+        """Room for the title band on top of whatever else needs room.
+
+        Only the painting bounds grow. The note's own rectangle stays
+        what it was, so the selection handles and the point a line
+        fastens to stay on the words rather than stepping up over a
+        heading.
+        """
+
+        rect = super().boundingRect()
+        if self.shows_header():
+            rect = rect.adjusted(0, -self.header_height(), 0, 0)
+        return rect
+
+    def shape(self):
+        """The note, and the band sitting on top of it.
+
+        So that the band can be clicked and double-clicked like part of
+        the note.
+        """
+
+        path = super().shape()
+        if self.shows_header():
+            path.addRect(self.header_rect())
+        return path
 
     def update_document_margin(self):
         """Keep the gap around the text in proportion to the text."""
@@ -2502,9 +2730,8 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
     def paint(self, painter, option, widget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QtGui.QBrush(self.box_color))
-        radius = self.corner_radius()
-        painter.drawRoundedRect(
-            QtWidgets.QGraphicsTextItem.boundingRect(self), radius, radius)
+        painter.drawPath(self.text_box_path())
+        self.paint_header(painter)
         option.state = QtWidgets.QStyle.StateFlag.State_Enabled
         super().paint(painter, option, widget)
         self.paint_selectable(painter, option, widget)
@@ -2721,12 +2948,14 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         self.cursor_may_have_moved()
 
     def search_text(self):
-        """What Find looks through, tables and all.
+        """What Find looks through: the title and the note under it.
 
         The plain text of a note runs a table's cells together with the
         rest of it, which is exactly what a search wants.
         """
 
+        if self.title:
+            return f'{self.title}\n{self.toPlainText()}'
         return self.toPlainText()
 
     def search_rect(self, query):
@@ -2735,6 +2964,11 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         text = self.toPlainText()
         start = text.lower().find(query.lower())
         if start < 0:
+            if self.title and query.lower() in self.title.lower():
+                # Only the heading matches, and it is drawn straight
+                # onto the note rather than laid out in a document, so
+                # the band is what there is to go to
+                return self.title_search_rect()
             return None
         cursor = QtGui.QTextCursor(self.document())
         cursor.setPosition(start)
@@ -3151,7 +3385,11 @@ class BeeTextItem(BeeItemMixin, QtWidgets.QGraphicsTextItem):
         item = BeeTextItem(html=self.toHtml(),
                            box_color=self.box_color.getRgb(),
                            text_width=(self.textWidth()
-                                       if self.textWidth() > 0 else None))
+                                       if self.textWidth() > 0 else None),
+                           title=self.title,
+                           title_align=self.title_align,
+                           header_color=(self.header_color.getRgb()
+                                         if self.header_color else None))
         item.setPos(self.pos())
         item.setZValue(self.zValue())
         item.setScale(self.scale())

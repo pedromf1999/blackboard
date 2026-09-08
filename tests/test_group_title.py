@@ -156,7 +156,7 @@ def test_a_copied_group_keeps_its_title(view):
 
 def test_the_title_can_be_undone(view):
     group = group_with_image(view)
-    view.undo_stack.push(commands.ChangeGroupTitle(
+    view.undo_stack.push(commands.ChangeTitle(
         [group], 'Lid Latch', QtGui.QColor('#e8a33d')))
     assert group.title == 'Lid Latch'
 
@@ -223,7 +223,7 @@ def test_a_copied_group_keeps_its_alignment(view):
 def test_the_alignment_can_be_undone(view):
     group = group_with_image(view)
     group.title = 'Lid Latch'
-    view.undo_stack.push(commands.ChangeGroupTitle(
+    view.undo_stack.push(commands.ChangeTitle(
         [group], 'Lid Latch', None, BeeGroupItem.TITLE_LEFT))
     assert group.title_align == BeeGroupItem.TITLE_LEFT
 
@@ -246,7 +246,7 @@ def test_the_title_is_written_on_the_group_itself(view):
 
     assert group.title_editing is True
     assert group.title_editor is not None
-    assert view.scene.title_group is group
+    assert view.scene.title_item is group
     # The band is there to type into, before the first letter
     assert group.shows_header() is True
     assert group.header_height() > 0
@@ -262,7 +262,7 @@ def test_what_is_typed_becomes_the_title(view):
     assert group.title == 'Lid Latch'
     assert group.title_editing is False
     assert group.title_editor is None
-    assert view.scene.title_group is None
+    assert view.scene.title_item is None
 
 
 def test_writing_nothing_leaves_the_group_without_a_header(view):
@@ -406,7 +406,7 @@ def test_the_text_tool_opens_a_title_instead_of_covering_it(view):
     point = view.mapFromScene(
         group.mapToScene(group.header_rect().center()))
 
-    assert view.group_header_at(point) is group
+    assert view.title_band_at(point) is group
     view.write_note_at(point)
     assert group.title_editing is True
     # And no note was laid over the band
@@ -419,13 +419,13 @@ def test_the_text_tool_still_writes_a_note_below_the_band(view):
     inside = group.rect().center()
     point = view.mapFromScene(group.mapToScene(inside))
 
-    assert view.group_header_at(point) is None
+    assert view.title_band_at(point) is None
 
 
 def test_an_untitled_group_has_no_band_for_the_tool_to_find(view):
     group = group_with_image(view)
     point = view.mapFromScene(group.mapToScene(group.rect().topLeft()))
-    assert view.group_header_at(point) is None
+    assert view.title_band_at(point) is None
 
 
 def test_a_locked_group_keeps_its_title_to_itself(view):
@@ -445,9 +445,9 @@ def test_clicking_away_finishes_the_title(view):
     view.on_action_group_title()
     type_title(group, 'Lid Latch')
 
-    view.scene.title_group.exit_title_edit_mode()
+    view.scene.title_item.exit_title_edit_mode()
     assert group.title == 'Lid Latch'
-    assert view.scene.title_group is None
+    assert view.scene.title_item is None
 
 
 def double_click(view, group, point):

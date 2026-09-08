@@ -365,14 +365,15 @@ class BeeGraphicsView(MainControlsMixin,
         """
 
         scene_pos = self.mapToScene(point)
-        header = self.group_header_at(point)
-        if header is not None and not header.locked:
-            # A group's title is text too, and clicking it with the tool
-            # should open it rather than lay a note over it
+        titled = self.title_band_at(point)
+        if titled is not None and not getattr(titled, 'locked', False):
+            # A title is text too, and clicking one with the tool should
+            # open it rather than lay a note over it
             self.set_draw_tool(None)
-            header.setSelected(True)
-            header.enter_title_edit_mode()
+            titled.setSelected(True)
+            titled.enter_title_edit_mode()
             self.update_group_toolbar()
+            self.update_text_toolbar()
             return
 
         caption = self.image_caption_at(point)
@@ -411,14 +412,16 @@ class BeeGraphicsView(MainControlsMixin,
         cursor.select(QtGui.QTextCursor.SelectionType.Document)
         item.setTextCursor(cursor)
 
-    def group_header_at(self, point):
-        """A group whose title band lies under the given viewport point."""
+    def title_band_at(self, point):
+        """An item whose title band lies under the given viewport point.
+
+        Groups and notes both have one, and the band belongs to
+        whichever of them is drawn on top.
+        """
 
         scene_pos = self.mapToScene(point)
         for item in self.scene.items(scene_pos):
-            if getattr(item, 'TYPE', None) != BeeGroupItem.TYPE:
-                continue
-            if not item.shows_header():
+            if not hasattr(item, 'shows_header') or not item.shows_header():
                 continue
             if item.header_rect().contains(item.mapFromScene(scene_pos)):
                 return item
@@ -1301,65 +1304,98 @@ class BeeGraphicsView(MainControlsMixin,
 
         self.ensureVisible(rect, self.REVEAL_MARGIN, self.REVEAL_MARGIN)
 
+    def item_being_titled(self, kind=None):
+        """The item whose title is being written, if one is.
+
+        A kind narrows it to groups or to notes, so that the colour
+        button on one bar cannot act on what the other bar is writing.
+        """
+
+        item = self.scene.title_item
+        if item is None:
+            return None
+        if kind is not None and getattr(item, 'TYPE', None) != kind:
+            return None
+        return item
+
     def group_being_titled(self):
         """The group whose title is being written, if one is."""
 
-        return self.scene.title_group
+        return self.item_being_titled(BeeGroupItem.TYPE)
 
-    def on_action_group_title_color(self):
+    def titled_items(self, kind, selected):
+        """What a title command acts on, and whether there is anything.
+
+        While a title is being written it is that one item, whatever
+        else happens to be selected.
+        """
+
+        writing = self.item_being_titled(kind)
+        return [writing] if writing is not None else selected
+
+    def pick_title_color(self, items):
         """Ask for a colour for the title band, showing it as it is picked.
 
         The band is only visible once there are words in it, so this is
-        offered where the words are: the same button that colours a
-        group colours its title while the title is being written.
+        offered where the words are: the same button that colours an
+        item colours its title while the title is being written.
         """
 
-        groups = ([self.group_being_titled()] if self.group_being_titled()
-                  else self.scene.selected_groups())
+        originals = [item.header_color for item in items]
+
+        def preview(color):
+            for item in items:
+                item.header_color = color
+                item.refresh_title_editor()
+                item.update()
+
+        color = self.pick_color_live(
+            'Choose Title Colour',
+            items[0].header_color or items[0].default_header_color(),
+            preview)
+
+        for item, original in zip(items, originals):
+            item.header_color = original
+            item.refresh_title_editor()
+            item.update()
+        if color is None:
+            return
+        self.undo_stack.push(commands.ChangeTitle(
+            items, items[0].title, color, items[0].title_align))
+        for item in items:
+            item.refresh_title_editor()
+
+    def set_title_align(self, kind, items, align):
+        """Put the title of the given items left or centred."""
+
+        if self.item_being_titled(kind) is not None:
+            # Mid-writing there is nothing to record yet; the title is
+            # still in the editor and goes on the stack when it is done
+            for item in items:
+                item.title_align = align
+                item.refresh_title_editor()
+                item.update()
+        else:
+            self.undo_stack.push(commands.ChangeTitle(
+                items, items[0].title, items[0].header_color, align))
+
+    def on_action_group_title_color(self):
+        groups = self.titled_items(
+            BeeGroupItem.TYPE, self.scene.selected_groups())
         if not groups:
             widgets.BeeNotification(self, 'No group selected')
             return
-        originals = [group.header_color for group in groups]
-
-        def preview(color):
-            for group in groups:
-                group.header_color = color
-                group.refresh_title_editor()
-                group.update()
-
-        color = self.pick_color_live(
-            'Choose Title Colour', groups[0].header_color
-            or groups[0].box_color, preview)
-
-        for group, original in zip(groups, originals):
-            group.header_color = original
-            group.refresh_title_editor()
-            group.update()
-        if color is None:
-            return
-        self.undo_stack.push(commands.ChangeGroupTitle(
-            groups, groups[0].title, color, groups[0].title_align))
-        for group in groups:
-            group.refresh_title_editor()
+        self.pick_title_color(groups)
 
     def set_group_title_align(self, align):
         """Put the title of the selected groups left or centred."""
 
-        groups = ([self.group_being_titled()] if self.group_being_titled()
-                  else self.scene.selected_groups())
+        groups = self.titled_items(
+            BeeGroupItem.TYPE, self.scene.selected_groups())
         if not groups:
             widgets.BeeNotification(self, 'No group selected')
             return
-        if self.group_being_titled() is not None:
-            # Mid-writing there is nothing to record yet; the title is
-            # still in the editor and goes on the stack when it is done
-            for group in groups:
-                group.title_align = align
-                group.refresh_title_editor()
-                group.update()
-        else:
-            self.undo_stack.push(commands.ChangeGroupTitle(
-                groups, groups[0].title, groups[0].header_color, align))
+        self.set_title_align(BeeGroupItem.TYPE, groups, align)
         self.update_group_toolbar()
 
     def on_action_group_title_align_left(self):
@@ -1367,6 +1403,42 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_action_group_title_align_center(self):
         self.set_group_title_align(BeeGroupItem.TITLE_CENTER)
+
+    def on_action_text_title(self):
+        """Write the title on the note itself."""
+
+        items = self.scene.selected_text_items()
+        if not items:
+            widgets.BeeNotification(self, 'No text selected')
+            return
+        self.set_draw_tool(None)
+        items[0].enter_title_edit_mode()
+        self.update_text_toolbar()
+
+    def on_action_text_title_color(self):
+        items = self.titled_items(
+            BeeTextItem.TYPE, self.scene.selected_text_items())
+        if not items:
+            widgets.BeeNotification(self, 'No text selected')
+            return
+        self.pick_title_color(items)
+
+    def set_text_title_align(self, align):
+        """Put the title of the selected notes left or centred."""
+
+        items = self.titled_items(
+            BeeTextItem.TYPE, self.scene.selected_text_items())
+        if not items:
+            widgets.BeeNotification(self, 'No text selected')
+            return
+        self.set_title_align(BeeTextItem.TYPE, items, align)
+        self.update_text_toolbar()
+
+    def on_action_text_title_align_left(self):
+        self.set_text_title_align(BeeTextItem.TITLE_LEFT)
+
+    def on_action_text_title_align_center(self):
+        self.set_text_title_align(BeeTextItem.TITLE_CENTER)
 
     def on_action_group_box_color(self):
         groups = [item for item in self.scene.selectedItems(user_only=True)
@@ -2747,8 +2819,11 @@ class BeeGraphicsView(MainControlsMixin,
     def update_text_toolbar(self):
         """Show the text buttons over the selected text, or not at all."""
 
-        self.pin_toolbar_to(getattr(self, 'text_toolbar', None),
-                            self.scene.selected_text_items())
+        toolbar = getattr(self, 'text_toolbar', None)
+        items = self.scene.selected_text_items()
+        if toolbar is not None and items:
+            toolbar.update_title(items[0])
+        self.pin_toolbar_to(toolbar, items)
 
     def update_draw_item_toolbar(self):
         """Show the drawing buttons over the selected drawings."""

@@ -35,6 +35,10 @@ class TextToolBar(PinnedToolBar):
     def __init__(self, parent, view):
         super().__init__(parent, view)
 
+        # One button, two jobs: while a title is being written the box
+        # colour colours the title, because that is what the colour on
+        # screen is at that moment. The group bar does the same.
+        self.writing_title = False
         self.bold = self.add_button(
             'bold', 'Bold', view.on_action_text_bold)
         self.font = self.add_button(
@@ -52,7 +56,36 @@ class TextToolBar(PinnedToolBar):
             'highlight', 'Highlight colour',
             view.on_action_text_highlight_color)
         self.box_color = self.add_button(
-            'color', 'Box colour', view.on_action_text_box_color,
-            keep_colors=True)
+            'color', 'Box colour', self.on_color, keep_colors=True)
+        self.title = self.add_button(
+            'title', 'Write a title', view.on_action_text_title)
+        self.align_left = self.add_button(
+            'align_left', 'Title on the left',
+            view.on_action_text_title_align_left)
+        self.align_left.setCheckable(True)
+        self.align_center = self.add_button(
+            'align_center', 'Title centred',
+            view.on_action_text_title_align_center)
+        self.align_center.setCheckable(True)
 
         self.adjustSize()
+
+    def on_color(self):
+        """Colour the title if one is being written, else the box."""
+
+        if self.writing_title:
+            self.view.on_action_text_title_color()
+        else:
+            self.view.on_action_text_box_color()
+
+    def update_title(self, item):
+        """Show what the bar is acting on: the note, or its title."""
+
+        self.writing_title = item.title_editing
+        self.box_color.setToolTip(
+            'Title colour' if self.writing_title else 'Box colour')
+        self.align_left.setChecked(item.title_align == item.TITLE_LEFT)
+        self.align_center.setChecked(item.title_align == item.TITLE_CENTER)
+        # Alignment means nothing until there is a title to align
+        for button in (self.align_left, self.align_center):
+            button.setEnabled(item.shows_header())

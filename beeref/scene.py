@@ -56,8 +56,8 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         # follow_moved_item
         self.uses_attachments = False
         self.edit_item = None
-        # The group whose title is being written, if any
-        self.title_group = None
+        # The item whose title is being written, if any
+        self.title_item = None
         # The image whose caption is being written, if any
         self.caption_item = None
         self.crop_item = None
@@ -666,13 +666,12 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
                 else:
                     super().mousePressEvent(event)
                     return
-            if self.title_group is not None:
+            if self.title_item is not None:
                 # Clicking the band itself goes on writing; the editor
                 # sits inside it and takes the click
-                group = self.title_group
-                editor = group.title_editor
-                if item_at_pos is not editor:
-                    group.exit_title_edit_mode()
+                titled = self.title_item
+                if item_at_pos is not titled.title_editor:
+                    titled.exit_title_edit_mode()
                 else:
                     super().mousePressEvent(event)
                     return
@@ -727,16 +726,16 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         super().mouseDoubleClickEvent(event)
 
     def title_double_clicked(self, item, scene_pos):
-        """Open a group's title when its band is double-clicked.
+        """Open a title when its band is double-clicked.
 
         Words are opened by double-clicking them everywhere else in the
-        application, and the alternative here was zooming to the group,
+        application, and the alternative on a group was zooming to it,
         which the rest of the box still does.
         """
 
-        if getattr(item, 'TYPE', None) != 'group' or item.locked:
+        if not hasattr(item, 'shows_header') or not item.shows_header():
             return False
-        if not item.shows_header():
+        if getattr(item, 'locked', False):
             return False
         if not item.header_rect().contains(item.mapFromScene(scene_pos)):
             return False
@@ -746,6 +745,7 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         item.enter_title_edit_mode()
         for view in self.views():
             view.update_group_toolbar()
+            view.update_text_toolbar()
         return True
 
     def caption_double_clicked(self, item, scene_pos):
