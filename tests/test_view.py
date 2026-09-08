@@ -1689,24 +1689,30 @@ def test_on_action_show_grid(view):
 def test_draw_background_draws_grid_when_enabled(super_mock, view):
     view.show_grid = True
     painter = MagicMock()
-    view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
+    with patch.object(type(view), 'draw_grid_lines') as drawn:
+        view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
     super_mock.assert_called_once()
     # Two levels, an octave apart, the finer of them faded; see
-    # grid_levels
-    assert painter.drawLines.call_count == 2
+    # grid_levels. Asked of the grid rather than of the painter: the
+    # lines are put down as filled rectangles a pixel wide, which the
+    # line rasteriser was half again slower at.
+    assert drawn.call_count == 2
     # 500x500 at the default spacing of 100: lines at 0, 100 ... 400
-    assert len(painter.drawLines.call_args_list[0][0][0]) == 10
+    _, _, across, down = drawn.call_args_list[0][0]
+    assert len(across) + len(down) == 10
     # And the coarser one at 0, 200, 400
-    assert len(painter.drawLines.call_args_list[1][0][0]) == 6
+    _, _, across, down = drawn.call_args_list[1][0]
+    assert len(across) + len(down) == 6
 
 
 @patch('PyQt6.QtWidgets.QGraphicsView.drawBackground')
 def test_draw_background_skips_grid_when_disabled(super_mock, view):
     view.show_grid = False
     painter = MagicMock()
-    view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
+    with patch.object(type(view), 'draw_grid_lines') as drawn:
+        view.drawBackground(painter, QtCore.QRectF(0, 0, 500, 500))
     super_mock.assert_called_once()
-    painter.drawLines.assert_not_called()
+    drawn.assert_not_called()
 
 
 def test_grid_setting_change_emits_grid_changed(settings):
@@ -3148,22 +3154,30 @@ def test_compact_file_runs_in_the_background(view):
 
 
 def test_wheel_zoom_is_spread_over_frames(view, imgfilename3x3):
-    """A notch of the wheel eases in rather than jumping at once."""
+    """A notch of the wheel eases in rather than jumping at once.
+
+    Driven by a clock of its own: the easing takes its share from the
+    time that has actually passed, so stepping it in a tight loop would
+    otherwise cover no ground at all.
+    """
 
     view.scene.addItem(BeePixmapItem(QtGui.QImage(imgfilename3x3)))
     anchor = QtCore.QPointF(50.0, 50.0)
     before = view.get_scale()
 
-    view.smooth_zoom(120, anchor)
-    # Nothing has moved yet; the work is waiting to be done
-    assert view.get_scale() == before
-    assert view.pending_zoom == 120
-    assert view.zoom_timer.isActive() is True
-
+    clock = [0.0]
     scales = []
-    for _ in range(40):
-        view.step_zoom()
-        scales.append(view.get_scale())
+    with patch('beeref.view.time.monotonic', side_effect=lambda: clock[0]):
+        view.smooth_zoom(120, anchor)
+        # Nothing has moved yet; the work is waiting to be done
+        assert view.get_scale() == before
+        assert view.pending_zoom == 120
+        assert view.zoom_timer.isActive() is True
+
+        for _ in range(40):
+            clock[0] += view.ZOOM_INTERVAL / 1000
+            view.step_zoom()
+            scales.append(view.get_scale())
 
     assert scales[0] > before, 'the first step has to move'
     assert scales == sorted(scales), 'zooming in never goes backwards'

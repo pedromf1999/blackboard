@@ -919,9 +919,16 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
         y = []
 
         for item in base:
-            for corner in item.corners_scene_coords:
-                x.append(corner.x())
-                y.append(corner.y())
+            # The item's own box mapped to the scene in one step. Going
+            # corner by corner built four points per item in Python,
+            # and this is walked several times on every frame of a
+            # zoom: the box of the mapped corners is the same box.
+            corners = item.mapToScene(
+                item.bounding_rect_unselected()).boundingRect()
+            x.append(corners.left())
+            x.append(corners.right())
+            y.append(corners.top())
+            y.append(corners.bottom())
 
         return QtCore.QRectF(
             QtCore.QPointF(min(x), min(y)),

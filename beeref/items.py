@@ -78,6 +78,37 @@ def sort_by_filename(items):
 OPAQUE_ENOUGH = 0.995
 
 
+def text_at_screen_size(painter, rect, size):
+    """Put the painter into screen units for drawing words.
+
+    Text is rasterised at the size the font asks for rather than at the
+    size it ends up on screen. A title is sized from the box holding it,
+    and a box on a real board reaches hundreds of thousands of units
+    across, so its letters ask for thousands of point and arrive four
+    pixels tall: on one real board that cost sixteen milliseconds a
+    frame for a title nobody could read.
+
+    Scaling the painter down and the letters with it draws exactly the
+    same picture from a font the size it is actually seen at. Returns
+    the rectangle and point size to draw with, both in the painter's
+    new units, and leaves the painter saved for the caller to restore.
+    Rotation and flip are untouched: they are still in the transform
+    this scales.
+    """
+
+    painter.save()
+    transform = painter.combinedTransform()
+    scale = math.hypot(transform.m11(), transform.m12())
+    if not 0 < scale < 1:
+        # Drawn at its own size or larger: nothing to gain, and scaling
+        # up a rasterised letter is worse than asking for a big one
+        return rect, size
+    painter.scale(1 / scale, 1 / scale)
+    smaller = QtCore.QRectF(rect.x() * scale, rect.y() * scale,
+                            rect.width() * scale, rect.height() * scale)
+    return smaller, size * scale
+
+
 def half_rounded_path(rect, radius, top):
     """A rectangle with two of its corners taken off.
 
@@ -920,7 +951,8 @@ class TitleBandMixin:
         band = self.header_rect()
         inset = self.title_inset()
         room = band.adjusted(inset, 0, -inset, 0)
-        font = self.title_font()
+        room, size = text_at_screen_size(painter, room, self.title_size())
+        font = self.title_font_of_size(max(size, 0.1))
         painter.setFont(font)
         painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
         metrics = QtGui.QFontMetricsF(font)
@@ -928,6 +960,7 @@ class TitleBandMixin:
             room, int(self.title_alignment()),
             metrics.elidedText(self._title, Qt.TextElideMode.ElideRight,
                                room.width()))
+        painter.restore()
 
     def title_search_rect(self):
         """Where the title sits on the board, for Find to go to.
@@ -1833,15 +1866,19 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
             painter.restore()
             return
 
-        painter.setFont(self.caption_font())
-        painter.setPen(QtGui.QPen(
-            readable_grey(self.visible_caption_color())))
         inset = self.caption_inset()
         room = band.adjusted(inset, inset, -inset, -inset)
+        room, size = text_at_screen_size(painter, room, self.caption_size())
+        font = self.caption_font()
+        font.setPointSizeF(max(size, 0.1))
+        painter.setFont(font)
+        painter.setPen(QtGui.QPen(
+            readable_grey(self.visible_caption_color())))
         painter.drawText(
             room,
             int(Qt.AlignmentFlag.AlignCenter | self.CAPTION_WRAP),
             self.caption)
+        painter.restore()
         painter.restore()
 
     def enter_caption_edit_mode(self):

@@ -18,6 +18,7 @@ import logging
 import math
 import os
 import os.path
+import time
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt
@@ -87,6 +88,9 @@ class BeeGraphicsView(MainControlsMixin,
     ZOOM_INTERVAL = 16
     ZOOM_SMOOTHING = 0.3
     ZOOM_REMAINDER = 1
+    # The most a single late frame may make up for. Without it, coming
+    # back to a window that was buried would finish the zoom in one jump
+    ZOOM_MAX_CATCHUP = 6
     SAMPLE_COLOR_MODE = 3
 
     # On-screen bounds in pixels between which the grid spacing is kept
@@ -149,6 +153,7 @@ class BeeGraphicsView(MainControlsMixin,
         # in one jump is what makes zooming feel steppy
         self.pending_zoom = 0
         self.zoom_anchor = None
+        self.last_zoom_step = None
         # Where a line being drawn would fasten itself, if it were let
         # go now; see show_snap_preview
         self.snap_preview = None
@@ -781,12 +786,43 @@ class BeeGraphicsView(MainControlsMixin,
             self.draw_grid_dots(painter, pen, across, down)
             return
 
-        painter.setPen(pen)
-        lines = [QtCore.QLineF(x, rect.top(), x, rect.bottom())
-                 for x in across]
-        lines += [QtCore.QLineF(rect.left(), y, rect.right(), y)
-                  for y in down]
-        painter.drawLines(lines)
+        self.draw_grid_lines(painter, pen, across, down)
+
+    def draw_grid_lines(self, painter, pen, across, down):
+        """The ruled grid, drawn on the screen rather than on the board.
+
+        In device coordinates, like the dots, and for the same two
+        reasons. A line landing on a fractional pixel is spread over
+        its neighbours, so a one-pixel line came out two pixels of
+        half-strength at some zooms; and drawing through the board's
+        transform with a cosmetic pen was, on a real board, most of
+        what a zoom frame cost -- more than every picture on it put
+        together. Antialiasing goes off with it: these are upright and
+        across and a pixel wide, so it has nothing to smooth.
+        """
+
+        view = self.viewport().rect()
+        columns = sorted({round(self.mapFromScene(QtCore.QPointF(x, 0)).x())
+                          for x in across})
+        rows = sorted({round(self.mapFromScene(QtCore.QPointF(0, y)).y())
+                       for y in down})
+
+        painter.save()
+        painter.setTransform(QtGui.QTransform())
+        painter.setRenderHint(painter.RenderHint.Antialiasing, False)
+        # Filled rectangles a pixel wide rather than drawn lines. On
+        # whole pixels the two come out identical, and the line
+        # rasteriser is the slower of the two by half again -- which on
+        # a board being zoomed is worth more than it sounds, since a
+        # single turn of the wheel is eased out over a dozen frames.
+        brush = QtGui.QBrush(pen.color())
+        height = view.height()
+        width = view.width()
+        for x in columns:
+            painter.fillRect(QtCore.QRect(x, 0, 1, height), brush)
+        for y in rows:
+            painter.fillRect(QtCore.QRect(0, y, width, 1), brush)
+        painter.restore()
 
     def draw_grid_dots(self, painter, pen, across, down):
         """A dot where the lines would have crossed.
@@ -2533,13 +2569,12 @@ class BeeGraphicsView(MainControlsMixin,
             return
         logger.trace('Recalculating scene rectangle...')
         try:
-            topleft = self.mapFromScene(
-                self.scene.itemsBoundingRect().topLeft())
+            items = self.scene.itemsBoundingRect()
+            topleft = self.mapFromScene(items.topLeft())
             topleft = self.mapToScene(QtCore.QPoint(
                 topleft.x() - self.size().width(),
                 topleft.y() - self.size().height()))
-            bottomright = self.mapFromScene(
-                self.scene.itemsBoundingRect().bottomRight())
+            bottomright = self.mapFromScene(items.bottomRight())
             bottomright = self.mapToScene(QtCore.QPoint(
                 bottomright.x() + self.size().width(),
                 bottomright.y() + self.size().height()))
@@ -2560,10 +2595,11 @@ class BeeGraphicsView(MainControlsMixin,
             arguments and turns it into a number, for ex. ``min`` or ``max``.
         """
 
-        topleft = self.mapFromScene(
-            self.scene.itemsBoundingRect().topLeft())
-        bottomright = self.mapFromScene(
-            self.scene.itemsBoundingRect().bottomRight())
+        # Asked for once: it walks every item on the board, and a
+        # smooth zoom lands here on every frame of every step
+        items = self.scene.itemsBoundingRect()
+        topleft = self.mapFromScene(items.topLeft())
+        bottomright = self.mapFromScene(items.bottomRight())
         return func(bottomright.x() - topleft.x(),
                     bottomright.y() - topleft.y())
 
@@ -2654,20 +2690,54 @@ class BeeGraphicsView(MainControlsMixin,
         self.pending_zoom += delta
         self.zoom_anchor = anchor
         if not self.zoom_timer.isActive():
+            self.last_zoom_step = time.monotonic()
             self.zoom_timer.start()
 
     def step_zoom(self):
-        """One frame of a smoothed zoom."""
+        """One frame of a smoothed zoom, by the clock.
+
+        Each step used to take a fixed share of what was left, so a
+        zoom took as many frames as it took. On a board where a frame
+        costs three times what the timer asks for -- which is what a
+        few hundred items zoomed out to fit the window comes to -- a
+        turn of the wheel then took three times as long to arrive, and
+        the board seemed to drift to a halt rather than stop.
+
+        Taking the share from the time that has actually passed instead
+        settles the zoom in the same moment however long the frames
+        take: fewer, larger steps when the board is busy.
+        """
+
+        now = time.monotonic()
+        # Explicitly against None: a clock can read zero, and treating
+        # that as "not started yet" left the zoom never moving at all
+        started = now if self.last_zoom_step is None else self.last_zoom_step
+        elapsed = now - started
+        self.last_zoom_step = now
 
         if abs(self.pending_zoom) <= self.ZOOM_REMAINDER:
             step = self.pending_zoom
             self.pending_zoom = 0
             self.zoom_timer.stop()
         else:
-            step = self.pending_zoom * self.ZOOM_SMOOTHING
+            step = self.pending_zoom * self.zoom_share(elapsed)
             self.pending_zoom -= step
         if step:
             self.zoom(step, self.zoom_anchor)
+
+    def zoom_share(self, elapsed):
+        """How much of what is left a step covers, for this long a frame.
+
+        ``ZOOM_SMOOTHING`` per ``ZOOM_INTERVAL``, so a frame arriving on
+        time behaves exactly as it always did, and a late one catches up
+        by as much as it is late.
+        """
+
+        intervals = min(elapsed * 1000 / self.ZOOM_INTERVAL,
+                        self.ZOOM_MAX_CATCHUP)
+        if intervals <= 0:
+            return 0
+        return 1 - (1 - self.ZOOM_SMOOTHING) ** intervals
 
     def wheelEvent(self, event):
         action, inverted\
