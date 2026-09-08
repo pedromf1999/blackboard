@@ -862,12 +862,21 @@ class TitleBandMixin:
 
         Falls back to the interface font on the rare install where the
         bundled one could not be loaded, which is better than no title.
+
+        Hinted the way a note's own text is hinted, and for the same
+        reason: left to what the platform gives, the letters were being
+        snapped to whole pixels in both directions, so a title got a
+        pixel shorter here and a pixel taller there as the board was
+        zoomed. Against a note beside it, which does not do this, it
+        read as trembling.
         """
 
         family = BeeAssets().font_family
         font = QtGui.QFont(family) if family else QtWidgets.QApplication.font()
         font.setBold(True)
         font.setPointSizeF(size)
+        font.setHintingPreference(
+            QtGui.QFont.HintingPreference.PreferVerticalHinting)
         return font
 
     def title_font(self):
@@ -1732,6 +1741,12 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
         font = QtGui.QFont(QtWidgets.QApplication.font())
         font.setPointSizeF(self.caption_size())
+        # Left as the interface font has it. A group's title asks for
+        # vertical hinting to stop it trembling as the board is zoomed;
+        # a caption measured steady without it, and changing it here
+        # puts the band and the line being typed into it out of step --
+        # the band is measured from these metrics and the editor lays
+        # the words out from its own.
         return font
 
     def caption_draft(self):

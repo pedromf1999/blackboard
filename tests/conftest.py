@@ -60,11 +60,18 @@ def kbsettings(tmpdir):
 
 
 def forget_unsaved_changes(window):
-    """Closing a window offers to save what is not on disk yet, and
-    a test that left changes behind would stop on a dialog with
-    nobody there to answer it."""
+    """Let the test's window close without offering to save.
 
-    window.view.undo_stack.setClean()
+    Closing a board with unsaved changes asks what to do with them, and
+    a test has nobody to answer it: the run stops dead on a dialog.
+
+    Answered here rather than by tidying the undo stack. Marking the
+    stack clean is not enough on its own -- a test that mocks out what
+    ends an undo macro leaves the stack inside one, and Qt ignores
+    setClean() there.
+    """
+
+    window.view.get_confirmation_unsaved_changes = lambda *args: True
 
 
 @pytest.fixture
@@ -109,3 +116,22 @@ def item():
 def qapp():
     from beeref.__main__ import BeeRefApplication
     yield BeeRefApplication([])
+
+
+@pytest.fixture(autouse=True)
+def no_unattended_dialogs():
+    """Turn a modal dialog nobody can answer into a plain failure.
+
+    A question box in a test run blocks it for ever: the run sits there
+    until somebody notices and clicks. Failing says which test did it,
+    and costs nobody a click. A test that means to open one patches it
+    itself, and that patch goes on top of this one.
+    """
+
+    def refuse(parent, title, *args, **kwargs):
+        raise AssertionError(
+            f'unattended modal dialog: {title!r}. Patch it in the test, '
+            'or leave the board in a state that does not ask.')
+
+    with patch('PyQt6.QtWidgets.QMessageBox.question', refuse):
+        yield

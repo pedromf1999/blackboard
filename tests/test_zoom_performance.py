@@ -7,7 +7,7 @@ frame that costs eleven has no room to spare and drops some.
 
 from unittest.mock import MagicMock, patch
 
-from PyQt6 import QtCore, QtGui
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from beeref.items import BeePixmapItem, BeeTextItem
 
@@ -302,3 +302,95 @@ def test_a_clock_reading_zero_still_zooms(view):
 
     assert view.pending_zoom < 120
     assert view.get_scale() > before
+
+
+def title_ink_height(view, item, rect_of, zoom):
+    """How tall the letters actually come out on screen, in pixels."""
+
+    view.setTransform(QtGui.QTransform.fromScale(zoom, zoom))
+    view.centerOn(item.mapToScene(rect_of(item).center()))
+    view.viewport().repaint()
+    shot = view.viewport().grab().toImage()
+    box = view.mapFromScene(item.mapToScene(rect_of(item))).boundingRect()
+    background = QtGui.QColor(
+        view.settings.valueOrDefault('View/canvas_color'))
+
+    rows = [y for x in range(max(0, box.left()),
+                             min(shot.width(), box.right()))
+            for y in range(max(0, box.top()), min(shot.height(), box.bottom()))
+            if shot.pixelColor(x, y).lightness()
+            > background.lightness() + 40]
+    return (max(rows) - min(rows) + 1) if rows else 0
+
+
+def dips(heights):
+    """Times the letters got shorter while the board was zoomed in."""
+
+    return sum(1 for a, b in zip(heights, heights[1:]) if b < a)
+
+
+def test_a_title_settles_like_a_notes_own_text(view, settings):
+    """Left to what the platform gives, a title's letters were snapped
+    to whole pixels in both directions, so it got a pixel shorter here
+    and a pixel taller there as the board was zoomed. Beside a note,
+    which does not do this, it read as trembling.
+
+    Measured against a note in the same window rather than against a
+    flat rule: what a font engine rounds to is its own business, and
+    the requirement is that the two behave alike.
+    """
+
+    view.resize(900, 400)
+    view.show_grid = False
+    note = BeeTextItem(text='Enclosure')
+    view.scene.addItem(note)
+    note.setPos(0, 0)
+
+    holder = BeeTextItem(text='xx')
+    view.scene.addItem(holder)
+    holder.setPos(0, 400)
+    holder.setSelected(True)
+    view.on_action_group_items()
+    group = list(view.scene.items_by_type('group'))[0]
+    group.title = 'Enclosure'
+    holder.setSelected(False)
+
+    zooms = [1.4 * (1.012 ** i) for i in range(34)]
+    note_high = [title_ink_height(view, note, lambda i: i.text_rect(), z)
+                 for z in zooms]
+    title_high = [title_ink_height(view, group, lambda i: i.header_rect(), z)
+                  for z in zooms]
+
+    assert max(title_high) > 0, 'the title has to be drawn at all'
+    assert dips(title_high) <= dips(note_high) + 1, (note_high, title_high)
+
+
+def test_a_title_is_hinted_the_way_a_note_is(view):
+    """Which is what makes the two behave alike."""
+
+    note = BeeTextItem(text='Hello')
+    view.scene.addItem(note)
+    note.title = 'Heading'
+
+    assert (note.title_font().hintingPreference()
+            == note.font().hintingPreference())
+
+
+def test_a_caption_keeps_the_hinting_the_interface_font_has(view):
+    """A group's title asks for vertical hinting to stop it trembling
+    as the board is zoomed. A caption measured steady without it, and
+    asking for it here put the band out of step with the line typed
+    into it: the band is measured from these metrics and the editor
+    lays the words out from its own, and the two stopped agreeing.
+
+    So this is a deliberate difference, not an oversight.
+    """
+
+    img = QtGui.QImage(80, 60, QtGui.QImage.Format.Format_RGB32)
+    img.fill(QtGui.QColor('red'))
+    item = BeePixmapItem(img)
+    view.scene.addItem(item)
+    item.caption = 'A caption'
+
+    assert (item.caption_font().hintingPreference()
+            == QtWidgets.QApplication.font().hintingPreference())
