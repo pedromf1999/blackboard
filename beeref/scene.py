@@ -624,11 +624,17 @@ class BeeGraphicsScene(QtWidgets.QGraphicsScene):
     def has_sizeable_selection(self):
         """Whether anything selected can be made bigger or smaller.
 
-        Text scales its letters, drawings their line thickness; both are
-        driven by the same pair of shortcuts.
+        Text scales its letters, drawings their line thickness, a group
+        the title across its top, and a picture its contour -- or the
+        caption being written into it, which the same pair of shortcuts
+        acts on while it is open. All are driven by that pair.
         """
 
-        return bool(self.selected_text_items() or self.selected_draw_items())
+        return bool(self.selected_text_items()
+                    or self.selected_draw_items()
+                    or self.selected_groups()
+                    or [item for item in self.selected_images()
+                        if item.has_outline() or item.caption_editing])
 
     def has_image_selection(self):
         """Whether any image is selected."""

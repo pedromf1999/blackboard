@@ -109,6 +109,43 @@ def text_at_screen_size(painter, rect, size):
     return smaller, size * scale
 
 
+# How much bigger or smaller than its natural size the words in a band
+# may be made. A group's title is measured from the width of its box and
+# a picture's caption from the width of its crop, and this is the share
+# of that the reader asked for -- so an item that grows still grows its
+# band, and a board written before there was a choice looks unchanged.
+BAND_SCALE_MIN = 0.25
+BAND_SCALE_MAX = 4
+
+
+class BandTextMixin:
+    """The words in a band can be made bigger or smaller.
+
+    Only the share is kept, never a size in points: what the band is
+    measured from goes on being what it always was.
+    """
+
+    band_scale = 1
+
+    def set_band_text_scale(self, scale):
+        self.band_scale = min(BAND_SCALE_MAX, max(BAND_SCALE_MIN, scale))
+        self.band_text_changed()
+
+    def grow_band_text(self, factor):
+        self.set_band_text_scale(self.band_scale * factor)
+
+    def band_text_changed(self):
+        """Take in a band that is now a different height. Up to the item."""
+
+        raise NotImplementedError
+
+    def band_scale_save_data(self):
+        """Only written once it has been changed, so a board written
+        before there was a choice saves exactly as it did."""
+
+        return {'band_scale': self.band_scale} if self.band_scale != 1 else {}
+
+
 def half_rounded_path(rect, radius, top):
     """A rectangle with two of its corners taken off.
 
@@ -1034,7 +1071,7 @@ class TitleBandMixin:
 
 
 @register_item
-class BeeGroupItem(TitleBandMixin, BeeItemMixin,
+class BeeGroupItem(TitleBandMixin, BandTextMixin, BeeItemMixin,
                    QtWidgets.QGraphicsRectItem):
     """A coloured box holding a group of items.
 
@@ -1067,7 +1104,8 @@ class BeeGroupItem(TitleBandMixin, BeeItemMixin,
 
     def __init__(self, box_color=None, locked=False,
                  created=None, modified=None, title=None,
-                 header_color=None, title_align=None, **kwargs):
+                 header_color=None, title_align=None, band_scale=None,
+                 **kwargs):
         super().__init__()
         self.save_id = None
         self.is_image = False
@@ -1078,6 +1116,9 @@ class BeeGroupItem(TitleBandMixin, BeeItemMixin,
         # An empty title means no band at all; the group looks exactly
         # as it did before there were titles
         self.init_title(title, header_color, title_align)
+        # How big the title is asked to be, as a share of what the box
+        # gives it; see BandTextMixin
+        self.band_scale = band_scale or 1
         # A locked group can't be opened up to edit the items inside it
         self.locked = locked
         self._drop_target = False
@@ -1155,7 +1196,14 @@ class BeeGroupItem(TitleBandMixin, BeeItemMixin,
                 'created': self.created,
                 'modified': self.modified}
         data.update(self.title_save_data())
+        data.update(self.band_scale_save_data())
         return data
+
+    def band_text_changed(self):
+        # The band is added above the items, so a taller one makes the
+        # box taller too
+        self.on_title_changed()
+        self.refresh_title_editor()
 
     def bee_children(self):
         """The items grouped inside this one."""
@@ -1216,7 +1264,8 @@ class BeeGroupItem(TitleBandMixin, BeeItemMixin,
         """
 
         return min(self.TITLE_MAX_SIZE,
-                   max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION))
+                   max(self.TITLE_MIN_SIZE,
+                       width * self.TITLE_FRACTION * self.band_scale))
 
     def title_size(self):
         return self.title_size_for(self.rect().width())
@@ -1357,6 +1406,7 @@ class BeeGroupItem(TitleBandMixin, BeeItemMixin,
             locked=self.locked,
             title=self.title,
             title_align=self.title_align,
+            band_scale=self.band_scale,
             header_color=(self.header_color.getRgb()
                           if self.header_color else None))
         item.setPos(self.pos())
@@ -1507,7 +1557,8 @@ class TitleEditor(QtWidgets.QGraphicsTextItem):
 
 
 @register_item
-class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
+class BeePixmapItem(BandTextMixin, BeeItemMixin,
+                    QtWidgets.QGraphicsPixmapItem):
     """Class for images added by the user."""
 
     TYPE = 'pixmap'
@@ -1575,6 +1626,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         if color:
             item.outline_color = QtGui.QColor(*color)
         item.caption = data.get('caption', '')
+        item.band_scale = data.get('band_scale', 1)
         color = data.get('caption_color')
         if color:
             item.caption_color = QtGui.QColor(*color)
@@ -1729,7 +1781,16 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
 
         return min(self.CAPTION_MAX_SIZE,
                    max(self.CAPTION_MIN_SIZE,
-                       self.crop.width() * self.CAPTION_FRACTION))
+                       self.crop.width() * self.CAPTION_FRACTION
+                       * self.band_scale))
+
+    def band_text_changed(self):
+        # The band hangs below the picture, so a taller one needs more
+        # room to paint in
+        self.prepareGeometryChange()
+        self.update()
+        if self.caption_editor is not None:
+            self.caption_editor.refresh()
 
     def caption_font(self):
         """The interface font, plain.
@@ -1971,7 +2032,7 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
         return bool(self.outline_width)
 
     def get_extra_save_data(self):
-        return {'filename': self.filename,
+        data = {'filename': self.filename,
                 'opacity': self.opacity(),
                 'grayscale': self.grayscale,
                 'outline_width': self.outline_width,
@@ -1982,6 +2043,8 @@ class BeePixmapItem(BeeItemMixin, QtWidgets.QGraphicsPixmapItem):
                          self.crop.topLeft().y(),
                          self.crop.width(),
                          self.crop.height()]}
+        data.update(self.band_scale_save_data())
+        return data
 
     def get_filename_for_export(self, imgformat, save_id_default=None):
         save_id = self.save_id or save_id_default

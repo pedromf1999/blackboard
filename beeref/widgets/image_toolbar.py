@@ -48,8 +48,9 @@ class ImageToolBar(PinnedToolBar):
         self.writing_caption = False
         self.color = self.add_button(
             'color', 'Outline colour', self.on_color, keep_colors=True)
-        # The same pair of icons as everywhere else: one makes what is
-        # selected bigger, the other smaller -- letters, line or contour
+        # The same pair of icons as everywhere else, and the same two
+        # jobs the colour button has: while a caption is being written
+        # they size the caption, because that is what is on screen
         self.thinner = self.add_button(
             'smaller', 'Thinner outline',
             view.on_action_size_decrease, repeat=True)
@@ -81,4 +82,10 @@ class ImageToolBar(PinnedToolBar):
             'Caption colour' if self.writing_caption else 'Outline colour')
         self.color.setEnabled(bool(outlined) or self.writing_caption)
         for button in (self.thinner, self.thicker):
-            button.setEnabled(bool(outlined))
+            button.setEnabled(bool(outlined) or self.writing_caption)
+        self.thinner.setToolTip(
+            'Smaller caption (Ctrl+-)' if self.writing_caption
+            else 'Thinner outline')
+        self.thicker.setToolTip(
+            'Bigger caption (Ctrl++)' if self.writing_caption
+            else 'Thicker outline')

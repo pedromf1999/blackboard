@@ -817,6 +817,30 @@ class ChangeTitle(QtGui.QUndoCommand):
             self.touch(item)
 
 
+class ChangeBandTextScale(QtGui.QUndoCommand):
+    """Make the words in a band bigger or smaller.
+
+    A group's title is measured from the width of its box and a
+    picture's caption from the width of its crop. This changes the
+    share of that they take, not a size in points, so an item that
+    grows still grows its band.
+    """
+
+    def __init__(self, items, factor):
+        super().__init__('Change title size')
+        self.items = list(items)
+        self.factor = factor
+        self.old = [item.band_scale for item in self.items]
+
+    def redo(self):
+        for item in self.items:
+            item.grow_band_text(self.factor)
+
+    def undo(self):
+        for item, scale in zip(self.items, self.old):
+            item.set_band_text_scale(scale)
+
+
 class ChangeOutlineColor(QtGui.QUndoCommand):
     """Change the colour of the contour round images."""
 

@@ -52,6 +52,14 @@ class GroupToolBar(PinnedToolBar):
             'align_center', 'Title centred',
             view.on_action_group_title_align_center)
         self.align_center.setCheckable(True)
+        # The same pair of icons as everywhere else. A group has nothing
+        # to size but its title, so these need no second job
+        self.smaller = self.add_button(
+            'smaller', 'Smaller title (Ctrl+-)',
+            view.on_action_size_decrease, repeat=True)
+        self.bigger = self.add_button(
+            'bigger', 'Bigger title (Ctrl++)',
+            view.on_action_size_increase, repeat=True)
         self.lock = self.add_button('lock', 'Lock group', self.toggle_lock)
         self.ungroup = self.add_button(
             'ungroup', 'Ungroup', view.on_action_ungroup_items)
@@ -74,8 +82,9 @@ class GroupToolBar(PinnedToolBar):
             'Title colour' if self.writing_title else 'Group colour')
         self.align_left.setChecked(group.title_align == group.TITLE_LEFT)
         self.align_center.setChecked(group.title_align == group.TITLE_CENTER)
-        # Alignment means nothing until there is a title to align
-        for button in (self.align_left, self.align_center):
+        # Alignment and size mean nothing until there is a title
+        for button in (self.align_left, self.align_center,
+                       self.smaller, self.bigger):
             button.setEnabled(group.shows_header())
 
     def toggle_lock(self):

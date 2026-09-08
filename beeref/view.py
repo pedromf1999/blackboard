@@ -1740,34 +1740,58 @@ class BeeGraphicsView(MainControlsMixin,
         self.undo_stack.push(commands.ChangeOutline(items, widths))
 
     def on_action_size_increase(self):
-        """Make whatever is selected bigger: text, line or contour."""
+        """Make whatever is selected bigger: text, line, title or contour."""
 
-        if self.scale_title_being_written(self.TEXT_SIZE_STEP):
-            return
-        self.scale_selected_text(self.TEXT_SIZE_STEP)
-        self.scale_selected_drawings(self.LINE_WIDTH_STEP)
-        self.scale_selected_outlines(self.LINE_WIDTH_STEP)
+        self.scale_by(self.TEXT_SIZE_STEP, self.LINE_WIDTH_STEP)
 
     def on_action_size_decrease(self):
-        if self.scale_title_being_written(1 / self.TEXT_SIZE_STEP):
-            return
-        self.scale_selected_text(1 / self.TEXT_SIZE_STEP)
-        self.scale_selected_drawings(1 / self.LINE_WIDTH_STEP)
-        self.scale_selected_outlines(1 / self.LINE_WIDTH_STEP)
+        self.scale_by(1 / self.TEXT_SIZE_STEP, 1 / self.LINE_WIDTH_STEP)
 
-    def scale_title_being_written(self, factor):
-        """Size the heading, while one is open for writing.
+    def scale_by(self, text_factor, line_factor):
+        """Size whatever the buttons are pointing at.
 
-        A note's heading keeps a size of its own now, so this is where
-        it is changed: the buttons act on the words on screen, and
-        while a title is being written those are the title's.
+        The words being written win, wherever they are: while a title
+        or a caption is open, that is what is on screen and that is
+        what a press is asking about. A group has only its title to
+        size, so it needs no such rule.
         """
 
-        item = self.item_being_titled(BeeTextItem.TYPE)
+        if self.scale_band_being_written(text_factor):
+            return
+        self.scale_selected_text(text_factor)
+        self.scale_selected_drawings(line_factor)
+        self.scale_selected_outlines(line_factor)
+        self.scale_selected_titles(text_factor)
+
+    def scale_band_being_written(self, factor):
+        """Size the title or caption that is open for writing.
+
+        Not recorded, the way an alignment picked while writing is not:
+        the title is still in the editor, and what goes on the stack is
+        the whole of it when the writing is done.
+        """
+
+        item = self.scene.title_item
+        if item is None:
+            item = self.scene.caption_item
         if item is None:
             return False
-        item.set_title_size(item.title_size() * factor)
+        if getattr(item, 'TYPE', None) == BeeTextItem.TYPE:
+            # A note's heading keeps a size of its own rather than a
+            # share of the note, so that making the note's own words
+            # bigger leaves the heading where it was
+            item.set_title_size(item.title_size() * factor)
+        else:
+            item.grow_band_text(factor)
         return True
+
+    def scale_selected_titles(self, factor):
+        """Size the title across the top of the selected groups."""
+
+        groups = self.scene.selected_groups()
+        if groups:
+            self.undo_stack.push(
+                commands.ChangeBandTextScale(groups, factor))
 
     def on_action_image_outline(self):
         """Put a contour on the selected images, or take it off.
