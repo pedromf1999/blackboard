@@ -700,3 +700,61 @@ def test_dragging_it_wider_puts_the_text_back_on_one_line(view):
 
     item.set_wrap_width(600)
     assert item.text_rect().height() == tall
+
+
+def test_the_edge_does_not_stop_dead_against_a_long_word(view):
+    """It jammed at the width of the longest word: dragging the side in
+    any further simply did nothing."""
+
+    item = note(view, 'Reference photogrammetry workflow')
+    for asked in (120, 80, 60, 40):
+        item.set_wrap_width(asked)
+        assert item.text_rect().width() == asked
+
+
+def test_a_single_long_word_narrows_just_the_same(view):
+    """Nowhere for it to wrap to, and still the box must shrink."""
+
+    item = note(view, 'Sesquipedalianism')
+    item.set_wrap_width(50)
+
+    assert item.text_rect().width() == 50
+
+
+def test_the_word_hangs_over_rather_than_being_broken(view):
+    """Words are never cut in half to make them fit."""
+
+    item = note(view, 'Sesquipedalianism')
+    tall = item.text_rect().height()
+    item.set_wrap_width(50)
+
+    assert item.toPlainText() == 'Sesquipedalianism'
+    # One line still, not two halves of a word on two of them
+    assert item.text_rect().height() == tall
+    # ...and there is room to paint the part that hangs over
+    assert item.boundingRect().width() > 50
+
+
+def test_words_that_can_wrap_still_do(view):
+    item = note(view, 'One two three four five six seven')
+    item.set_wrap_width(80)
+
+    assert item.text_rect().width() == 80
+    assert item.text_rect().height() > item.one_line_height()
+
+
+def test_the_handles_stay_on_the_box_not_the_overhang(view):
+    item = note(view, 'Sesquipedalianism')
+    item.set_wrap_width(50)
+    item.setSelected(True)
+
+    assert item.width == 50
+    for corner in item.corners:
+        assert corner.x() in (0, 50)
+
+
+def test_the_band_follows_the_width_it_was_dragged_to(view):
+    item = titled(view, 'Chapter One', 'Reference photogrammetry workflow')
+    item.set_wrap_width(70)
+
+    assert item.header_rect().width() == 70
