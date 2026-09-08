@@ -94,13 +94,13 @@ def test_confirm_closed_initialises_input_from_settings(settings, view):
 
 def test_confirm_closed_sets_title_when_not_edited(settings, view):
     widget = ConfirmCloseUnsavedWidget()
-    assert widget.title() == 'Confirm when closing an unsaved file:'
+    assert widget.title() == 'Offer to save when closing an unsaved board:'
 
 
 def test_confirm_closed_sets_title_when_edited(settings, view):
     settings.setValue('Save/confirm_close_unsaved', False)
     widget = ConfirmCloseUnsavedWidget()
-    assert widget.title() == 'Confirm when closing an unsaved file: ✎'
+    assert widget.title() == 'Offer to save when closing an unsaved board: ✎'
 
 
 def test_confirm_closed_saves_change(settings, view):
@@ -108,7 +108,7 @@ def test_confirm_closed_saves_change(settings, view):
     widget = ConfirmCloseUnsavedWidget()
     widget.set_value(False)
     assert settings.valueOrDefault('Save/confirm_close_unsaved') is False
-    assert widget.title() == 'Confirm when closing an unsaved file: ✎'
+    assert widget.title() == 'Offer to save when closing an unsaved board: ✎'
 
 
 def test_confirm_closed_on_restore_defaults(settings, view):
@@ -117,7 +117,7 @@ def test_confirm_closed_on_restore_defaults(settings, view):
     settings.setValue('Save/confirm_close_unsaved', True)
     widget.on_restore_defaults()
     assert widget.input.isChecked() is True
-    assert widget.title() == 'Confirm when closing an unsaved file:'
+    assert widget.title() == 'Offer to save when closing an unsaved board:'
 
 
 def test_canvas_color_initialises_input_from_settings(settings, view):

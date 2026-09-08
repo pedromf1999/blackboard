@@ -202,7 +202,7 @@ def test_get_confirmation_unsaved_changes_when_changes_confirmation_disabled(
 
 
 @patch('PyQt6.QtWidgets.QMessageBox.question',
-       return_value=QtWidgets.QMessageBox.StandardButton.Yes)
+       return_value=QtWidgets.QMessageBox.StandardButton.Discard)
 def test_get_confirmation_unsaved_changes_when_changes_confirmed(
         dlg_mock, settings, view, item):
     view.undo_stack.push(

@@ -993,22 +993,54 @@ class BeeGraphicsView(MainControlsMixin,
         logger.trace('Fit view done')
 
     def get_confirmation_unsaved_changes(self, msg):
-        confirm = self.settings.valueOrDefault('Save/confirm_close_unsaved')
-        if confirm and not self.undo_stack.isClean():
-            answer = QtWidgets.QMessageBox.question(
-                self,
-                'Discard unsaved changes?',
-                msg,
-                QtWidgets.QMessageBox.StandardButton.Yes |
-                QtWidgets.QMessageBox.StandardButton.Cancel)
-            return answer == QtWidgets.QMessageBox.StandardButton.Yes
+        """Ask what to do with changes that are not on disk yet.
 
-        return True
+        The board is about to be thrown away, so the chance to keep it
+        is offered here rather than left to be remembered: saving is
+        the third answer, not something to go and do first.
+        """
+
+        confirm = self.settings.valueOrDefault('Save/confirm_close_unsaved')
+        if not confirm or self.undo_stack.isClean():
+            return True
+
+        button = QtWidgets.QMessageBox.StandardButton
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            'Save your changes?',
+            msg,
+            button.Save | button.Discard | button.Cancel,
+            button.Save)
+        if answer == button.Save:
+            return self.save_and_wait()
+        return answer == button.Discard
+
+    def save_and_wait(self):
+        """Save the board and say whether it is safely on disk.
+
+        Saving runs in a thread of its own behind a progress bar, and
+        what asked for it is about to close the board, so it has to
+        wait for the answer instead of taking the save on trust.
+        """
+
+        started_with = getattr(self, 'worker', None)
+        self.on_action_save()
+        worker = getattr(self, 'worker', None)
+        if worker is None or worker is started_with:
+            # Save As was needed and the file dialog was dismissed
+            return False
+
+        waiting = QtCore.QEventLoop()
+        worker.finished.connect(waiting.quit)
+        if worker.isRunning():
+            waiting.exec()
+        # Saving marks the undo stack clean; a failed save does not
+        return self.undo_stack.isClean()
 
     def on_action_new_scene(self):
         confirm = self.get_confirmation_unsaved_changes(
-            'There are unsaved changes. '
-            'Are you sure you want to open a new scene?')
+            'This board has changes that are not saved. '
+            'Save them before opening another board?')
         if confirm:
             self.clear_scene()
 
@@ -1871,8 +1903,8 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_action_open_recent_file(self, filename):
         confirm = self.get_confirmation_unsaved_changes(
-            'There are unsaved changes. '
-            'Are you sure you want to open a new scene?')
+            'This board has changes that are not saved. '
+            'Save them before opening another board?')
         if confirm:
             self.open_from_file(filename)
 
@@ -1896,8 +1928,8 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_action_open(self):
         confirm = self.get_confirmation_unsaved_changes(
-            'There are unsaved changes. '
-            'Are you sure you want to open a new scene?')
+            'This board has changes that are not saved. '
+            'Save them before opening another board?')
         if not confirm:
             return
 
@@ -2175,7 +2207,8 @@ class BeeGraphicsView(MainControlsMixin,
 
     def on_action_quit(self):
         confirm = self.get_confirmation_unsaved_changes(
-            'There are unsaved changes. Are you sure you want to quit?')
+            'This board has changes that are not saved. '
+            'Save them before quitting?')
         if confirm:
             logger.info('User quit. Exiting...')
             self.app.quit()

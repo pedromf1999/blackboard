@@ -64,6 +64,13 @@ class BeeRefMainWindow(QtWidgets.QMainWindow):
         self.show()
 
     def closeEvent(self, event):
+        # Closing by the window's own button asked nothing and threw
+        # the board away; only File -> Quit ever stopped to ask
+        if not self.view.get_confirmation_unsaved_changes(
+                'This board has changes that are not saved. '
+                'Save them before closing?'):
+            event.ignore()
+            return
         geom = self.saveGeometry()
         self.view.settings.setValue('MainWindow/geometry', geom)
         event.accept()

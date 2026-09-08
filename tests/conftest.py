@@ -59,12 +59,20 @@ def kbsettings(tmpdir):
     dir_patcher.stop()
 
 
+def forget_unsaved_changes(window):
+    """Closing a window offers to save what is not on disk yet, and
+    a test that left changes behind would stop on a dialog with
+    nobody there to answer it."""
+
+    window.view.undo_stack.setClean()
+
+
 @pytest.fixture
 def main_window(qtbot):
     from beeref.__main__ import BeeRefMainWindow
     app = QtWidgets.QApplication.instance()
     main = BeeRefMainWindow(app)
-    qtbot.addWidget(main)
+    qtbot.addWidget(main, before_close_func=forget_unsaved_changes)
     yield main
 
 

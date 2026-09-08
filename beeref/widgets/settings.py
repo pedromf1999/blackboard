@@ -247,11 +247,11 @@ class AllocationLimitWidget(IntegerGroup):
 
 
 class ConfirmCloseUnsavedWidget(SingleCheckboxGroup):
-    TITLE = 'Confirm when closing an unsaved file:'
+    TITLE = 'Offer to save when closing an unsaved board:'
     HELPTEXT = (
-        'When about to close an unsaved file, should BeeRef ask for '
-        'confirmation?')
-    LABEL = 'Confirm when closing'
+        'When a board with unsaved changes is about to be closed, '
+        'should it offer to save them first?')
+    LABEL = 'Offer to save when closing'
     KEY = 'Save/confirm_close_unsaved'
 
 
