@@ -95,27 +95,136 @@ def test_it_is_written_in_the_bundled_face(view):
         assert item.title_font().family() == family
 
 
-def test_a_bigger_note_gets_a_bigger_title(view):
-    small = titled(view)
-    big = titled(view)
-    cursor = big.textCursor()
+def size_the_text(item, points):
+    cursor = item.textCursor()
     cursor.select(QtGui.QTextCursor.SelectionType.Document)
     charformat = QtGui.QTextCharFormat()
-    charformat.setFontPointSize(60)
+    charformat.setFontPointSize(points)
     cursor.mergeCharFormat(charformat)
+
+
+def test_a_bigger_note_gets_a_bigger_title(view):
+    """The heading starts out sized against the words it will head."""
+
+    small = titled(view)
+    big = note(view)
+    size_the_text(big, 60)
+    big.title = 'Chapter One'
 
     assert big.title_size() > small.title_size()
 
 
 def test_the_title_size_is_reined_in_at_the_top(view):
-    item = titled(view)
-    cursor = item.textCursor()
-    cursor.select(QtGui.QTextCursor.SelectionType.Document)
-    charformat = QtGui.QTextCharFormat()
-    charformat.setFontPointSize(40000)
-    cursor.mergeCharFormat(charformat)
+    item = note(view)
+    size_the_text(item, 40000)
+    item.title = 'Chapter One'
 
     assert item.title_size() == item.TITLE_MAX_SIZE
+
+
+def test_the_band_does_not_follow_the_words_afterwards(view):
+    """Making a word bigger must not drag the heading up with it."""
+
+    item = titled(view, 'Chapter One')
+    before = item.header_height()
+    size_the_text(item, 60)
+
+    assert item.header_height() == before
+    assert item.title_size() < 60
+
+
+def test_the_note_never_gets_wider_when_its_text_grows(view):
+    """It shoved the rest of the board along when it did."""
+
+    item = titled(view, 'Chapter One', text='One two three four five')
+    item.setSelected(True)
+    before = item.text_rect().width()
+    for _ in range(5):
+        view.on_action_size_increase()
+
+    assert item.text_rect().width() == before
+
+
+def test_it_still_grows_downwards_so_nothing_is_hidden(view):
+    item = note(view, 'One two three four five six seven')
+    item.setSelected(True)
+    before = item.text_rect().height()
+    for _ in range(5):
+        view.on_action_size_increase()
+
+    assert item.text_rect().height() > before
+
+
+def test_the_words_come_back_to_where_they_were(view):
+    item = note(view, 'One two three four five six seven')
+    item.setSelected(True)
+    before = item.text_rect()
+    view.on_action_size_increase()
+    view.on_action_size_decrease()
+
+    assert item.text_rect() == before
+
+
+def test_a_width_the_user_set_is_left_alone(view):
+    item = note(view, 'One two three four five')
+    item.set_wrap_width(150)
+    item.setSelected(True)
+    view.on_action_size_increase()
+
+    assert item.textWidth() == 150
+
+
+def test_the_size_buttons_size_an_open_heading(view):
+    """The buttons act on the words on screen, and while a title is
+    being written those are the title's."""
+
+    item = titled(view, 'Chapter One')
+    item.setSelected(True)
+    item.enter_title_edit_mode()
+    before = item.title_size()
+    text_before = item.text_rect()
+    view.on_action_size_increase()
+
+    assert item.title_size() > before
+    assert item.text_rect() == text_before
+
+
+def test_they_size_the_note_again_once_the_title_is_done(view):
+    item = titled(view, 'Chapter One')
+    item.setSelected(True)
+    item.enter_title_edit_mode()
+    item.exit_title_edit_mode()
+    heading = item.title_size()
+    view.on_action_size_increase()
+
+    assert item.title_size() == heading
+
+
+def test_the_heading_size_is_saved(view, tmpdir):
+    item = titled(view, 'Chapter One')
+    item.set_title_size(40)
+
+    path = os.path.join(tmpdir, 'sized.blk')
+    fileio.save_bee(path, view.scene, create_new=True)
+    view.scene.clear()
+    fileio.load_bee(path, view.scene)
+    view.scene.add_queued_items()
+
+    back = list(view.scene.items_by_type('text'))[0]
+    assert back.title_size() == 40
+
+
+def test_a_note_titled_before_this_keeps_how_it_looked(view):
+    """And is then fixed there, rather than going on drifting."""
+
+    item = BeeTextItem.create_from_data(
+        data={'text': 'Hello', 'title': 'Chapter One'})
+    view.scene.addItem(item)
+    was = item.title_size()
+    size_the_text(item, 60)
+
+    assert was > 0
+    assert item.title_size() == was
 
 
 def test_the_band_takes_the_notes_colour_by_default(view):

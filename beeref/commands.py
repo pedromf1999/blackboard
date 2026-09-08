@@ -779,14 +779,16 @@ class ChangeTitle(QtGui.QUndoCommand):
     both have a title band, and this works on either.
     """
 
-    def __init__(self, items, title, header_color, align=None):
+    def __init__(self, items, title, header_color, align=None, size=None):
         super().__init__('Change title')
         self.items = list(items)
         self.title = title
         self.header_color = header_color
         self.align = align
-        self.old = [(item.title, item.header_color, item.title_align)
-                    for item in self.items]
+        # A note holds a size for its heading; a group works its own out
+        self.size = size
+        self.old = [(item.title, item.header_color, item.title_align,
+                     item.stored_title_size()) for item in self.items]
 
     @staticmethod
     def touch(item):
@@ -799,14 +801,18 @@ class ChangeTitle(QtGui.QUndoCommand):
             item.header_color = self.header_color
             if self.align is not None:
                 item.title_align = self.align
+            if self.size is not None:
+                item.set_title_size(self.size)
             # Last, because setting it re-measures the item
             item.title = self.title
             self.touch(item)
 
     def undo(self):
-        for item, (title, color, align) in zip(self.items, self.old):
+        for item, (title, color, align, size) in zip(self.items, self.old):
             item.header_color = color
             item.title_align = align
+            if size is not None:
+                item.set_title_size(size)
             item.title = title
             self.touch(item)
 

@@ -1706,14 +1706,32 @@ class BeeGraphicsView(MainControlsMixin,
     def on_action_size_increase(self):
         """Make whatever is selected bigger: text, line or contour."""
 
+        if self.scale_title_being_written(self.TEXT_SIZE_STEP):
+            return
         self.scale_selected_text(self.TEXT_SIZE_STEP)
         self.scale_selected_drawings(self.LINE_WIDTH_STEP)
         self.scale_selected_outlines(self.LINE_WIDTH_STEP)
 
     def on_action_size_decrease(self):
+        if self.scale_title_being_written(1 / self.TEXT_SIZE_STEP):
+            return
         self.scale_selected_text(1 / self.TEXT_SIZE_STEP)
         self.scale_selected_drawings(1 / self.LINE_WIDTH_STEP)
         self.scale_selected_outlines(1 / self.LINE_WIDTH_STEP)
+
+    def scale_title_being_written(self, factor):
+        """Size the heading, while one is open for writing.
+
+        A note's heading keeps a size of its own now, so this is where
+        it is changed: the buttons act on the words on screen, and
+        while a title is being written those are the title's.
+        """
+
+        item = self.item_being_titled(BeeTextItem.TYPE)
+        if item is None:
+            return False
+        item.set_title_size(item.title_size() * factor)
+        return True
 
     def on_action_image_outline(self):
         """Put a contour on the selected images, or take it off.

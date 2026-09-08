@@ -803,6 +803,15 @@ class TitleBandMixin:
                 'header_color': (self.header_color.getRgb()
                                  if self.header_color else None)}
 
+    def stored_title_size(self):
+        """A size the item holds on to for its title, if it holds one.
+
+        A group's title is measured from its box every time, so there
+        is nothing to keep. A note's is not.
+        """
+
+        return None
+
     def shows_header(self):
         """Whether there is a band to draw.
 
@@ -967,7 +976,8 @@ class TitleBandMixin:
 
         if commit and text != self._title and scene is not None:
             scene.undo_stack.push(commands.ChangeTitle(
-                [self], text, self.header_color, self.title_align))
+                [self], text, self.header_color, self.title_align,
+                self.stored_title_size()))
         else:
             # Nothing to record, but the band still has to go if the
             # title was left empty
@@ -2414,7 +2424,7 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
 
     def __init__(self, text=None, html=None, box_color=None,
                  text_width=None, title=None, header_color=None,
-                 title_align=None, **kwargs):
+                 title_align=None, title_size=None, **kwargs):
         super().__init__(text or "Text")
         self.save_id = None
         logger.debug(f'Initialized {self}')
@@ -2423,6 +2433,12 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         # Before anything can ask how big the note is: an empty title
         # means no band, and a note that looks as it always did
         self.init_title(title, header_color, title_align)
+        # A heading keeps the size it was given. Measuring it against
+        # the words underneath meant that making one of them bigger
+        # moved the band as well, which is not what was asked for.
+        # None on a note written before this, which then takes the size
+        # it used to be drawn at.
+        self._title_size = title_size
         self.is_editable = True
         self.edit_mode = False
         self.settings = BeeSettings()
@@ -2450,6 +2466,11 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
             # follow the box it now sits in
             self.refresh_text_colors()
         self.update_document_margin()
+        if self._title and not self._title_size:
+            # A note titled before headings kept a size of their own:
+            # fixed here at what it has been being drawn at, so it
+            # opens looking the way it did and then stays put
+            self._title_size = self.title_size_from_text()
 
     def get_text_font(self):
         """The font new text is written in: the interface font.
@@ -2543,6 +2564,8 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
                 'html': self.toHtml(),
                 'box_color': self.box_color.getRgb()}
         data.update(self.title_save_data())
+        if self._title_size:
+            data['title_size'] = self._title_size
         if self.textWidth() > 0:
             # Only stored once the box has been given a width to wrap
             # at, so untouched text items save exactly as before
@@ -2589,13 +2612,35 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         return largest
 
     def title_size(self):
-        """How big the title's letters are: a little more than the text."""
+        """How big the title's letters are.
+
+        The size the heading was given, or -- on a note that has not
+        been given one -- a little more than the words underneath.
+        """
+
+        if self._title_size:
+            return self._title_size
+        return self.title_size_from_text()
+
+    def title_size_from_text(self):
+        """What a heading over this note would start out at."""
 
         size = self.largest_point_size()
         if size <= 0:
             size = QtGui.QFontInfo(self.font()).pointSizeF()
         return min(self.TITLE_MAX_SIZE,
                    max(self.TITLE_MIN_SIZE, size * self.TITLE_SIZE_FRACTION))
+
+    def stored_title_size(self):
+        return self._title_size
+
+    def set_title_size(self, size):
+        """Make the heading bigger or smaller, band and all."""
+
+        self._title_size = min(self.TITLE_MAX_SIZE,
+                               max(self.TITLE_MIN_SIZE, size))
+        self.on_title_changed()
+        self.refresh_title_editor()
 
     def default_header_color(self):
         """A band with no colour of its own is the note's own box."""
@@ -2622,6 +2667,10 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
     def on_title_changed(self):
         # The band is added above the words, so the note is a different
         # size once a title comes or goes
+        if self._title and not self._title_size:
+            # Fixed the moment the band first appears, so that it stops
+            # moving when the words under it change
+            self._title_size = self.title_size_from_text()
         self.prepareGeometryChange()
         self.update()
 
@@ -3341,6 +3390,13 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         as a plain point size does, would flatten them together.
         """
 
+        # Pinned to what it is now, so that bigger words wrap inside
+        # the note instead of pushing its edges out and shoving the rest
+        # of the board along with them. The note still grows downwards,
+        # so nothing written in it is hidden.
+        if self.textWidth() <= 0:
+            self.set_wrap_width(self.text_rect().width())
+
         start, end = self.selected_range()
         edits = []
         for run_start, run_end, charformat in self.text_runs(start, end):
@@ -3388,6 +3444,7 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
                                        if self.textWidth() > 0 else None),
                            title=self.title,
                            title_align=self.title_align,
+                           title_size=self._title_size,
                            header_color=(self.header_color.getRgb()
                                          if self.header_color else None))
         item.setPos(self.pos())
