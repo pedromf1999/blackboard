@@ -261,7 +261,9 @@ def test_paint(paint_mock, qapp):
     option = MagicMock()
     item.paint(painter, option, 'widget')
     item.paint_selectable.assert_called_once()
-    painter.drawRoundedRect.assert_called_once()
+    # A path rather than a rounded rectangle: a note with a title has
+    # to meet the band square across the top
+    painter.drawPath.assert_called_once()
     assert option.state == QtWidgets.QStyle.StateFlag.State_Enabled
     paint_mock.assert_called_once_with(painter, option, 'widget')
 
