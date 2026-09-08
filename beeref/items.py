@@ -2648,29 +2648,9 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         return self.box_color
 
     def text_rect(self):
-        """The note without its band: the box the words sit in.
+        """The note without its band: the box the words sit in."""
 
-        The width the note was given, not the width its longest word
-        would like. Taking it from the document meant a note could not
-        be dragged narrower than its longest word: the edge stopped
-        dead against it. A word with nowhere to wrap to hangs over the
-        side instead, which is what it did before it was given a width
-        at all, and words are never broken in half to make them fit.
-        """
-
-        rect = QtWidgets.QGraphicsTextItem.boundingRect(self)
-        if self.textWidth() > 0:
-            rect.setWidth(self.textWidth())
-        return rect
-
-    def bounding_rect_unselected(self):
-        """The note's own box, which is what it is handled by.
-
-        So that the outline, the handles and the sides to drag all sit
-        on the box rather than out at the end of an overhanging word.
-        """
-
-        return self.text_rect()
+        return QtWidgets.QGraphicsTextItem.boundingRect(self)
 
     def header_rect(self):
         """The band sitting on top of the note.
@@ -2740,9 +2720,7 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         rect = super().boundingRect()
         if self.shows_header():
             rect = rect.adjusted(0, -self.header_height(), 0, 0)
-        # A word too long for the box hangs over the side rather than
-        # being broken, so there has to be room to paint it in
-        return rect.united(QtWidgets.QGraphicsTextItem.boundingRect(self))
+        return rect
 
     def shape(self):
         """The note, and the band sitting on top of it.
@@ -2785,7 +2763,8 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         does not get rounded away.
         """
 
-        shorter = min(self.text_rect().width(), self.one_line_height())
+        rect = QtWidgets.QGraphicsTextItem.boundingRect(self)
+        shorter = min(rect.width(), self.one_line_height())
         return shorter * self.CORNER_RADIUS_FRACTION
 
     def selection_corner_radius(self):

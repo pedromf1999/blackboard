@@ -651,29 +651,26 @@ def test_corner_radius_never_swallows_a_small_box(view):
     assert item.corner_radius() < shorter / 2
 
 
-def test_corner_radius_never_rounds_the_box_into_a_capsule(view):
+def test_corner_radius_keeps_its_weight_as_text_grows(view):
     """Big text must not round the box towards a capsule.
 
     Going by the bare line height, the corners crept from a third of the
     box towards half of it as the text was scaled up with the toolbar.
-    The whole box is no longer a fixed measure of this -- a note keeps
-    its width and wraps, so its height is a matter of how many lines it
-    ends up with -- so the guard is on every step of the way up.
     """
 
     item = BeeTextItem('Title')
     view.scene.addItem(item)
     item.setSelected(True)
 
+    def weight():
+        rect = QtWidgets.QGraphicsTextItem.boundingRect(item)
+        return item.corner_radius() / rect.height()
+
+    before = weight()
     for _ in range(8):
         view.on_action_size_increase()
-        rect = item.text_rect()
-        # A third of the shorter of the box's width and one line of it
-        assert item.corner_radius() == pytest.approx(
-            min(rect.width(), item.one_line_height()) / 3)
-        # ...which is what keeps it clear of the half that reads as a
-        # capsule, however big the text is made
-        assert item.corner_radius() < min(rect.width(), rect.height()) / 2
+
+    assert weight() == pytest.approx(before, abs=0.02)
 
 
 def test_wrap_width_rewraps_the_text(view):
