@@ -317,3 +317,138 @@ def test_the_command_puts_every_selected_group_back(view):
     view.undo_stack.undo()
     assert one.band_scale == 1
     assert two.band_scale == 1
+
+
+def long_titled(view, title='ALVC Cooling Solution and Gimball Enclosure'):
+    return titled_group(view, title)
+
+
+def rows(group):
+    """How many rows of letters the title takes."""
+
+    size = group.title_size()
+    room = group.band_width() - 2 * group.title_inset_for(size)
+    return group.title_text_height(size, room) / group.line_height_for(size)
+
+
+def test_a_title_too_long_for_the_box_goes_onto_another_row(view):
+    """It used to be cut off with an ellipsis, so asking for a bigger
+    title gave less of it rather than more."""
+
+    group = long_titled(view)
+
+    assert rows(group) > 1.5
+
+
+def test_and_the_band_grows_down_to_hold_it(view):
+    short = titled_group(view, 'Short')
+    long = long_titled(view)
+
+    assert long.header_height() > short.header_height()
+
+
+def test_a_title_that_fits_still_takes_one_row(view):
+    group = titled_group(view, 'Short')
+
+    assert round(rows(group)) == 1
+
+
+def test_making_it_bigger_takes_more_rows_rather_than_fewer_words(view):
+    """Which is the whole point: the words stay, the letters grow."""
+
+    group = long_titled(view)
+    group.setSelected(True)
+    before = rows(group)
+    band = group.header_height()
+
+    for _ in range(6):
+        view.on_action_size_increase()
+
+    assert rows(group) > before
+    assert group.header_height() > band
+
+
+def test_a_notes_title_is_still_cut_off_rather_than_wrapped(view):
+    """A note's band is measured from the note. Letting it wrap would
+    put its height back at the mercy of the note's own words, which is
+    what it was taken away from."""
+
+    note = BeeTextItem(text='Hello')
+    view.scene.addItem(note)
+    note.title = 'ALVC Cooling Solution and Gimball Enclosure'
+    band = note.header_height()
+
+    cursor = note.textCursor()
+    cursor.select(QtGui.QTextCursor.SelectionType.Document)
+    charformat = QtGui.QTextCharFormat()
+    charformat.setFontPointSize(60)
+    cursor.mergeCharFormat(charformat)
+
+    assert note.TITLE_WRAPS is False
+    assert note.header_height() == band
+
+
+def test_a_very_large_group_can_still_be_made_bigger(view):
+    """Qt's font engine stops measuring above ten thousand point, and a
+    box on a real board asks for far more than that. The title used to
+    stick at the cap: pressing bigger did nothing at all."""
+
+    item = picture(view, 200, 150)
+    item.setScale(3000)
+    view.scene.clearSelection()
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = item.parentItem()
+    group.title = 'Enclosure'
+    group.setSelected(True)
+
+    assert group.title_size() == group.TITLE_MAX_SIZE
+    sizes = []
+    for _ in range(5):
+        view.on_action_size_increase()
+        sizes.append(group.title_size())
+
+    assert sizes == sorted(sizes)
+    assert sizes[-1] > group.TITLE_MAX_SIZE * 1.4
+
+
+def test_such_a_title_is_still_measured_rather_than_coming_back_empty(view):
+    """Above ten thousand point Qt hands back a line height of zero and
+    widths that are negative."""
+
+    from beeref.items import SAFE_FONT_SIZE
+
+    group = titled_group(view)
+    huge = SAFE_FONT_SIZE * 12
+
+    assert group.line_height_for(huge) > 0
+    assert (group.line_height_for(huge)
+            > group.line_height_for(SAFE_FONT_SIZE) * 10)
+
+
+def test_the_natural_size_of_a_very_large_group_is_unchanged(view):
+    """Boards written before this open looking exactly as they did: the
+    cap is on what the box gives, not on what may be asked for."""
+
+    item = picture(view, 200, 150)
+    item.setScale(3000)
+    view.scene.clearSelection()
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = item.parentItem()
+    group.title = 'Enclosure'
+
+    assert group.band_scale == 1
+    assert group.title_size() == group.TITLE_MAX_SIZE
+
+
+def test_the_gap_round_the_words_does_not_depend_on_the_rows(view):
+    """The width the words wrap at depends on the gap, so the gap can
+    not be measured from a band whose height depends on the wrapping."""
+
+    short = titled_group(view, 'Short')
+    long = long_titled(view)
+    long.band_scale = short.band_scale
+
+    assert (round(short.title_inset_for(short.title_size()), 6)
+            == round(long.title_inset_for(long.title_size()), 6))

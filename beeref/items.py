@@ -100,9 +100,14 @@ def text_at_screen_size(painter, rect, size):
     transform = painter.combinedTransform()
     scale = math.hypot(transform.m11(), transform.m12())
     if not 0 < scale < 1:
-        # Drawn at its own size or larger: nothing to gain, and scaling
-        # up a rasterised letter is worse than asking for a big one
-        return rect, size
+        # Drawn at its own size or larger: nothing to gain from a
+        # smaller font, and scaling up a rasterised letter is worse
+        # than asking for a big one -- unless the size asked for is one
+        # the engine cannot make at all, and then the painter has to
+        # make up the difference the other way round
+        if size <= SAFE_FONT_SIZE:
+            return rect, size
+        scale = SAFE_FONT_SIZE / size
     painter.scale(1 / scale, 1 / scale)
     smaller = QtCore.QRectF(rect.x() * scale, rect.y() * scale,
                             rect.width() * scale, rect.height() * scale)
@@ -114,8 +119,16 @@ def text_at_screen_size(painter, rect, size):
 # a picture's caption from the width of its crop, and this is the share
 # of that the reader asked for -- so an item that grows still grows its
 # band, and a board written before there was a choice looks unchanged.
+# Qt's font engine is linear up to about eight thousand point and
+# comes apart above ten: the line height comes back as zero and the
+# widths go negative. Letters are measured at this size and the answer
+# scaled by arithmetic, which is exact -- metrics are linear in the
+# point size -- so a title on a very large group is not held back by
+# what the engine can do.
+SAFE_FONT_SIZE = 2000
+
 BAND_SCALE_MIN = 0.25
-BAND_SCALE_MAX = 4
+BAND_SCALE_MAX = 10
 
 
 class BandTextMixin:
@@ -828,6 +841,13 @@ class TitleBandMixin:
     # across, which asked for twenty-five thousand point.
     TITLE_MAX_SIZE = 8000
 
+    # Whether a title too long for its band goes onto another row or is
+    # cut off with an ellipsis. A group's box is a container and can
+    # grow taller to hold the words; a note's band is measured from the
+    # note, so letting it wrap would put its height back at the mercy
+    # of the note's own words, which is what it was taken away from.
+    TITLE_WRAPS = False
+
     # Where the title sits in its band
     TITLE_CENTER = 'center'
     TITLE_LEFT = 'left'
@@ -919,36 +939,91 @@ class TitleBandMixin:
     def title_font(self):
         return self.title_font_of_size(self.title_size())
 
+    def title_metrics(self, size):
+        """Letters this size, measured, and what to multiply that by.
+
+        Taken at a size the font engine can manage and scaled, so that
+        a title on a very large group -- which asks for tens of
+        thousands of point -- is measured rather than coming back as
+        nothing; see SAFE_FONT_SIZE.
+        """
+
+        if size <= SAFE_FONT_SIZE:
+            return QtGui.QFontMetricsF(self.title_font_of_size(size)), 1
+        return (QtGui.QFontMetricsF(self.title_font_of_size(SAFE_FONT_SIZE)),
+                size / SAFE_FONT_SIZE)
+
     def line_height_for(self, size):
         """The height of one line of letters this size."""
 
-        line = QtGui.QFontMetricsF(self.title_font_of_size(size)).height()
+        metrics, factor = self.title_metrics(size)
+        line = metrics.height() * factor
         if line > 0:
             return line
         # Whatever the font engine made of it, a band still has to have
         # a height, or the title is simply not there
         return size * 1.8
 
-    def band_height_for(self, size):
-        """The band that letters of this size need, editor included."""
+    def title_text_height(self, size, width):
+        """How tall the title is once wrapped to that width.
+
+        A title too long for the box wraps onto another row and the
+        band grows down to hold it. Cutting it off with an ellipsis ate
+        the words as the letters were made bigger, so asking for a
+        bigger title gave less of it rather than more.
+        """
+
+        line = self.line_height_for(size)
+        if self.title_editor is not None:
+            # Ask the editor rather than measuring the same words a
+            # second way: the band has to hold exactly what it lays out
+            return max(self.title_editor.boundingRect().height(), line)
+        if not self._title or not self.TITLE_WRAPS:
+            return line
+        metrics, factor = self.title_metrics(size)
+        wrapped = metrics.boundingRect(
+            QtCore.QRectF(0, 0, max(1.0, width / factor), 0),
+            int(self.title_text_alignment() | Qt.TextFlag.TextWordWrap),
+            self._title)
+        return max(wrapped.height() * factor, line)
+
+    def band_height_of_one_line(self, size):
+        """What the band would be if the title fitted on a single row."""
+
+        line = self.line_height_for(size)
+        return line * (1 + 2 * self.TITLE_PADDING_FRACTION)
+
+    def band_height_for(self, size, width):
+        """The band that these words need, at this size, across this width."""
 
         line = self.line_height_for(size)
         room = line * self.TITLE_PADDING_FRACTION
-        if self.title_editor is not None:
-            # Ask the editor rather than measuring a line a second way:
-            # the band has to hold exactly what it lays out
-            line = max(self.title_editor.boundingRect().height(), line)
-        return line + 2 * room
+        return self.title_text_height(size, width) + 2 * room
+
+    def band_width(self):
+        """How wide the band is. Up to the item."""
+
+        raise NotImplementedError
 
     def header_height(self):
         if not self.shows_header():
             return 0
-        return self.band_height_for(self.title_size())
+        size = self.title_size()
+        return self.band_height_for(
+            size, self.band_width() - 2 * self.title_inset_for(size))
+
+    def title_inset_for(self, size):
+        """The gap kept between the words and the ends of the band.
+
+        Measured from what a single row would give rather than from the
+        band itself, which now depends on how many rows the words turn
+        out to need -- and the width they wrap at depends on this.
+        """
+
+        return self.band_height_of_one_line(size) * self.TITLE_PADDING_FRACTION
 
     def title_inset(self):
-        """The gap kept between the words and the ends of the band."""
-
-        return self.header_height() * self.TITLE_PADDING_FRACTION
+        return self.title_inset_for(self.title_size())
 
     def header_rect(self):
         """The band itself, in item coordinates. Up to the item."""
@@ -1001,11 +1076,17 @@ class TitleBandMixin:
         font = self.title_font_of_size(max(size, 0.1))
         painter.setFont(font)
         painter.setPen(QtGui.QPen(readable_grey(self.visible_header_color())))
-        metrics = QtGui.QFontMetricsF(font)
-        painter.drawText(
-            room, int(self.title_alignment()),
-            metrics.elidedText(self._title, Qt.TextElideMode.ElideRight,
-                               room.width()))
+        if self.TITLE_WRAPS:
+            painter.drawText(
+                room,
+                int(self.title_alignment() | Qt.TextFlag.TextWordWrap),
+                self._title)
+        else:
+            metrics = QtGui.QFontMetricsF(font)
+            painter.drawText(
+                room, int(self.title_alignment()),
+                metrics.elidedText(self._title, Qt.TextElideMode.ElideRight,
+                                   room.width()))
         painter.restore()
 
     def title_search_rect(self):
@@ -1081,6 +1162,10 @@ class BeeGroupItem(TitleBandMixin, BandTextMixin, BeeItemMixin,
     """
 
     TYPE = 'group'
+
+    # A box can grow taller to hold the words, so a title too long for
+    # it goes onto another row rather than being cut off
+    TITLE_WRAPS = True
 
     DEFAULT_BOX_COLOR = (52, 52, 52, 255)
     # Smallest space between the box edge and the items inside it
@@ -1263,9 +1348,14 @@ class BeeGroupItem(TitleBandMixin, BandTextMixin, BeeItemMixin,
         the band and the band depend on the size.
         """
 
-        return min(self.TITLE_MAX_SIZE,
-                   max(self.TITLE_MIN_SIZE,
-                       width * self.TITLE_FRACTION * self.band_scale))
+        # The cap is on what the box gives, not on what is asked for:
+        # a box on a real board asks for far more point than the font
+        # engine can draw, and holding the natural size there is what
+        # keeps a very large group looking as it always did. The share
+        # is applied after, so a title can still be made bigger.
+        natural = min(self.TITLE_MAX_SIZE,
+                      max(self.TITLE_MIN_SIZE, width * self.TITLE_FRACTION))
+        return max(self.TITLE_MIN_SIZE, natural * self.band_scale)
 
     def title_size(self):
         return self.title_size_for(self.rect().width())
@@ -1296,7 +1386,12 @@ class BeeGroupItem(TitleBandMixin, BandTextMixin, BeeItemMixin,
 
         if not self.shows_header():
             return 0
-        return self.band_height_for(self.title_size_for(width))
+        size = self.title_size_for(width)
+        return self.band_height_for(
+            size, width - 2 * self.title_inset_for(size))
+
+    def band_width(self):
+        return self.rect().width()
 
     def header_rect(self):
         """The band across the top of the box."""
@@ -2766,6 +2861,9 @@ class BeeTextItem(TitleBandMixin, BeeItemMixin,
         """The note without its band: the box the words sit in."""
 
         return QtWidgets.QGraphicsTextItem.boundingRect(self)
+
+    def band_width(self):
+        return self.text_rect().width()
 
     def header_rect(self):
         """The band sitting on top of the note.
