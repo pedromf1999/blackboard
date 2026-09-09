@@ -977,7 +977,7 @@ class TitleBandMixin:
         if self.title_editor is not None:
             # Ask the editor rather than measuring the same words a
             # second way: the band has to hold exactly what it lays out
-            return max(self.title_editor.boundingRect().height(), line)
+            return max(self.title_editor.band_height(), line)
         if not self._title or not self.TITLE_WRAPS:
             return line
         metrics, factor = self.title_metrics(size)
@@ -1620,16 +1620,38 @@ class TitleEditor(QtWidgets.QGraphicsTextItem):
         item = self.item
         band = item.header_rect()
         inset = item.title_inset()
-        self.setFont(item.title_font())
+        shrink = self.shrink_for(item.title_size())
+        # Laid out at a size the font engine can manage and scaled up to
+        # make the difference. Past about ten thousand point Qt gives up
+        # -- GetTextMetrics fails, the line height comes back as nothing
+        # and the words came out on one line, overflowing the band and
+        # cut off at both ends. The painted title already does this; the
+        # line being typed into has to do it too, or writing a title on
+        # a large group means writing into a mess.
+        self.setScale(1 / shrink)
+        self.setFont(item.title_font_of_size(item.title_size() * shrink))
         self.setDefaultTextColor(
             readable_grey(item.visible_header_color()))
-        self.setTextWidth(max(1.0, band.width() - 2 * inset))
+        self.setTextWidth(max(1.0, (band.width() - 2 * inset) * shrink))
         option = self.document().defaultTextOption()
         option.setAlignment(item.title_text_alignment())
         self.document().setDefaultTextOption(option)
         # From the top of the band, not centred in it: the band is
         # built to fit these words, so there is nothing to centre
         self.setPos(band.x() + inset, band.y() + inset)
+
+    @staticmethod
+    def shrink_for(size):
+        """What the letters have to be multiplied by to be laid out."""
+
+        if size <= SAFE_FONT_SIZE or size <= 0:
+            return 1
+        return SAFE_FONT_SIZE / size
+
+    def band_height(self):
+        """How tall the line being typed is, in the item's own units."""
+
+        return self.boundingRect().height() * self.scale()
 
     def keyPressEvent(self, event):
         # A title is one line: Enter finishes it rather than starting a

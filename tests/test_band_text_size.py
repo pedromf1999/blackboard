@@ -1,5 +1,6 @@
 import os
 
+import pytest
 from PyQt6 import QtGui
 
 from beeref import commands, fileio
@@ -452,3 +453,83 @@ def test_the_gap_round_the_words_does_not_depend_on_the_rows(view):
 
     assert (round(short.title_inset_for(short.title_size()), 6)
             == round(long.title_inset_for(long.title_size()), 6))
+
+
+def huge_group(view, title='Ficha da Board ao CPU - 7,45 ou 4,45mm'):
+    item = picture(view, 200, 150)
+    item.setScale(3000)
+    view.scene.clearSelection()
+    item.setSelected(True)
+    view.on_action_group_items()
+    group = item.parentItem()
+    group.title = title
+    group.setSelected(True)
+    return group
+
+
+def test_a_small_title_is_typed_into_at_its_own_size(view):
+    group = titled_group(view, 'Short')
+    group.enter_title_edit_mode()
+    editor = group.title_editor
+
+    assert editor.scale() == 1
+    assert round(editor.font().pointSizeF(), 3) == round(group.title_size(), 3)
+
+
+def test_a_huge_title_is_typed_into_at_a_size_qt_can_lay_out(view):
+    """Past about ten thousand point Qt gives up: GetTextMetrics fails,
+    the line height comes back as nothing, and the words came out on one
+    row overflowing the band and cut off at both ends."""
+
+    from beeref.items import SAFE_FONT_SIZE
+
+    group = huge_group(view)
+    group.setSelected(True)
+    for _ in range(4):
+        view.on_action_size_increase()
+    assert group.title_size() > 10000
+
+    group.enter_title_edit_mode()
+    editor = group.title_editor
+
+    assert editor.font().pointSizeF() <= SAFE_FONT_SIZE
+    assert editor.scale() > 1
+
+
+def test_and_scaled_back_up_to_the_size_it_is_meant_to_be(view):
+    from beeref.items import SAFE_FONT_SIZE
+
+    group = huge_group(view)
+    group.enter_title_edit_mode()
+    editor = group.title_editor
+    drawn = editor.font().pointSizeF() * editor.scale()
+
+    assert round(drawn, 3) == round(group.title_size(), 3)
+    assert group.title_size() > SAFE_FONT_SIZE
+
+
+def test_the_band_being_typed_into_matches_the_one_left_behind(view):
+    """The whole complaint: the title looked right once it was written
+    and a mess while it was being written."""
+
+    group = huge_group(view)
+    group.setSelected(True)
+
+    for _ in range(6):
+        finished = group.header_height()
+        group.enter_title_edit_mode()
+        writing = group.header_height()
+        group.exit_title_edit_mode(commit=False)
+
+        assert writing == pytest.approx(finished, rel=0.1), group.title_size()
+        view.on_action_size_increase()
+
+
+def test_the_line_being_typed_reports_its_height_in_the_items_units(view):
+    group = huge_group(view)
+    group.enter_title_edit_mode()
+    editor = group.title_editor
+
+    assert editor.band_height() == pytest.approx(
+        editor.boundingRect().height() * editor.scale())
+    assert editor.band_height() > editor.boundingRect().height()
