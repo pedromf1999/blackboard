@@ -2539,6 +2539,10 @@ class BeeGraphicsView(MainControlsMixin,
         item = BeeTextItem()
         item.setPlainText('')
         table = item.insert_table(len(rows), len(rows[0]))
+        # Merged before anything is written: what a merge covers is
+        # empty, so nothing is run together by joining the cells
+        for row, column, down, across in getattr(rows, 'merges', ()):
+            table.mergeCells(row, column, down, across)
         for r, row in enumerate(rows):
             for c, words in enumerate(row):
                 if words:

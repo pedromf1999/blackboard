@@ -83,15 +83,16 @@ def test_a_sheets_table_comes_across(view):
 
 
 def test_a_teams_table_comes_across(view):
-    """Its heading is merged across the top; a merged cell counts once
-    and the row is padded rather than the table refusing to come."""
+    """Its heading is merged across the top, and stays merged: both
+    columns of the first row are the one cell, so both read as it."""
 
     paste(view, html=TEAMS)
     table = pasted_table(view)
 
     assert (table.rows(), table.columns()) == (2, 2)
-    assert cells_of(table) == [['Plug (Mass Prod)', ''],
-                               ['Normal', '47-1234-01']]
+    assert table.cellAt(0, 0).columnSpan() == 2
+    assert cells_of(table)[0] == ['Plug (Mass Prod)', 'Plug (Mass Prod)']
+    assert cells_of(table)[1] == ['Normal', '47-1234-01']
 
 
 def test_a_spreadsheet_pasted_as_plain_text_comes_across(view):
@@ -332,4 +333,121 @@ def test_the_pasted_table_has_a_cell_for_every_column(view):
     table = pasted_table(view)
 
     assert (table.rows(), table.columns()) == (6, 4)
-    assert cells_of(table)[2] == ['', '', 'A1.2', 'Rear Shell']
+    # The first two of that row are the cell above, merged down onto it
+    assert table.cellAt(2, 0).rowSpan() == 2
+    assert cells_of(table)[2][2:] == ['A1.2', 'Rear Shell']
+
+
+# The table the owner sent, exactly as Google Sheets writes it
+SHEET_EXPORT = '''<meta http-equiv="Content-Type" content="text/html">
+<div class="ritz grid-container" dir="ltr"><table class="waffle"
+cellspacing="0" cellpadding="0"><thead><tr>
+<th class="row-header freezebar-origin-ltr"></th>
+<th id="0C0" class="column-headers-background">A</th>
+<th id="0C1" class="column-headers-background">B</th>
+<th id="0C2" class="column-headers-background">C</th>
+<th id="0C3" class="column-headers-background">D</th></tr></thead><tbody>
+<tr><th id="0R0" class="row-headers-background"><div
+class="row-header-wrapper">1</div></th>
+<td class="s0">CODE</td><td class="s0">AREA</td>
+<td class="s0">CODE</td><td class="s0">SUB-ASSEMBLY</td></tr>
+<tr><th id="0R1" class="row-headers-background"><div
+class="row-header-wrapper">2</div></th>
+<td class="s0" rowspan="2">A1</td><td class="s0" rowspan="2">Structural
+Assembly</td><td class="s0">A1.1</td><td class="s0">Front shell</td></tr>
+<tr><th id="0R2" class="row-headers-background"><div
+class="row-header-wrapper">3</div></th>
+<td class="s0">A1.2</td><td class="s0">Rear Shell</td></tr>
+<tr><th id="0R3" class="row-headers-background"><div
+class="row-header-wrapper">4</div></th>
+<td class="s0" rowspan="2">A2</td><td class="s0" rowspan="2">Electronics</td>
+<td class="s0">A2.1</td><td class="s0">Controllers</td></tr>
+<tr><th id="0R4" class="row-headers-background"><div
+class="row-header-wrapper">5</div></th>
+<td class="s0">A2.2</td><td class="s0">Main Board</td></tr>
+</tbody></table></div>'''
+
+
+def test_a_merged_cell_arrives_merged(view):
+    """The rows of the code column are taller than the rest, because
+    an area spans the parts belonging to it. Reading it as a grid of
+    single cells loses what the table was saying."""
+
+    paste(view, html=SHEET_EXPORT)
+    table = pasted_table(view)
+
+    assert table.cellAt(1, 0).rowSpan() == 2
+    assert table.cellAt(1, 1).rowSpan() == 2
+    assert table.cellAt(3, 0).rowSpan() == 2
+    assert table.cellAt(0, 0).rowSpan() == 1
+
+
+def test_the_merged_cell_is_the_one_holding_the_words(view):
+    paste(view, html=SHEET_EXPORT)
+    table = pasted_table(view)
+
+    assert table.cellAt(1, 0).firstCursorPosition().block().text() == 'A1'
+    # The row below reads the same cell, since they are one
+    assert table.cellAt(2, 0).firstCursorPosition().block().text() == 'A1'
+
+
+def test_the_merges_are_carried_by_the_table_that_was_read(view):
+    rows = tables.table_from_html(SHEET_EXPORT)
+
+    assert rows.merges == [(1, 0, 2, 1), (1, 1, 2, 1),
+                           (3, 0, 2, 1), (3, 1, 2, 1)]
+
+
+def test_a_sheet_saved_as_a_page_leaves_its_own_numbering_behind(view):
+    """Downloading a sheet as a web page brings the row numbers and
+    column letters along as cells. They belong to the page, not to the
+    table, and copying from the sheet does not carry them at all."""
+
+    rows = tables.table_from_html(SHEET_EXPORT)
+
+    assert len(rows[0]) == 4
+    assert rows[0] == ['CODE', 'AREA', 'CODE', 'SUB-ASSEMBLY']
+    # Not a row of column letters, and no column of row numbers
+    assert rows[0] != ['A', 'B', 'C', 'D']
+    assert [row[0] for row in rows] == ['CODE', 'A1', '', 'A2', '']
+
+
+def test_a_table_with_no_merges_carries_none(view):
+    rows = tables.table_from_html(
+        '<table><tr><td>a</td><td>b</td></tr></table>')
+
+    assert rows.merges == []
+
+
+def test_the_rows_still_read_as_a_plain_list(view):
+    """So that everything asking for the words does not have to know
+    about merges."""
+
+    rows = tables.table_from_html(
+        '<table><tr><td>a</td><td>b</td></tr></table>')
+
+    assert rows == [['a', 'b']]
+    assert list(rows) == [['a', 'b']]
+
+
+def test_a_merge_that_was_trimmed_away_is_dropped(view):
+    """The table is cut to what a board should hold, and a merge
+    reaching past that would be asked of cells that are not there."""
+
+    row = '<tr>' + '<td>x</td>' * 4 + '</tr>'
+    html = ('<table><tr><td rowspan="300">Deep</td>'
+            + '<td>a</td>' * 3 + '</tr>'
+            + row * (tables.MAX_ROWS + 10) + '</table>')
+    rows = tables.table_from_html(html)
+
+    assert len(rows) == tables.MAX_ROWS
+    for row_index, column, down, across in rows.merges:
+        assert row_index + down <= len(rows)
+        assert column + across <= len(rows[0])
+
+
+def test_a_table_from_plain_text_has_no_merges(view):
+    rows = tables.table_from_text('a\tb\nc\td')
+
+    assert rows == [['a', 'b'], ['c', 'd']]
+    assert getattr(rows, 'merges', []) == []

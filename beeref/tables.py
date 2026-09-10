@@ -20,9 +20,9 @@ onto the clipboard, and the spreadsheets put a tab separated copy there
 as well. Only the shape and the words are taken from either: a
 Blackboard table has no colours, borders or fonts to give the rest to.
 
-A merged cell is not kept as a merge -- there is nothing here to merge
--- but where it reaches is honoured, so that the cells below and beside
-it stay in the columns they belong in.
+A merged cell is carried across as a merge: where it reaches decides
+which column everything after it belongs in, and a table of areas and
+their parts reads as one only when the area spans its parts.
 """
 
 import logging
@@ -42,6 +42,13 @@ MAX_COLUMNS = 50
 
 # Tags whose text belongs to the page rather than to the table
 IGNORED = {'style', 'script', 'head', 'title'}
+
+# A spreadsheet saved as a web page brings its own row numbers and
+# column letters along as cells. They are the page's furniture rather
+# than anything that was in the sheet, and they are marked as such --
+# copying from the sheet does not carry them at all.
+FURNITURE = ('row-headers-background', 'column-headers-background',
+             'row-header', 'freezebar')
 
 
 def tidy(text):
@@ -68,6 +75,7 @@ class TableReader(HTMLParser):
         self.ignoring = 0
         self.finished = False
         self.spans = (1, 1)
+        self.skipping = False
 
     def handle_starttag(self, tag, attrs):
         if tag in IGNORED:
@@ -88,6 +96,7 @@ class TableReader(HTMLParser):
         elif tag in ('td', 'th'):
             self.close_cell()
             self.cell = []
+            self.skipping = is_furniture(attrs)
             self.spans = (span_of(attrs, 'rowspan'), span_of(attrs, 'colspan'))
         elif tag == 'br' and self.cell is not None:
             self.cell.append(' ')
@@ -119,6 +128,11 @@ class TableReader(HTMLParser):
     def close_cell(self):
         if self.cell is None:
             return
+        if self.skipping:
+            self.cell = None
+            self.skipping = False
+            self.spans = (1, 1)
+            return
         if self.row is None:
             # A cell outside any row: give it one, rather than losing it
             self.row = []
@@ -132,6 +146,17 @@ class TableReader(HTMLParser):
         if self.row:
             self.rows.append(self.row)
         self.row = None
+
+
+def is_furniture(attrs):
+    """Whether this cell is a row number or a column letter."""
+
+    for key, value in attrs:
+        if key.lower() == 'class' and value:
+            classes = str(value).lower()
+            if any(mark in classes for mark in FURNITURE):
+                return True
+    return False
 
 
 def span_of(attrs, name):
@@ -154,18 +179,32 @@ def put(row, column, words):
     row[column] = words
 
 
+class Table(list):
+    """The rows of a table, and where its cells are merged.
+
+    A list of rows of words, so it can be read as one, that also knows
+    which cells reach across or down: ``merges`` holds a
+    ``(row, column, rows, columns)`` for each.
+    """
+
+    def __init__(self, rows, merges=()):
+        super().__init__(rows)
+        self.merges = list(merges)
+
+
 def laid_out(rows):
     """Cells placed in the columns their spans put them in.
 
     A cell merged down the page leaves the rows below it one cell
     short, and filling that at the end of the row instead of where the
     hole is shunts everything left: a table of areas and their parts
-    came out with the parts in the column the areas belong in. What is
-    covered from above is left empty, which is how the merge reads in
-    the application it came from.
+    came out with the parts in the column the areas belong in. What a
+    merge covers is left empty, and the merge itself is handed on so
+    the table can be put back together the way it was.
     """
 
     grid = []
+    merges = []
     # Column to how many more rows a cell above still covers it
     held = {}
     for cells in rows:
@@ -180,12 +219,28 @@ def laid_out(rows):
                 put(row, column + offset, words if offset == 0 else '')
                 if down > 1:
                     held[column + offset] = down
+            if down > 1 or across > 1:
+                merges.append((len(grid), column, down, across))
             column += across
         grid.append(row)
         # A row has gone by, so everything held covers one row less
         held = {column: rows_left - 1
                 for column, rows_left in held.items() if rows_left > 1}
-    return grid
+    return grid, merges
+
+
+def merges_that_fit(merges, rows, columns):
+    """The merges still inside the table once it has been trimmed."""
+
+    kept = []
+    for row, column, down, across in merges:
+        if row >= rows or column >= columns:
+            continue
+        down = min(down, rows - row)
+        across = min(across, columns - column)
+        if down > 1 or across > 1:
+            kept.append((row, column, down, across))
+    return kept
 
 
 def squared_off(rows):
@@ -214,7 +269,11 @@ def table_from_html(html):
                      exc_info=True)
         return None
     reader.close_row()
-    return squared_off(laid_out(reader.rows))
+    grid, merges = laid_out(reader.rows)
+    grid = squared_off(grid)
+    if not grid:
+        return None
+    return Table(grid, merges_that_fit(merges, len(grid), len(grid[0])))
 
 
 def table_from_text(text):
