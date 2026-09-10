@@ -243,3 +243,93 @@ def test_the_words_are_tidied_of_the_spacing_they_arrived_with(view):
     html = '<table><tr><td>  two   words \n </td><td>b</td></tr></table>'
 
     assert tables.table_from_html(html) == [['two words', 'b']]
+
+
+AREAS = '''<table>
+<tr><td>CODE</td><td>AREA</td><td>CODE</td><td>SUB-ASSEMBLY</td></tr>
+<tr><td rowspan="2">A1</td><td rowspan="2">Structural</td>
+    <td>A1.1</td><td>Front Shell</td></tr>
+<tr><td>A1.2</td><td>Rear Shell</td></tr>
+<tr><td rowspan="3">A2</td><td rowspan="3">Electronics</td>
+    <td>A2.1</td><td>Controllers Board</td></tr>
+<tr><td>A2.2</td><td>Main Unit</td></tr>
+<tr><td>A2.3</td><td>Power System</td></tr>
+</table>'''
+
+
+def test_a_cell_merged_down_the_page_keeps_the_columns_in_line(view):
+    """It left the rows below it one cell short, and filling that at
+    the end of the row instead of where the hole is shunted everything
+    left: the sub-assemblies came out in the column the areas belong
+    in."""
+
+    rows = tables.table_from_html(AREAS)
+
+    assert rows == [
+        ['CODE', 'AREA', 'CODE', 'SUB-ASSEMBLY'],
+        ['A1', 'Structural', 'A1.1', 'Front Shell'],
+        ['', '', 'A1.2', 'Rear Shell'],
+        ['A2', 'Electronics', 'A2.1', 'Controllers Board'],
+        ['', '', 'A2.2', 'Main Unit'],
+        ['', '', 'A2.3', 'Power System'],
+    ]
+
+
+def test_the_merged_cell_says_its_words_once(view):
+    """Which is how the merge reads in the application it came from."""
+
+    rows = tables.table_from_html(AREAS)
+    codes = [row[0] for row in rows]
+
+    assert codes.count('A1') == 1
+    assert codes.count('A2') == 1
+
+
+def test_a_cell_merged_across_holds_its_place(view):
+    html = ('<table><tr><td colspan="3">Wide</td><td>End</td></tr>'
+            '<tr><td>a</td><td>b</td><td>c</td><td>d</td></tr></table>')
+
+    assert tables.table_from_html(html) == [['Wide', '', '', 'End'],
+                                            ['a', 'b', 'c', 'd']]
+
+
+def test_a_cell_merged_both_ways(view):
+    html = ('<table>'
+            '<tr><td rowspan="2" colspan="2">Corner</td><td>x</td></tr>'
+            '<tr><td>y</td></tr>'
+            '<tr><td>a</td><td>b</td><td>c</td></tr></table>')
+
+    assert tables.table_from_html(html) == [['Corner', '', 'x'],
+                                            ['', '', 'y'],
+                                            ['a', 'b', 'c']]
+
+
+def test_a_merge_that_runs_off_the_end_is_survived(view):
+    """Applications write spans that reach past the table they are in."""
+
+    html = ('<table><tr><td rowspan="99">Deep</td><td>a</td></tr>'
+            '<tr><td>b</td></tr></table>')
+
+    assert tables.table_from_html(html) == [['Deep', 'a'], ['', 'b']]
+
+
+def test_nonsense_in_a_span_is_ignored(view):
+    html = ('<table><tr><td rowspan="lots">a</td><td>b</td></tr>'
+            '<tr><td>c</td><td>d</td></tr></table>')
+
+    assert tables.table_from_html(html) == [['a', 'b'], ['c', 'd']]
+
+
+def test_a_table_with_no_merges_is_read_exactly_as_before(view):
+    html = ('<table><tr><td>a</td><td>b</td></tr>'
+            '<tr><td>c</td><td>d</td></tr></table>')
+
+    assert tables.table_from_html(html) == [['a', 'b'], ['c', 'd']]
+
+
+def test_the_pasted_table_has_a_cell_for_every_column(view):
+    paste(view, html=AREAS)
+    table = pasted_table(view)
+
+    assert (table.rows(), table.columns()) == (6, 4)
+    assert cells_of(table)[2] == ['', '', 'A1.2', 'Rear Shell']

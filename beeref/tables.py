@@ -18,8 +18,11 @@
 Word, Excel, Sheets and Teams all put an HTML copy of what was copied
 onto the clipboard, and the spreadsheets put a tab separated copy there
 as well. Only the shape and the words are taken from either: a
-Blackboard table has no colours, borders, fonts or merged cells to give
-the rest to.
+Blackboard table has no colours, borders or fonts to give the rest to.
+
+A merged cell is not kept as a merge -- there is nothing here to merge
+-- but where it reaches is honoured, so that the cells below and beside
+it stay in the columns they belong in.
 """
 
 import logging
@@ -64,6 +67,7 @@ class TableReader(HTMLParser):
         self.depth = 0
         self.ignoring = 0
         self.finished = False
+        self.spans = (1, 1)
 
     def handle_starttag(self, tag, attrs):
         if tag in IGNORED:
@@ -84,6 +88,7 @@ class TableReader(HTMLParser):
         elif tag in ('td', 'th'):
             self.close_cell()
             self.cell = []
+            self.spans = (span_of(attrs, 'rowspan'), span_of(attrs, 'colspan'))
         elif tag == 'br' and self.cell is not None:
             self.cell.append(' ')
 
@@ -117,8 +122,10 @@ class TableReader(HTMLParser):
         if self.row is None:
             # A cell outside any row: give it one, rather than losing it
             self.row = []
-        self.row.append(tidy(''.join(self.cell)))
+        rows, columns = self.spans
+        self.row.append((tidy(''.join(self.cell)), rows, columns))
         self.cell = None
+        self.spans = (1, 1)
 
     def close_row(self):
         self.close_cell()
@@ -127,12 +134,62 @@ class TableReader(HTMLParser):
         self.row = None
 
 
-def squared_off(rows):
-    """Every row the same length, so the result is a grid.
+def span_of(attrs, name):
+    """A rowspan or colspan, however the other application wrote it."""
 
-    A merged cell counts once and leaves its row short; the row is
-    padded rather than the table refusing to come across.
+    for key, value in attrs:
+        if key.lower() == name:
+            try:
+                return max(1, min(MAX_COLUMNS, int(str(value).strip())))
+            except (TypeError, ValueError):
+                return 1
+    return 1
+
+
+def put(row, column, words):
+    """Set a cell, making room for it if the row is short."""
+
+    while len(row) <= column:
+        row.append('')
+    row[column] = words
+
+
+def laid_out(rows):
+    """Cells placed in the columns their spans put them in.
+
+    A cell merged down the page leaves the rows below it one cell
+    short, and filling that at the end of the row instead of where the
+    hole is shunts everything left: a table of areas and their parts
+    came out with the parts in the column the areas belong in. What is
+    covered from above is left empty, which is how the merge reads in
+    the application it came from.
     """
+
+    grid = []
+    # Column to how many more rows a cell above still covers it
+    held = {}
+    for cells in rows:
+        row = []
+        column = 0
+        for words, down, across in cells:
+            while held.get(column, 0):
+                put(row, column, '')
+                column += 1
+            for offset in range(across):
+                # The words go in the first of the columns it covers
+                put(row, column + offset, words if offset == 0 else '')
+                if down > 1:
+                    held[column + offset] = down
+            column += across
+        grid.append(row)
+        # A row has gone by, so everything held covers one row less
+        held = {column: rows_left - 1
+                for column, rows_left in held.items() if rows_left > 1}
+    return grid
+
+
+def squared_off(rows):
+    """Every row the same length, so the result is a grid."""
 
     rows = [row[:MAX_COLUMNS] for row in rows[:MAX_ROWS]]
     if not rows:
@@ -157,7 +214,7 @@ def table_from_html(html):
                      exc_info=True)
         return None
     reader.close_row()
-    return squared_off(reader.rows)
+    return squared_off(laid_out(reader.rows))
 
 
 def table_from_text(text):
