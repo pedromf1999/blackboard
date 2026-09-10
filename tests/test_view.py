@@ -789,11 +789,18 @@ def test_on_action_paste_internal(mimedata_mock, clear_mock, view):
 
 
 @patch('beeref.scene.BeeGraphicsScene.clearSelection')
+@patch('PyQt6.QtGui.QClipboard.mimeData')
 @patch('PyQt6.QtGui.QClipboard.text')
 @patch('PyQt6.QtGui.QClipboard.image')
-def test_on_action_paste_when_text(img_mock, text_mock, clear_mock, view):
+def test_on_action_paste_when_text(
+        img_mock, text_mock, mime_mock, clear_mock, view):
     img_mock.return_value = QtGui.QImage()
     text_mock.return_value = 'foo bar'
+    # Given too, or the paste reads the machine's own clipboard looking
+    # for a table on it, and the test turns on what happens to be there
+    mimedata = QtCore.QMimeData()
+    mimedata.setText('foo bar')
+    mime_mock.return_value = mimedata
     view.cancel_active_modes = MagicMock()
     view.on_action_paste()
     assert len(view.scene.items()) == 1
@@ -804,14 +811,16 @@ def test_on_action_paste_when_text(img_mock, text_mock, clear_mock, view):
 
 
 @patch('beeref.scene.BeeGraphicsScene.clearSelection')
+@patch('PyQt6.QtGui.QClipboard.mimeData')
 @patch('PyQt6.QtGui.QClipboard.text')
 @patch('PyQt6.QtGui.QClipboard.image')
 @patch('beeref.widgets.BeeNotification')
 def test_on_action_paste_when_empty(
-        notification_mock, img_mock, text_mock, clear_mock, view):
+        notification_mock, img_mock, text_mock, mime_mock, clear_mock, view):
     view.cancel_active_modes = MagicMock()
     img_mock.return_value = QtGui.QImage()
     text_mock.return_value = ''
+    mime_mock.return_value = QtCore.QMimeData()
     view.on_action_paste()
     assert len(view.scene.items()) == 0
     notification_mock.assert_called()

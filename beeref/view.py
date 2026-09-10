@@ -29,6 +29,7 @@ from beeref import commands
 from beeref.config import (
     CommandlineArgs, BeeSettings, KeyboardSettings, settings_events)
 from beeref import constants
+from beeref import tables
 from beeref import fileio
 from beeref.fileio.errors import IMG_LOADING_ERROR_MSG
 from beeref.fileio.export import exporter_registry, ImagesToDirectoryExporter
@@ -2512,6 +2513,11 @@ class BeeGraphicsView(MainControlsMixin,
                 # This is the first image in the scene
                 self.on_action_fit_scene()
             return
+        rows = tables.table_from_mimedata(clipboard.mimeData())
+        if rows:
+            self.paste_table(rows, pos)
+            return
+
         text = clipboard.text()
         if text:
             item = BeeTextItem(text)
@@ -2522,6 +2528,25 @@ class BeeGraphicsView(MainControlsMixin,
         msg = 'No image data or text in clipboard or image too big'
         logger.info(msg)
         widgets.BeeNotification(self, msg)
+
+    def paste_table(self, rows, pos):
+        """Put a table copied from another application on the board.
+
+        Only its shape and its words: a table here has no colours,
+        merged cells or column widths to give the rest to.
+        """
+
+        item = BeeTextItem()
+        item.setPlainText('')
+        table = item.insert_table(len(rows), len(rows[0]))
+        for r, row in enumerate(rows):
+            for c, words in enumerate(row):
+                if words:
+                    table.cellAt(r, c).firstCursorPosition().insertText(words)
+        item.setScale(1 / self.get_scale())
+        self.undo_stack.push(commands.InsertItems(self.scene, [item], pos))
+        logger.info(f'Pasted a table of {len(rows)} rows '
+                    f'and {len(rows[0])} columns')
 
     def on_action_open_settings_dir(self):
         dirname = os.path.dirname(self.settings.fileName())
