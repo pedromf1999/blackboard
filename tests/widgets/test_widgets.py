@@ -1,3 +1,5 @@
+import os
+
 from unittest.mock import patch, MagicMock
 
 from PyQt6 import QtCore, QtWidgets, QtGui
@@ -16,6 +18,10 @@ from beeref.widgets import (
 
 
 def test_debug_log_dialog(qtbot, settings, view):
+    # The directory is made when the log is first written to, which by
+    # this point may not have happened: without it the test turns on
+    # what ran before it
+    os.makedirs(os.path.dirname(logfile_name()), exist_ok=True)
     with open(logfile_name(), 'w') as f:
         f.write('my log output')
 
