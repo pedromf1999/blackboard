@@ -220,6 +220,42 @@ def test_a_new_board_starts_without_the_old_legend(view):
     assert view.scene.legend == []
 
 
+def test_a_new_board_clears_the_panel_too(view):
+    """Not just the list behind it: the old lines stayed on show."""
+
+    panel(view).on_add()
+    view.clear_scene()
+    assert panel(view).rows == []
+
+
+def test_a_board_opened_from_disk_shows_its_legend(view, tmpdir, qtbot):
+    """A board is read on a thread of its own, and lines built from
+    there never reach the panel: the colour dialog offered them, the
+    panel stayed empty."""
+
+    rows = [{'color': (25, 91, 166, 255), 'text': 'Ideas'},
+            {'color': (230, 155, 34, 255), 'text': 'To do'}]
+    view.scene.addItem(BeePixmapItem(
+        QtGui.QImage(4, 4, QtGui.QImage.Format.Format_ARGB32)))
+    path = os.path.join(tmpdir, 'legend.blk')
+    # Written straight to the file, so the panel has never shown them
+    fileio.save_bee(path, view.scene, create_new=True, legend=rows)
+
+    with patch.object(view, 'on_loading_finished',
+                      side_effect=view.on_loading_finished) as finished:
+        view.open_from_file(path)
+        view.worker.wait()
+        qtbot.waitUntil(lambda: finished.called is True)
+    view.legend_dock.set_collapsed(False)
+
+    assert [row.edit.text() for row in panel(view).rows] == [
+        'Ideas', 'To do']
+    gui = QtGui.QGuiApplication.instance().thread()
+    for row in panel(view).rows:
+        assert row.thread() == gui
+        assert panel(view).isAncestorOf(row)
+
+
 def test_the_menu_entry_opens_and_closes_it(view):
     view.on_action_show_legend(True)
     assert view.legend_dock.collapsed is False

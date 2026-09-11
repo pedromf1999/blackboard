@@ -999,6 +999,7 @@ class BeeGraphicsView(MainControlsMixin,
         logging.debug('Clearing scene...')
         self.cancel_active_modes()
         self.scene.clear()
+        self.refresh_legend()
         self.undo_stack.clear()
         self.filename = None
         self.setTransform(QtGui.QTransform())
@@ -2051,6 +2052,9 @@ class BeeGraphicsView(MainControlsMixin,
             # items that share a z value; put them back as they were
             self.scene.restack_as_saved()
             self.on_action_fit_scene()
+        # Reading could only record the legend; its lines are made here,
+        # on the thread the window belongs to
+        self.refresh_legend()
 
     def on_action_open_recent_file(self, filename):
         confirm = self.get_confirmation_unsaved_changes(

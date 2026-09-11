@@ -368,7 +368,10 @@ class SQLiteIO:
     @handle_sqlite_errors
     def read(self):
         self.warn_if_written_by_newer()
-        self.scene.set_legend(self.read_legend())
+        # Only the list, not the panel showing it: this runs on the
+        # loading thread, where Qt quietly refuses to put new widgets
+        # into a window. The view builds the panel once loading is done.
+        self.scene.legend = self.read_legend()
         if self.worker:
             self.worker.begin_processing.emit(self.count_rows())
 
